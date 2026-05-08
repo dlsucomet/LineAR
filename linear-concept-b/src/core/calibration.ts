@@ -3,7 +3,7 @@
 // Computes a 3×3 homography that maps camera pixel coordinates to projector
 // pixel coordinates using four corresponding point pairs (one per corner).
 
-import type { HomographyCalibration, Matrix3x3, Point2D } from "../types/index.js";
+import type { HomographyCalibration, Matrix3x3, Point2D } from "../types/index.ts";
 
 // ---------------------------------------------------------------------------
 // 4-point DLT homography

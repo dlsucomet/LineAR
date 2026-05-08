@@ -3,7 +3,7 @@
 // and decorative visual feedback on the projector canvas.
 
 import p5 from "p5";
-import type { DetectedObject, DetectedHand, Point2D } from "../types/index.js";
+import type { DetectedObject, DetectedHand, Point2D } from "../types/index.ts";
 
 // ---------------------------------------------------------------------------
 // Colour map (label → p5 colour string)

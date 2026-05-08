@@ -38,17 +38,6 @@ export type TransformationType =
   | "reflect"
   | "custom";
 
-export interface TransformationStep {
-  /** Human-readable label shown in the guided instruction panel. */
-  label: string;
-  /** The 2×2 transformation matrix for this step. */
-  matrix: Matrix2x2;
-  /** Which transformation family this belongs to. */
-  type: TransformationType;
-  /** Optional hint text shown to the user during this step. */
-  hint?: string;
-}
-
 // ---------------------------------------------------------------------------
 // Object / Marker detection
 // ---------------------------------------------------------------------------
@@ -141,22 +130,4 @@ export interface GridConfig {
   transitionMs: number;
 }
 
-// ---------------------------------------------------------------------------
-// App state
-// ---------------------------------------------------------------------------
 
-export type AppPhase =
-  | "calibration"    // Setting up projector ↔ camera homography
-  | "intro"          // Splash / welcome screen
-  | "tutorial"       // Step-by-step guided lesson
-  | "freeform";      // Open sandbox mode
-
-export interface AppState {
-  phase: AppPhase;
-  currentStepIndex: number;
-  transformationHistory: TransformationStep[];
-  detectedObjects: DetectedObject[];
-  detectedHands: DetectedHand[];
-  cameraReady: boolean;
-  calibration: HomographyCalibration;
-}

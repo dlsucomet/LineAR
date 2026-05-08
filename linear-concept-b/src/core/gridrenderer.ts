@@ -3,8 +3,8 @@
 // and transformed objects on top of the projector canvas.
 
 /// <reference types="jsxgraph" />
-import type { GridConfig, Matrix2x2, Point2D } from "../types/index.js";
-import { applyTransform, lerpMatrix, identity } from "./linearTransform.js";
+import type { GridConfig, Matrix2x2, Point2D } from "../types/index.ts";
+import { applyTransform, lerpMatrix, identity } from "./lineartransform.ts";
 
 // ---------------------------------------------------------------------------
 // Types
@@ -47,7 +47,7 @@ export class GridRenderer {
       showNavigation: false,
       keepAspectRatio: true,
       pan: { enabled: false },
-      zoom: { enabled: false },
+      zoom: false,
     });
 
     this.drawBasisVectors(identity());

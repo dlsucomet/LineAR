@@ -4,7 +4,7 @@
 
 import * as handPoseDetection from "@tensorflow-models/hand-pose-detection";
 import "@tensorflow/tfjs-backend-webgl";
-import type { DetectedHand, HandGesture, HandLandmark } from "../types/index.js";
+import type { DetectedHand, HandGesture, HandLandmark } from "../types/index.ts";
 
 // ---------------------------------------------------------------------------
 // Constants
@@ -76,13 +76,15 @@ export class HandTracker {
     this.detector
       .estimateHands(this.videoEl, { flipHorizontal: false })
       .then((rawHands) => {
-        const hands: DetectedHand[] = rawHands.map((h) => {
-          const landmarks = h.keypoints3D?.map((kp) => ({
+        const hands: DetectedHand[] = rawHands.map((h): DetectedHand => {
+          const toLandmark = (kp: { x: number; y: number; z?: number; name?: string }): HandLandmark => ({
             x: kp.x,
             y: kp.y,
             z: kp.z ?? 0,
-            name: kp.name,
-          })) ?? h.keypoints.map((kp) => ({ x: kp.x, y: kp.y, z: 0, name: kp.name }));
+            ...(kp.name !== undefined ? { name: kp.name } : {}),
+          });
+
+          const landmarks = (h.keypoints3D ?? h.keypoints).map(toLandmark);
 
           return {
             handedness: h.handedness as "Left" | "Right",
@@ -124,18 +126,17 @@ export class HandTracker {
 function classifyGesture(landmarks: HandLandmark[]): HandGesture {
   if (landmarks.length < 21) return "unknown";
 
-  const wrist = landmarks[0];
-  const thumbTip = landmarks[4];
-  const indexTip = landmarks[8];
-  const middleTip = landmarks[12];
-  const ringTip = landmarks[16];
-  const pinkyTip = landmarks[20];
+  const wrist = landmarks[0]!;
+  const thumbTip = landmarks[4]!;
+  const indexTip = landmarks[8]!;
+  const middleTip = landmarks[12]!;
+  const ringTip = landmarks[16]!;
+  const pinkyTip = landmarks[20]!;
 
-  // Knuckle reference points
-  const indexMcp = landmarks[5];
-  const middleMcp = landmarks[9];
-  const ringMcp = landmarks[13];
-  const pinkyMcp = landmarks[17];
+  const indexMcp = landmarks[5]!;
+  const middleMcp = landmarks[9]!;
+  const ringMcp = landmarks[13]!;
+  const pinkyMcp = landmarks[17]!;
 
   const fingerExtended = (tip: HandLandmark, mcp: HandLandmark): boolean =>
     distance(tip, wrist) > distance(mcp, wrist) * 1.2;

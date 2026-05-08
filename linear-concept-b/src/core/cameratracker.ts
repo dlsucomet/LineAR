@@ -2,8 +2,8 @@
 // Manages webcam capture and uses OpenCV.js for colour-based object detection.
 // OpenCV.js is loaded as a global script (window.cv) from a CDN in index.html.
 
-import type { CameraConfig, DetectedObject, BoundingBox, Point2D } from "../types/index.js";
-import { generateId } from "../utils/helpers.js";
+import type { CameraConfig, DetectedObject, BoundingBox, Point2D } from "../types/index.ts";
+import { generateId } from "../utils/helpers.ts";
 
 // ---------------------------------------------------------------------------
 // OpenCV.js ambient type shim

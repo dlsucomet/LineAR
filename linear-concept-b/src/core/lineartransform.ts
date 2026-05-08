@@ -3,7 +3,7 @@
 // All functions are stateless and fully typed.
 
 import { Matrix } from "ml-matrix";
-import type { Matrix2x2, Point2D, TransformationType } from "../types/index.js";
+import type { Matrix2x2, Point2D, TransformationType } from "../types/index.ts";
 
 // ---------------------------------------------------------------------------
 // Matrix factory helpers
