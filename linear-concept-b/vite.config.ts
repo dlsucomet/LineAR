@@ -1,4 +1,5 @@
 import { defineConfig } from "vite";
+import path from "path";
 
 export default defineConfig({
 
@@ -8,12 +9,17 @@ export default defineConfig({
     outDir: "dist",
     target: "esnext",
   },
+  resolve: {
+    alias: {
+      "@mediapipe/hands": path.resolve(__dirname, "src/shims/mediapipe-hands.ts"),
+    },
+  },
   server: {
     port: 3000,
     open: true
   },
   optimizeDeps: {
-    include: ["@tensorflow/tfjs", "@tensorflow-models/hand-pose-detection", "ml-matrix", "p5"],
+    include: ["@tensorflow/tfjs", "ml-matrix", "p5"],
     exclude: ['@mediapipe/hands', '@tensorflow-models/hand-pose-detection']
   }
 
