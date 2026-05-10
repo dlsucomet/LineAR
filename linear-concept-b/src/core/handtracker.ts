@@ -7,11 +7,22 @@ import "@tensorflow/tfjs-backend-webgl";
 import type { DetectedHand, HandGesture, HandLandmark } from "../types/index.ts";
 
 // ---------------------------------------------------------------------------
+// Types
+// ---------------------------------------------------------------------------
+
+export interface HandTrackerConfig {
+  /** Use the "lite" model for faster but less accurate tracking. */
+  lite?: boolean;
+  /** Maximum number of hands to track. */
+  maxHands?: number;
+}
+
+// ---------------------------------------------------------------------------
 // Constants
 // ---------------------------------------------------------------------------
 
-/** Maximum number of hands to track simultaneously. */
-const MAX_HANDS = 2;
+/** Default maximum number of hands to track simultaneously. */
+const DEFAULT_MAX_HANDS = 2;
 
 /** Pinch distance threshold (normalised units). */
 const PINCH_THRESHOLD = 0.07;
@@ -26,6 +37,11 @@ export class HandTracker {
   private animFrameId: number | null = null;
   private frameCallback: ((hands: DetectedHand[]) => void) | null = null;
   private videoEl: HTMLVideoElement | null = null;
+  private config: HandTrackerConfig;
+
+  constructor(config: HandTrackerConfig = {}) {
+    this.config = config;
+  }
 
   // -------------------------------------------------------------------------
   // Lifecycle
@@ -34,11 +50,10 @@ export class HandTracker {
   /** Initialise the TensorFlow model (downloads weights). */
   async init(): Promise<void> {
     const model = handPoseDetection.SupportedModels.MediaPipeHands;
-    const detectorConfig: handPoseDetection.MediaPipeHandsMediaPipeModelConfig = {
-      runtime: "mediapipe",
-      solutionPath: "https://cdn.jsdelivr.net/npm/@mediapipe/hands",
-      modelType: "full",
-      maxHands: MAX_HANDS,
+    const detectorConfig: handPoseDetection.MediaPipeHandsTfjsModelConfig = {
+      runtime: "tfjs",
+      modelType: this.config.lite ? "lite" : "full",
+      maxHands: this.config.maxHands ?? DEFAULT_MAX_HANDS,
     };
     this.detector = await handPoseDetection.createDetector(model, detectorConfig);
   }
@@ -84,7 +99,7 @@ export class HandTracker {
             ...(kp.name !== undefined ? { name: kp.name } : {}),
           });
 
-          const landmarks = (h.keypoints3D ?? h.keypoints).map(toLandmark);
+          const landmarks = h.keypoints.map(toLandmark);
 
           return {
             handedness: h.handedness as "Left" | "Right",
@@ -97,8 +112,8 @@ export class HandTracker {
         this.frameCallback?.(hands);
         this.animFrameId = requestAnimationFrame(() => this.loop());
       })
-      .catch(() => {
-        // Silently skip frames that fail (e.g. video not ready)
+      .catch((err) => {
+        console.warn("[HandTracker] Frame error:", err);
         this.animFrameId = requestAnimationFrame(() => this.loop());
       });
   }

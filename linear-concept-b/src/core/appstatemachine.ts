@@ -95,7 +95,8 @@ export type AppAction =
   | { type: "CONFIRM_YES" }
   | { type: "CONFIRM_NO" }
   | { type: "TRANSFORMATION_DONE" }
-  | { type: "RESET_CONFIRMED" };
+  | { type: "RESET_CONFIRMED" }
+  | { type: "PHASE_ADVANCE" };
 
 export function transition(state: AppState, action: AppAction): AppState {
   switch (action.type) {
@@ -192,6 +193,12 @@ export function transition(state: AppState, action: AppAction): AppState {
         return { ...state, phase: "CONFIRM_RESET" };
       }
       return state;
+    }
+
+    // Auto-advance from SHOW_CORNERS → SHOW_BASIS_VECTORS
+    case "PHASE_ADVANCE": {
+      if (state.phase !== "SHOW_CORNERS") return state;
+      return { ...state, phase: "SHOW_BASIS_VECTORS" };
     }
 
     default:

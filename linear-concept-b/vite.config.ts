@@ -19,8 +19,8 @@ export default defineConfig({
     open: true
   },
   optimizeDeps: {
-    include: ["@tensorflow/tfjs", "ml-matrix", "p5"],
-    exclude: ['@mediapipe/hands', '@tensorflow-models/hand-pose-detection']
+    include: ["@tensorflow/tfjs", "@tensorflow-models/hand-pose-detection", "long", "ml-matrix", "p5"],
+    exclude: ['@mediapipe/hands']
   }
 
 });
