@@ -1,0 +1,354 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="utf-8">
+    <title>LineAR</title>
+    <meta name="viewport" content="width=device-width, initial-scale=1">
+
+    <link rel="stylesheet" href="LineAR.css">
+    <link href="https://cdn.jsdelivr.net/npm/latin-modern-web@1.0.1/latinmodern.css" rel="stylesheet">
+
+    <script>
+        MathJax = {
+            tex: {
+                inlineMath: [['$', '$'], ['\\(', '\\)']],
+                displayMath: [['\\[', '\\]']]
+            }
+        };
+    </script>
+    <script src="https://cdn.jsdelivr.net/npm/mathjax@3/es5/tex-mml-chtml.js"></script>
+</head>
+<body>
+
+    <div class="content-area">
+
+        <div id="top-instruction" class="instruction">
+            Place paper on the highlighted area
+        </div>
+
+        <div class="content">
+            
+            <div class="right-instruction">
+                <!-- 
+                <button class="change-button"> 1 </button>
+                <br> <br>
+                <button class="change-button"> 2 </button>
+                <button class="change-button"> 2c </button>
+                <button class="change-button"> 2w </button>
+                <br> <br>
+                -->
+            </div>
+            
+
+            <!--
+            <div class="paper-imitation">
+                <p>
+                    Let \( L:\mathbb{R}^2 \to \mathbb{R}^2 \) be a linear transformation such that
+                </p>
+                <p>
+                    <span>
+                        \( L\!\left(\begin{bmatrix}1\\2\end{bmatrix}\right) \)
+                    </span>
+                    =
+                    <span>
+                        \( \begin{bmatrix}4\\-1\end{bmatrix} \)
+                    </span>,
+                    <span>
+                        \( L\!\left(\begin{bmatrix}0\\1\end{bmatrix}\right) \)
+                    </span>
+                    =
+                    <span>
+                        \( \begin{bmatrix}-1\\2\end{bmatrix} \)
+                    </span>
+                </p>
+                <p>
+                    <b>(i)</b> Find
+                    <span>
+                        \( L\!\left(\begin{bmatrix}3\\-2\end{bmatrix}\right) \)
+                    </span>
+                    = 3
+                    <span>
+                        \( L\!\left(\begin{bmatrix}1\\2\end{bmatrix}\right) \)
+                    </span>
+                    + -2
+                    <span>
+                        \( L\!\left(\begin{bmatrix}0\\1\end{bmatrix}\right) \)
+                    </span>
+                </p>
+                <p>
+                    &nbsp; &nbsp; &nbsp; &nbsp; &nbsp; &nbsp; &nbsp; &nbsp; &nbsp; &nbsp; &nbsp; &nbsp; &nbsp; &nbsp; &nbsp; &nbsp;
+                    = 3
+                    <span>
+                        \( \begin{bmatrix}4\\-1\end{bmatrix} \)
+                    </span>
+                    + -2
+                    <span>
+                        \( \begin{bmatrix}-1\\2\end{bmatrix} \)
+                    </span>
+                </p>
+                <p>
+                    &nbsp; &nbsp; &nbsp; &nbsp; &nbsp; &nbsp; &nbsp; &nbsp; &nbsp; &nbsp; &nbsp; &nbsp; &nbsp; &nbsp; &nbsp; &nbsp;
+                    =
+                    <span>
+                        \( \begin{bmatrix}12\\-3\end{bmatrix} \)
+                    </span>
+                    +
+                    <span>
+                        \( \begin{bmatrix}2\\-4\end{bmatrix} \)
+                    </span>
+                </p>
+                <p>
+                    &nbsp; &nbsp; &nbsp; &nbsp; &nbsp; &nbsp; &nbsp; &nbsp; &nbsp; &nbsp; &nbsp; &nbsp; &nbsp; &nbsp; &nbsp; &nbsp;
+                    =
+                    <span>
+                        \( \begin{bmatrix}14\\-7\end{bmatrix} \)
+                    </span>
+                </p>
+            </div>
+            -->
+
+            <div class="paper">
+            
+                <div id="top-left" class="biggest-box">
+                    <div id="top-left-first" class="big-box"></div>
+                    <div id="top-left-second" class="big-box"></div>
+                    <div id="top-left-third" class="big-box"></div>
+                    <div id="top-left-fourth" class="big-box"></div>
+                    <div id="top-left-fifth" class="big-box"></div>
+                    <div id="top-left-sixth" class="big-box"></div>
+                    <div id="top-left-seventh" class="biggest-box">
+                        <div id="top-left-seventh-first" class="box"></div>
+                        <div id="top-left-seventh-second" class="box"></div>
+                        <div id="top-left-seventh-third" class="box"></div>
+                        <div id="top-left-seventh-fourth" class="box"></div>
+                        <div id="top-left-seventh-fifth" class="box"></div>
+                        <div id="top-left-seventh-sixth" class="box"></div>
+                        <div id="top-left-seventh-seventh" class="box"></div>
+                        <div id="top-left-seventh-eighth" class="box"></div>
+                        <div id="top-left-seventh-ninth" class="box"></div>
+                    </div>
+                    <div id="top-left-eighth" class="biggest-box">
+                        <div id="top-left-eighth-first" class="box"></div>
+                        <div id="top-left-eighth-second" class="box"></div>
+                        <div id="top-left-eighth-third" class="box"></div>
+                        <div id="top-left-eighth-fourth" class="box"></div>
+                        <div id="top-left-eighth-fifth" class="box"></div>
+                        <div id="top-left-eighth-sixth" class="box"></div>
+                        <div id="top-left-eighth-seventh" class="box"></div>
+                        <div id="top-left-eighth-eighth" class="box"></div>
+                        <div id="top-left-eighth-ninth" class="box"></div>
+                    </div>
+                    <div id="top-left-ninth" class="biggest-box">
+                        <div id="top-left-ninth-first" class="box"></div>
+                        <div id="top-left-ninth-second" class="box"></div>
+                        <div id="top-left-ninth-third" class="box"></div>
+                        <div id="top-left-ninth-fourth" class="box"></div>
+                        <div id="top-left-ninth-fifth" class="box"></div>
+                        <div id="top-left-ninth-sixth" class="box"></div>
+                        <div id="top-left-ninth-seventh" class="box"></div>
+                        <div id="top-left-ninth-eighth" class="box"></div>
+                        <div id="top-left-ninth-ninth" class="box"></div>
+                    </div>
+                </div>
+
+                <div id="top-mid" class="biggest-box">
+                    <div id="top-mid-first" class="big-box"></div>
+                    <div id="top-mid-second" class="big-box"></div>
+                    <div id="top-mid-third" class="big-box"></div>
+                    <div id="top-mid-fourth" class="big-box"></div>
+                    <div id="top-mid-fifth" class="big-box"></div>
+                    <div id="top-mid-sixth" class="big-box"></div>
+                    <div id="top-mid-seventh" class="biggest-box">
+                        <div id="top-mid-seventh-first" class="box"></div>
+                        <div id="top-mid-seventh-second" class="box"></div>
+                        <div id="top-mid-seventh-third" class="box"></div>
+                        <div id="top-mid-seventh-fourth" class="box"></div>
+                        <div id="top-mid-seventh-fifth" class="box"></div>
+                        <div id="top-mid-seventh-sixth" class="box"></div>
+                        <div id="top-mid-seventh-seventh" class="box"></div>
+                        <div id="top-mid-seventh-eighth" class="box"></div>
+                        <div id="top-mid-seventh-ninth" class="box"></div>
+                    </div>
+                    <div id="top-mid-eighth" class="biggest-box">
+                        <div id="top-mid-eighth-first" class="box"></div>
+                        <div id="top-mid-eighth-second" class="box"></div>
+                        <div id="top-mid-eighth-third" class="box"></div>
+                        <div id="top-mid-eighth-fourth" class="box"></div>
+                        <div id="top-mid-eighth-fifth" class="box"></div>
+                        <div id="top-mid-eighth-sixth" class="box"></div>
+                        <div id="top-mid-eighth-seventh" class="box"></div>
+                        <div id="top-mid-eighth-eighth" class="box"></div>
+                        <div id="top-mid-eighth-ninth" class="box"></div>
+                    </div>
+                    <div id="top-mid-ninth" class="biggest-box">
+                        <div id="top-mid-ninth-first" class="box"></div>
+                        <div id="top-mid-ninth-second" class="box"></div>
+                        <div id="top-mid-ninth-third" class="box"></div>
+                        <div id="top-mid-ninth-fourth" class="box"></div>
+                        <div id="top-mid-ninth-fifth" class="box"></div>
+                        <div id="top-mid-ninth-sixth" class="box"></div>
+                        <div id="top-mid-ninth-seventh" class="box"></div>
+                        <div id="top-mid-ninth-eighth" class="box"></div>
+                        <div id="top-mid-ninth-ninth" class="box"></div>
+                    </div>
+                </div>
+
+                <div id="top-right" class="biggest-box">
+                    <div id="top-right-first" class="big-box"></div>
+                    <div id="top-right-second" class="big-box"></div>
+                    <div id="top-right-third" class="big-box"></div>
+                    <div id="top-right-fourth" class="big-box"></div>
+                    <div id="top-right-fifth" class="big-box"></div>
+                    <div id="top-right-sixth" class="big-box"></div>
+                    <div id="top-right-seventh" class="biggest-box">
+                        <div id="top-right-seventh-first" class="box"></div>
+                        <div id="top-right-seventh-second" class="box"></div>
+                        <div id="top-right-seventh-third" class="box"></div>
+                        <div id="top-right-seventh-fourth" class="box"></div>
+                        <div id="top-right-seventh-fifth" class="box"></div>
+                        <div id="top-right-seventh-sixth" class="box"></div>
+                        <div id="top-right-seventh-seventh" class="box"></div>
+                        <div id="top-right-seventh-eighth" class="box"></div>
+                        <div id="top-right-seventh-ninth" class="box"></div>
+                    </div>
+                    <div id="top-right-eighth" class="biggest-box">
+                        <div id="top-right-eighth-first" class="box"></div>
+                        <div id="top-right-eighth-second" class="box"></div>
+                        <div id="top-right-eighth-third" class="box"></div>
+                        <div id="top-right-eighth-fourth" class="box"></div>
+                        <div id="top-right-eighth-fifth" class="box"></div>
+                        <div id="top-right-eighth-sixth" class="box"></div>
+                        <div id="top-right-eighth-seventh" class="box"></div>
+                        <div id="top-right-eighth-eighth" class="box"></div>
+                        <div id="top-right-eighth-ninth" class="box"></div>
+                    </div>
+                    <div id="top-right-ninth" class="biggest-box">
+                        <div id="top-right-ninth-first" class="box"></div>
+                        <div id="top-right-ninth-second" class="box"></div>
+                        <div id="top-right-ninth-third" class="box"></div>
+                        <div id="top-right-ninth-fourth" class="box"></div>
+                        <div id="top-right-ninth-fifth" class="box"></div>
+                        <div id="top-right-ninth-sixth" class="box"></div>
+                        <div id="top-right-ninth-seventh" class="box"></div>
+                        <div id="top-right-ninth-eighth" class="box"></div>
+                        <div id="top-right-ninth-ninth" class="box"></div>
+                    </div>
+                </div>
+
+                <div id="mid-left" class="biggest-box">
+                    <div id="mid-left-first" class="box"></div>
+                    <div id="mid-left-second" class="box"></div>
+                    <div id="mid-left-third" class="box"></div>
+                    <div id="mid-left-fourth" class="box"></div>
+                    <div id="mid-left-fifth" class="box"></div>
+                    <div id="mid-left-sixth" class="box"></div>
+                    <div id="mid-left-seventh" class="box"></div>
+                    <div id="mid-left-eighth" class="box"></div>
+                    <div id="mid-left-ninth" class="box"></div>
+                </div>
+
+                <div id="mid-mid" class="biggest-box">
+                    <div id="mid-mid-first" class="biggest-box">
+                        <div id="mid-mid-first-first" class="box"></div>
+                        <div id="mid-mid-first-second" class="box"></div>
+                        <div id="mid-mid-first-third" class="box"></div>
+                        <div id="mid-mid-first-fourth" class="box"></div>
+                        <div id="mid-mid-first-fifth" class="box"></div>
+                        <div id="mid-mid-first-sixth" class="box"></div>
+                        <div id="mid-mid-first-seventh" class="box"></div>
+                        <div id="mid-mid-first-eighth" class="box"></div>
+                        <div id="mid-mid-first-ninth" class="box"></div>
+                    </div>
+                    <div id="mid-mid-second" class="biggest-box">
+                        <div id="mid-mid-second-first" class="box"></div>
+                        <div id="mid-mid-second-second" class="box"></div>
+                        <div id="mid-mid-second-third" class="box"></div>
+                        <div id="mid-mid-second-fourth" class="box"></div>
+                        <div id="mid-mid-second-fifth" class="box"></div>
+                        <div id="mid-mid-second-sixth" class="box"></div>
+                        <div id="mid-mid-second-seventh" class="box"></div>
+                        <div id="mid-mid-second-eighth" class="box"></div>
+                        <div id="mid-mid-second-ninth" class="box"></div>
+                    </div>
+                    <div id="mid-mid-third" class="biggest-box">
+                        <div id="mid-mid-third-first" class="box"></div>
+                        <div id="mid-mid-third-second" class="box"></div>
+                        <div id="mid-mid-third-third" class="box"></div>
+                        <div id="mid-mid-third-fourth" class="box"></div>
+                        <div id="mid-mid-third-fifth" class="box"></div>
+                        <div id="mid-mid-third-sixth" class="box"></div>
+                        <div id="mid-mid-third-seventh" class="box"></div>
+                        <div id="mid-mid-third-eighth" class="box"></div>
+                        <div id="mid-mid-third-ninth" class="box"></div>
+                    </div>
+                    <div id="mid-mid-fourth" class="box"></div>
+                    <div id="mid-mid-fifth" class="box"></div>
+                    <div id="mid-mid-sixth" class="box"></div>
+                    <div id="mid-mid-seventh" class="box"></div>
+                    <div id="mid-mid-eighth" class="box"></div>
+                    <div id="mid-mid-ninth" class="box"></div>
+                </div>
+
+                <div id="mid-right" class="biggest-box">
+                    <div id="mid-right-first" class="box"></div>
+                    <div id="mid-right-second" class="box"></div>
+                    <div id="mid-right-third" class="box"></div>
+                    <div id="mid-right-fourth" class="box"></div>
+                    <div id="mid-right-fifth" class="box"></div>
+                    <div id="mid-right-sixth" class="box"></div>
+                    <div id="mid-right-seventh" class="box"></div>
+                    <div id="mid-right-eighth" class="box"></div>
+                    <div id="mid-right-ninth" class="box"></div>
+                </div>
+
+                <div id="bot-left" class="biggest-box">
+                    <div id="bot-left-first" class="box"></div>
+                    <div id="bot-left-second" class="box"></div>
+                    <div id="bot-left-third" class="box"></div>
+                    <div id="bot-left-fourth" class="box"></div>
+                    <div id="bot-left-fifth" class="box"></div>
+                    <div id="bot-left-sixth" class="box"></div>
+                    <div id="bot-left-seventh" class="box"></div>
+                    <div id="bot-left-eighth" class="box"></div>
+                    <div id="bot-left-ninth" class="box"></div>
+                </div>
+
+                <div id="bot-mid" class="biggest-box">
+                    <div id="bot-mid-first" class="box"></div>
+                    <div id="bot-mid-second" class="box"></div>
+                    <div id="bot-mid-third" class="box"></div>
+                    <div id="bot-mid-fourth" class="box"></div>
+                    <div id="bot-mid-fifth" class="box"></div>
+                    <div id="bot-mid-sixth" class="box"></div>
+                    <div id="bot-mid-seventh" class="box"></div>
+                    <div id="bot-mid-eighth" class="box"></div>
+                    <div id="bot-mid-ninth" class="box"></div>
+                </div>
+
+                <div id="bot-right" class="biggest-box">
+                    <div id="bot-right-first" class="box"></div>
+                    <div id="bot-right-second" class="box"></div>
+                    <div id="bot-right-third" class="box"></div>
+                    <div id="bot-right-fourth" class="box"></div>
+                    <div id="bot-right-fifth" class="box"></div>
+                    <div id="bot-right-sixth" class="box"></div>
+                    <div id="bot-right-seventh" class="box"></div>
+                    <div id="bot-right-eighth" class="box"></div>
+                    <div id="bot-right-ninth" class="box"></div>
+                </div>
+                
+
+            </div> <!-- End of Paper -->
+
+            
+            <div id="side-instruction" class="right-instruction">
+                
+            </div>
+
+
+        </div>
+    </div>
+
+<script src="LineAR.js"></script>
+</body>
+</html>

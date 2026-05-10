@@ -1,0 +1,100 @@
+body {
+  margin: 0;
+  font-family: Arial, sans-serif;
+  background: #ffffff;
+}
+
+.content-area {
+  width: 90%;
+  margin: 0px 40px 40px 40px;
+  background: #ffffff;
+  padding: 20px;
+  position: relative;
+}
+
+.content {
+  display: flex;
+  justify-content: space-between;
+  align-items: flex-start;
+}
+
+.paper {
+  max-width: 500px;
+  height: 600px;
+  width: 100%;
+  background-color: #e5e5e5;
+  box-sizing: border-box;
+  margin: 20px;
+  border: 2px dashed #666;
+  display: grid;
+  grid-template-columns: repeat(3, 1fr);
+  grid-template-rows: repeat(3, 1fr);
+}
+
+.paper-imitation {
+  max-width: 500px;
+  height: 600px;
+  width: 100%;
+  background-color: #e5e5e5;
+  box-sizing: border-box;
+  margin: 20px;
+  padding: 20px;
+  border: 2px dashed #666;
+}
+
+.biggest-box {
+  /* border: 1px solid black; */         
+  display: grid;
+  grid-template-columns: repeat(3, 1fr);
+  grid-template-rows: repeat(3, 1fr);
+}
+
+.big-box {      
+  display: grid;
+  grid-template-columns: repeat(3, 1fr);
+  grid-template-rows: repeat(3, 1fr);
+}
+
+.box {
+  /* border: 1px solid black;    */       
+  display: grid;
+  grid-template-columns: repeat(3, 1fr);
+  grid-template-rows: repeat(3, 1fr);
+}
+
+.copy-box {
+  background-color: #45a8fa;
+  opacity: 50%;
+}
+
+.wrong-box {
+  background-color: #ff0000;
+  opacity: 50%;
+}
+
+.correct-box {
+  background-color: #079707;
+  opacity: 50%;
+}
+
+/* Instructions */
+.instruction {
+  text-align: center;
+  font-size: 18px;
+  font-weight: bold;
+}
+
+.right-instruction {
+  margin-top: 150px;
+  width: 250px;
+  text-align: left;
+  font-size: 14px;
+  font-weight: bold;
+}
+
+.change-button {
+    background: #c2c2c2;
+    color: #000000;
+    font-size: 10px;
+    font-weight: bold;
+}
