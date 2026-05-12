@@ -1,26 +1,5 @@
-
-
-function setBoxState(ids, state) {
-
-  if (!Array.isArray(ids)) {
-    ids = [ids];
-  }
-
-  ids.forEach(id => {
-
-    const box = document.getElementById(id);
-
-    box.classList.remove(
-      "copy-box",
-      "correct-box",
-      "wrong-box"
-    );
-
-    box.classList.add(state);
-
-  });
-
-}
+const APP_KEY = "...";
+const HMAC_KEY = "...";
 
 const emptyInstruction = "";
 
@@ -41,15 +20,6 @@ const sideInstructionText = [
   "Scalar multiplication is done this way:",
   "Vector addition is done this way:"
 ];
-
-function setTopInstruction(text) {
-  document.getElementById("top-instruction").textContent = text;
-}
-
-function setSideInstruction(text) {
-  document.getElementById("side-instruction").textContent = text;
-}
-
 
 /*
   States
@@ -644,9 +614,67 @@ const steps = [
 
 ];
 
+
+function setBoxState(ids, state) {
+
+  if (!Array.isArray(ids)) {
+    ids = [ids];
+  }
+
+  ids.forEach(id => {
+
+    const box = document.getElementById(id);
+
+    if (!box) return;
+
+    box.classList.remove(
+      "copy-box",
+      "correct-box",
+      "wrong-box"
+    );
+
+    if (state !== "") {
+      box.classList.add(state);
+    }
+
+  });
+
+}
+
+function clearAllBoxes() {
+
+  const boxes =
+    document.querySelectorAll(".box");
+
+  boxes.forEach(box => {
+
+    box.classList.remove(
+      "copy-box",
+      "correct-box",
+      "wrong-box"
+    );
+
+  });
+
+}
+
+function setTopInstruction(text) {
+  document.getElementById("top-instruction").textContent = text;
+}
+
+function setSideInstruction(text) {
+  document.getElementById("side-instruction").textContent = text;
+}
+
+let currentStep = 0;
+
 function renderStep(stepIndex) {
 
+  clearAllBoxes();
+
   const step = steps[stepIndex];
+
+  if (!step) return;
 
   setTopInstruction(step.topText);
 
@@ -664,6 +692,201 @@ function renderStep(stepIndex) {
 }
 
 /*
+                                                                    Webcam stuff                                            
+*/
+const video =
+  document.createElement("video");
+
+video.autoplay = true;
+video.playsInline = true;
+
+const canvas =
+  document.createElement("canvas");
+
+const ctx =
+  canvas.getContext("2d");
+
+async function initializeCamera() {
+
+  const stream =
+    await navigator.mediaDevices.getUserMedia({
+
+      video: {
+        width: 1920,
+        height: 1080
+      }
+
+    });
+
+  video.srcObject = stream;
+
+  console.log(
+    "Camera initialized"
+  );
+
+}
+
+
+/* 
+                                                                          iinkTS 
+*/
+
+/*
+const editorElement =
+  document.getElementById(
+    "math-editor"
+  );
+
+const editor =
+  new iink.Editor(
+    editorElement,
+    {
+
+      configuration: {
+
+        server: {
+
+          scheme: "https",
+
+          host:
+            "cloud.myscript.com",
+
+          applicationKey:
+            APP_KEY,
+
+          hmacKey:
+            HMAC_KEY
+        },
+
+        recognition: {
+          type: "MATH"
+        }
+
+      }
+
+    }
+  );
+
+async function initializeEditor() {
+
+  await editor.initialize();
+
+  console.log(
+    "iinkTS initialized"
+  );
+
+}
+*/
+
+/*
+                                                                       Main Loop
+*/
+let previousFrame = null;
+
+async function recognitionLoop() {
+  canvas.width =
+    video.videoWidth;
+
+  canvas.height =
+    video.videoHeight;
+
+  ctx.drawImage(
+    video,
+    0,
+    0
+  );
+
+  const currentFrame =
+    canvas.toDataURL(
+      "image/png"
+    );
+
+  if (
+    currentFrame !== previousFrame
+  ) {
+
+    previousFrame =
+      currentFrame;
+
+    console.log(
+      "Paper changed"
+    );
+
+    /*
+      Stiil need to crop picture to paper, detect handwriting, and detect matrix
+    */
+
+    await recognizeMath();
+
+  }
+
+  requestAnimationFrame(
+    recognitionLoop
+  );
+
+}
+
+/*
+                                                              Recognize function
+*/
+
+/*
+async function recognizeMath() {
+
+  try {
+    const jiix =
+      await editor.export_(
+        "application/vnd.myscript.jiix"
+      );
+
+    console.log(
+      "JIIX:",
+      jiix
+    );
+
+    const recognized =
+      JSON.stringify(jiix);
+
+    if (
+      recognized.includes()
+    ) {
+      currentStep = 0;
+      renderStep(currentStep)
+    }
+  }
+
+  catch(error) {
+
+    console.error(
+      "Recognition error:",
+      error
+    );
+  }
+}
+*/
+
+async function initializeSystem() {
+
+  await initializeCamera();
+
+  // await initializeEditor();
+
+  renderStep(5);
+
+  recognitionLoop();
+
+}
+
+initializeSystem();
+
+
+
+
+
+
+
+
+/*
 document
   .getElementById("checker")
   .addEventListener("click", () => {
@@ -671,6 +894,7 @@ document
   });
 */
 
+/*
 const boxes = document.querySelectorAll(".box");
 
 boxes.forEach(box => {
@@ -716,3 +940,4 @@ bigBoxes.forEach(box => {
 
   });
 });
+*/
