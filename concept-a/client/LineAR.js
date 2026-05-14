@@ -1,5 +1,5 @@
-const APP_KEY = "...";
-const HMAC_KEY = "...";
+const APP_KEY = "0c186186-7ebb-4b0d-a824-69da658edbd6";
+const HMAC_KEY = "e37026dc-f77f-4103-a401-16a85f5a7b59";
 
 const emptyInstruction = "";
 
@@ -689,6 +689,10 @@ function renderStep(stepIndex) {
 
   });
 
+  console.log(
+    "State changed to " + stepIndex
+  );
+
 }
 
 /*
@@ -726,69 +730,20 @@ async function initializeCamera() {
 
 }
 
-
-/* 
-                                                                          iinkTS 
-*/
-
-/*
-const editorElement =
-  document.getElementById(
-    "math-editor"
-  );
-
-const editor =
-  new iink.Editor(
-    editorElement,
-    {
-
-      configuration: {
-
-        server: {
-
-          scheme: "https",
-
-          host:
-            "cloud.myscript.com",
-
-          applicationKey:
-            APP_KEY,
-
-          hmacKey:
-            HMAC_KEY
-        },
-
-        recognition: {
-          type: "MATH"
-        }
-
-      }
-
-    }
-  );
-
-async function initializeEditor() {
-
-  await editor.initialize();
-
-  console.log(
-    "iinkTS initialized"
-  );
-
-}
-*/
-
 /*
                                                                        Main Loop
 */
 let previousFrame = null;
 
 async function recognitionLoop() {
-  canvas.width =
-    video.videoWidth;
 
-  canvas.height =
-    video.videoHeight;
+  if (video.videoWidth === 0 || video.videoHeight === 0) {
+    setTimeout(recognitionLoop, 1000);
+    return;
+  }
+  
+  canvas.width = video.videoWidth;
+  canvas.height = video.videoHeight;
 
   ctx.drawImage(
     video,
@@ -796,86 +751,72 @@ async function recognitionLoop() {
     0
   );
 
-  const currentFrame =
-    canvas.toDataURL(
-      "image/png"
+  const currentFrame = canvas.toDataURL("image/png");
+
+  if (currentFrame !== previousFrame) {
+    previousFrame = currentFrame;
+    console.log("Paper changed");
+
+    await fetch("http://localhost:3000/frame", {
+        method: "POST",
+        headers: {
+          "Content-Type":
+            "application/json"
+        },
+        body: JSON.stringify({
+          image:
+            currentFrame
+        })
+      }
     );
 
-  if (
-    currentFrame !== previousFrame
-  ) {
+    const response = await fetch("http://localhost:3000/frame", {
+        method: "POST",
 
-    previousFrame =
-      currentFrame;
-
-    console.log(
-      "Paper changed"
-    );
-
-    /*
-      Stiil need to crop picture to paper, detect handwriting, and detect matrix
-    */
-
-    await recognizeMath();
-
-  }
-
-  requestAnimationFrame(
-    recognitionLoop
-  );
-
-}
-
-/*
-                                                              Recognize function
-*/
-
-/*
-async function recognizeMath() {
-
-  try {
-    const jiix =
-      await editor.export_(
-        "application/vnd.myscript.jiix"
+        headers: {
+          "Content-Type":
+          "application/json"
+          },
+          body: JSON.stringify({
+            image: currentFrame
+          })
+        }
       );
 
-    console.log(
-      "JIIX:",
-      jiix
-    );
+    const result = await response.json();
 
-    const recognized =
-      JSON.stringify(jiix);
+    console.log(result);
 
     if (
-      recognized.includes()
+      result.state === "correct"
     ) {
-      currentStep = 0;
-      renderStep(currentStep)
+
+      currentStep += 1;
+
+      if(currentStep >= 26) {
+        currentStep = 0;
+      }
+
+      renderStep(currentStep);
+
     }
-  }
 
-  catch(error) {
-
-    console.error(
-      "Recognition error:",
-      error
-    );
   }
+  
+  setTimeout(recognitionLoop, 3000);
 }
-*/
 
 async function initializeSystem() {
 
   await initializeCamera();
 
-  // await initializeEditor();
+  await new Promise(resolve => setTimeout(resolve, 2000));
 
-  renderStep(5);
+  renderStep(0);
 
   recognitionLoop();
 
-}
+};
 
 initializeSystem();
 
@@ -883,61 +824,3 @@ initializeSystem();
 
 
 
-
-
-
-/*
-document
-  .getElementById("checker")
-  .addEventListener("click", () => {
-    renderStep(25)
-  });
-*/
-
-/*
-const boxes = document.querySelectorAll(".box");
-
-boxes.forEach(box => {
-  box.addEventListener("click", () => {
-
-    if (box.classList.contains("copy-box")) {
-      box.classList.remove("copy-box");
-      box.classList.add("correct-box");
-
-    } else if (box.classList.contains("correct-box")) {
-      box.classList.remove("correct-box");
-      box.classList.add("wrong-box");
-
-    } else if (box.classList.contains("wrong-box")) {
-      box.classList.remove("wrong-box");
-
-    } else {
-      box.classList.add("copy-box");
-    }
-
-  });
-});
-
-const bigBoxes = document.querySelectorAll(".big-box");
-
-bigBoxes.forEach(box => {
-  box.addEventListener("click", () => {
-
-    if (box.classList.contains("copy-box")) {
-      box.classList.remove("copy-box");
-      box.classList.add("correct-box");
-
-    } else if (box.classList.contains("correct-box")) {
-      box.classList.remove("correct-box");
-      box.classList.add("wrong-box");
-
-    } else if (box.classList.contains("wrong-box")) {
-      box.classList.remove("wrong-box");
-
-    } else {
-      box.classList.add("copy-box");
-    }
-
-  });
-});
-*/
