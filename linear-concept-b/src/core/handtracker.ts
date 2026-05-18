@@ -25,7 +25,10 @@ export interface HandTrackerConfig {
 const DEFAULT_MAX_HANDS = 2;
 
 /** Pinch distance threshold (normalised units). */
-const PINCH_THRESHOLD = 0.07;
+const PINCH_THRESHOLD = 0.09;
+
+/** Number of consecutive frames a gesture must hold before being classified. */
+const GESTURE_HOLD_FRAMES = 2;
 
 // ---------------------------------------------------------------------------
 // HandTracker class
@@ -123,8 +126,16 @@ export class HandTracker {
 // Gesture classification helpers
 // ---------------------------------------------------------------------------
 
+// ─── Gesture state (hold smoothing) ──────────────────────────────────────────
+
+let lastGesture: HandGesture = "unknown";
+let gestureHoldCount = 0;
+
 /**
  * Classify a hand gesture from 21 MediaPipe landmarks.
+ *
+ * Uses hold-frame smoothing: a gesture must persist for GESTURE_HOLD_FRAMES
+ * consecutive frames before the classification changes.
  *
  * Landmark indices (MediaPipe convention):
  *   0  = WRIST
@@ -154,7 +165,7 @@ function classifyGesture(landmarks: HandLandmark[]): HandGesture {
   const pinkyMcp = landmarks[17]!;
 
   const fingerExtended = (tip: HandLandmark, mcp: HandLandmark): boolean =>
-    distance(tip, wrist) > distance(mcp, wrist) * 1.2;
+    distance(tip, wrist) > distance(mcp, wrist) * 1.25;
 
   const indexExt = fingerExtended(indexTip, indexMcp);
   const middleExt = fingerExtended(middleTip, middleMcp);
@@ -162,14 +173,34 @@ function classifyGesture(landmarks: HandLandmark[]): HandGesture {
   const pinkyExt = fingerExtended(pinkyTip, pinkyMcp);
 
   // Pinch: thumb and index tips are close
-  const pinching = distance(thumbTip, indexTip) < PINCH_THRESHOLD * distance(wrist, indexMcp) * 10;
+  const pinchDist = distance(thumbTip, indexTip);
+  const wristMcpDist = distance(wrist, indexMcp);
+  const pinching = pinchDist < PINCH_THRESHOLD * wristMcpDist * 10;
 
-  if (pinching && !middleExt && !ringExt && !pinkyExt) return "pinch";
-  if (indexExt && !middleExt && !ringExt && !pinkyExt) return "point";
-  if (!indexExt && !middleExt && !ringExt && !pinkyExt) return "fist";
-  if (indexExt && middleExt && ringExt && pinkyExt) return "open";
+  let raw: HandGesture;
+  if (pinching) {
+    raw = "pinch";
+  } else if (indexExt && !middleExt && !ringExt && !pinkyExt) {
+    raw = "point";
+  } else if (!indexExt && !middleExt && !ringExt && !pinkyExt) {
+    raw = "fist";
+  } else if (indexExt && middleExt && ringExt && pinkyExt) {
+    raw = "open";
+  } else {
+    raw = "unknown";
+  }
 
-  return "unknown";
+  // Hold-frame smoothing: only switch after GESTURE_HOLD_FRAMES consistent frames
+  if (raw === lastGesture) {
+    gestureHoldCount = Math.min(gestureHoldCount + 1, GESTURE_HOLD_FRAMES);
+  } else {
+    gestureHoldCount = 1;
+  }
+
+  if (gestureHoldCount >= GESTURE_HOLD_FRAMES) {
+    lastGesture = raw;
+  }
+  return lastGesture;
 }
 
 function distance(a: HandLandmark, b: HandLandmark): number {

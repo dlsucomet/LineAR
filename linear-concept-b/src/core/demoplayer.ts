@@ -18,13 +18,9 @@ export const VIRTUAL_OBJECT = {
 
 export const PRESET_MATRIX: Matrix2x2 = [1, 0.5, 0.3, 1];
 
-// ─── Corner drag target (phase 3: POINTS_CALCULATED) ────────────────────────
-
-export const DRAG_TARGET = {
-  cornerIndex: 0,
-  targetPos: { x: 4, y: 1 } as Point2D,
-  snapRadius: 1.5,
-};
+// Corner drag now snaps to nearest integer grid intersection.
+// Snap radius is defined in tabletopui.ts as GRID_SNAP_RADIUS (0.5 units).
+// Phase advances via a "Done ✓" button after both C and D have been placed.
 
 // ─── Ghost arrow targets (phase 5: SHOW_BASIS_VECTORS) ──────────────────────
 
@@ -46,7 +42,7 @@ export const PHASE_TIMINGS = {
 // ─── Interaction thresholds ─────────────────────────────────────────────────
 
 export const HOVER_DWELL_MS = 400;
-export const GRAB_RADIUS_PX = 40;
+export const GRAB_RADIUS_PX = 60;
 export const ARROW_GRAB_RADIUS_PX = 30;
 export const ARROW_SNAP_PX = 15;
 export const CORNER_SNAP_RADIUS = 1.5;
@@ -55,7 +51,7 @@ export const CORNER_SNAP_RADIUS = 1.5;
 
 export const DEMO_INSTRUCTIONS: Record<string, string> = {
   WAITING_FOR_OBJECT: "Point at ▶ Start Demo and hold still",
-  POINTS_CALCULATED: "Pinch the red corner and drag it to the target",
+  POINTS_CALCULATED: "Drag bottom corners to grid positions, then tap Done ✓",
   SHOW_BASIS_VECTORS: "Drag each arrow tip to the dotted target",
   CONFIRM_TRANSFORM: "Basis Vectors adjusted. Start Linear Transformation",
 };

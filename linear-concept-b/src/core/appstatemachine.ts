@@ -56,6 +56,9 @@ export interface AppState {
   /** Raw detected objects from the camera tracker (current frame). */
   detectedObjects: DetectedObject[];
 
+  /** Detection outline points for UI rendering (grid coordinates). */
+  detectionOutline: Point2D[] | null;
+
   /** How many consecutive frames an object has been detected. */
   stableFrameCount: number;
 }
@@ -78,6 +81,7 @@ export function createInitialState(): AppState {
     pendingMatrix: [...IDENTITY],
     appliedMatrix: [...IDENTITY],
     detectedObjects: [],
+    detectionOutline: null,
     stableFrameCount: 0,
   };
 }

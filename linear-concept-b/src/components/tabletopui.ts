@@ -24,18 +24,24 @@ const C = {
   btnYesBg: "#3a5a7a",
   btnNoBg: "#555",
   btnText: "#fff",
-  e1: "#e63030",
-  e2: "#22aa22",
+  e1: "#3a7bd5",
+  e2: "#5b9cf5",
   corner: "#222",
   cornerFill: "#fff",
   matrixText: "#111",
+  hl: "#3a7bd5",
+  hlBg: "rgba(58, 123, 213, 0.4)",
+  hlStroke: "#3a7bd5",
+  hlActive: "#5b9cf5",
+  hlActiveBg: "rgba(91, 156, 245, 0.4)",
 };
 
 // ---------------------------------------------------------------------------
 // Layout constants
 // ---------------------------------------------------------------------------
-const INSET = 28;
-const INSTR_H = 52;
+const GRID_RANGE = 10;
+const GRID_SNAP_RADIUS = 2.0;
+const TEXT_STRIP_H = 40;
 
 // ---------------------------------------------------------------------------
 // TabletopUI
@@ -51,9 +57,9 @@ export class TabletopUI {
   private matrix: Matrix2x2 = [1, 0, 0, 1];
   private appliedMatrix: Matrix2x2 = [1, 0, 0, 1];
   private corners: [Point2D, Point2D, Point2D, Point2D] | null = null;
+  private detectionOutline: Point2D[] | null = null;
   private btnYes: DOMRect | null = null;
   private btnNo: DOMRect | null = null;
-  private btnStart: DOMRect | null = null;
   private btnContinue: DOMRect | null = null;
 
   // Demo-specific state
@@ -61,23 +67,30 @@ export class TabletopUI {
   private dwellProgress = 0;
   private demoInstructions: Record<string, string> | null = null;
 
-  // Drag state (phase 3: POINTS_CALCULATED)
-  private draggingCorner = false;
-  private draggedCornerPos: Point2D | null = null;
-  private targetPos: Point2D | null = null;
-  private cornerInTarget = false;
+  // Drag state (phase 3: POINTS_CALCULATED) — all 4 corners snap to grid intersections
+  private cornerDragPos: [Point2D | null, Point2D | null, Point2D | null, Point2D | null] = [null, null, null, null];
+  private cornerSnapped: [boolean, boolean, boolean, boolean] = [false, false, false, false];
+  private cornerLocked: [boolean, boolean, boolean, boolean] = [false, false, false, false];
+
+  // Done button (phase 3)
+  showDoneButton = false;
+  btnDone: DOMRect | null = null;
+  onDone: (() => void) | null = null;
 
   // Arrow drag state (phase 5: SHOW_BASIS_VECTORS)
   private ghostArrows: { e1: Point2D; e2: Point2D } | null = null;
   private e1Snapped = false;
   private e2Snapped = false;
 
+  // Mouse tracking for corner drag fallback
+  private mouseDown = false;
+  private mouseCanvasPos: Point2D | null = null;
+
   // Raw hand data for skeleton visualization
   private rawHands: DetectedHand[] | null = null;
 
   onYes: (() => void) | null = null;
   onNo: (() => void) | null = null;
-  onStart: (() => void) | null = null;
   onContinue: (() => void) | null = null;
 
   constructor(canvas: HTMLCanvasElement) {
@@ -86,6 +99,10 @@ export class TabletopUI {
     if (!ctx) throw new Error("Could not get 2D canvas context.");
     this.ctx = ctx;
     canvas.addEventListener("click", (e) => this.handleClick(e));
+    canvas.addEventListener("mousedown", (e) => this.handleMouseDown(e));
+    canvas.addEventListener("mousemove", (e) => this.handleMouseMove(e));
+    canvas.addEventListener("mouseup", () => this.handleMouseUp());
+    canvas.addEventListener("mouseleave", () => this.handleMouseUp());
   }
 
   resize(w: number, h: number): void {
@@ -98,28 +115,48 @@ export class TabletopUI {
   setAppliedMatrix(m: Matrix2x2): void { this.appliedMatrix = m; }
   setCorners(c: [Point2D, Point2D, Point2D, Point2D] | null): void { this.corners = c; }
 
+  setDetectionOutline(outline: Point2D[] | null): void { this.detectionOutline = outline; }
+
   // Demo setters
   setFingerPosition(pos: Point2D | null): void { this.fingerPos = pos; }
   setDwellProgress(v: number): void { this.dwellProgress = v; }
   setDemoInstructions(overrides: Record<string, string> | null): void { this.demoInstructions = overrides; }
 
-  setDragTarget(pos: Point2D | null): void { this.targetPos = pos; }
-  setDraggedCorner(pos: Point2D | null, dragging: boolean): void {
-    this.draggedCornerPos = pos;
-    this.draggingCorner = dragging;
+  setCornerDrag(index: number, pos: Point2D | null, snapped: boolean): void {
+    this.cornerDragPos[index] = pos;
+    this.cornerSnapped[index] = snapped;
   }
-  setCornerInTarget(v: boolean): void { this.cornerInTarget = v; }
+
+  setCornerLockedStates(states: [boolean, boolean, boolean, boolean]): void {
+    this.cornerLocked = states;
+  }
+
+  getDragPos(index: number): Point2D | null { return this.cornerDragPos[index] as Point2D | null; }
 
   setGhostArrows(e1: Point2D, e2: Point2D): void { this.ghostArrows = { e1, e2 }; }
   setArrowSnapped(e1: boolean, e2: boolean): void { this.e1Snapped = e1; this.e2Snapped = e2; }
   setRawHands(hands: DetectedHand[] | null): void { this.rawHands = hands; }
 
-  getButtonRects(): { start: DOMRect | null; yes: DOMRect | null; no: DOMRect | null; continue: DOMRect | null } {
+  getButtonRects(): { yes: DOMRect | null; no: DOMRect | null; continue: DOMRect | null; done: DOMRect | null } {
     return {
-      start: this.btnStart,
       yes: this.btnYes,
       no: this.btnNo,
       continue: this.btnContinue,
+      done: this.btnDone,
+    };
+  }
+
+  getLayoutProperties(): { gridX: number; gridY: number; gridWidth: number; gridHeight: number; scale: number } | null {
+    if (this.W === 0 || this.H === 0) return null;
+    const gridY = TEXT_STRIP_H;
+    const gridHeight = this.H - TEXT_STRIP_H;
+    const scale = Math.min(this.W, gridHeight) / (GRID_RANGE * 2);
+    return {
+      gridX: 0,
+      gridY,
+      gridWidth: this.W,
+      gridHeight,
+      scale,
     };
   }
 
@@ -133,13 +170,13 @@ export class TabletopUI {
     const grid = this.computeGridRect();
     this.drawGrid(grid);
 
+    // Detection outline (shows object being tracked)
+    this.drawDetectionOutline(grid, state.phase);
+
     // Virtual object (pre-placed quadrilateral)
     this.drawVirtualObject(grid, state.phase, state.appliedMatrix);
 
     this.drawInstruction(state.phase, grid);
-
-    // Start button during WAITING_FOR_OBJECT
-    if (state.phase === "WAITING_FOR_OBJECT") this.drawStartButton(grid);
 
     // Yes/No buttons during confirm phases
     if (showConfirmButtons(state.phase)) this.drawButtons(grid, state.phase);
@@ -147,10 +184,11 @@ export class TabletopUI {
     // Continue button during TRANSFORMED
     if (state.phase === "TRANSFORMED") this.drawContinueButton(grid);
 
-    // Drag target highlight during POINTS_CALCULATED
+    // Grid snap preview + drag feedback + Done button during POINTS_CALCULATED
     if (state.phase === "POINTS_CALCULATED") {
-      this.drawDragTarget(grid);
-      if (this.draggingCorner) this.drawDragFeedback(grid);
+      this.drawSnapPreview(grid);
+      this.drawDragFeedback(grid);
+      if (this.showDoneButton) this.drawDoneButton(grid);
     }
 
     // Ghost arrows + drag feedback during SHOW_BASIS_VECTORS
@@ -178,11 +216,7 @@ export class TabletopUI {
 
   private computeGridRect(): DOMRect {
     const { W, H } = this;
-    const gx = INSET;
-    const gy = INSET + INSTR_H;
-    const gw = W - INSET * 2;
-    const gh = H - INSET * 2 - INSTR_H;
-    this.lastGridRect = new DOMRect(gx, gy, gw, gh);
+    this.lastGridRect = new DOMRect(0, TEXT_STRIP_H, W, H - TEXT_STRIP_H);
     return this.lastGridRect;
   }
 
@@ -190,30 +224,38 @@ export class TabletopUI {
   getLastGridRect(): DOMRect | null { return this.lastGridRect; }
 
   private drawGrid(r: DOMRect): void {
-    const { ctx } = this;
-    // Grid background
+    const { ctx, W, H } = this;
+    // Background fills the full grid rect
     ctx.fillStyle = C.gridBg;
     ctx.fillRect(r.x, r.y, r.width, r.height);
 
-    const cols = 40;
-    const rows = 28;
-    const cellW = r.width / cols;
-    const cellH = r.height / rows;
+    const cx = r.x + r.width * 0.5;
+    const cy = r.y + r.height * 0.5;
+    const scale = Math.min(r.width, r.height) / (GRID_RANGE * 2);
 
+    // Vertical lines at every integer grid x that falls within the canvas
+    const firstCol = Math.ceil((0 - cx) / scale);
+    const lastCol = Math.floor((W - cx) / scale);
     ctx.strokeStyle = C.gridLine;
     ctx.lineWidth = 0.8;
-    ctx.beginPath();
-    for (let c = 0; c <= cols; c++) {
-      const x = r.x + c * cellW;
+    for (let i = firstCol; i <= lastCol; i++) {
+      const x = cx + i * scale;
+      ctx.beginPath();
       ctx.moveTo(x, r.y);
-      ctx.lineTo(x, r.y + r.height);
+      ctx.lineTo(x, H);
+      ctx.stroke();
     }
-    for (let rr = 0; rr <= rows; rr++) {
-      const y = r.y + rr * cellH;
-      ctx.moveTo(r.x, y);
-      ctx.lineTo(r.x + r.width, y);
+
+    // Horizontal lines at every integer grid y that falls within the canvas
+    const firstRow = Math.ceil((cy - H) / scale);
+    const lastRow = Math.floor((cy - r.y) / scale);
+    for (let i = firstRow; i <= lastRow; i++) {
+      const y = cy - i * scale;
+      ctx.beginPath();
+      ctx.moveTo(0, y);
+      ctx.lineTo(W, y);
+      ctx.stroke();
     }
-    ctx.stroke();
 
     // Thin border around grid
     ctx.strokeStyle = "rgba(100,160,220,0.8)";
@@ -221,15 +263,13 @@ export class TabletopUI {
     ctx.strokeRect(r.x, r.y, r.width, r.height);
   }
 
-  private drawInstruction(phase: AppPhase, grid: DOMRect): void {
+  private drawInstruction(phase: AppPhase, _grid: DOMRect): void {
     const { ctx, W } = this;
     const override = this.demoInstructions?.[phase];
     const text = override ?? getInstructionText(phase);
     if (!text) return;
 
-    const iy = grid.y - 18;   // centred in the gap above the grid
-
-    // Pick text colour from frames:
+    // Text in the clear strip at the top, nothing else
     let color = C.instrBlue;
     if (phase === "OBJECT_DETECTED") color = C.instrOrange;
     if (phase === "TRANSFORMED") color = C.instrCyan;
@@ -241,18 +281,17 @@ export class TabletopUI {
     ctx.fillStyle = color;
     ctx.font = "18px 'Courier New', monospace";
     ctx.textAlign = "center";
-    ctx.fillText(text, W / 2, iy);
+    ctx.fillText(text, W / 2, TEXT_STRIP_H - 12);
     ctx.textAlign = "left";
   }
 
-  private drawButtons(grid: DOMRect, phase: AppPhase): void {
+  private drawButtons(_grid: DOMRect, phase: AppPhase): void {
     const { ctx, W } = this;
-    const iy = grid.y - 26;
     const bw = 64;
     const bh = 28;
     const gap = 10;
 
-    // Calculate text width to position buttons after it
+    // Position buttons just below the text strip, overlaying the grid
     ctx.font = "18px 'Courier New', monospace";
     const text = getInstructionText(phase);
     const tw = ctx.measureText(text).width;
@@ -260,7 +299,7 @@ export class TabletopUI {
 
     const yesX = startX;
     const noX = yesX + bw + gap;
-    const btnY = iy - bh + 4;
+    const btnY = TEXT_STRIP_H + 6;
 
     // Yes button (darker blue in frames)
     ctx.fillStyle = C.btnYesBg;
@@ -290,24 +329,28 @@ export class TabletopUI {
   /**
    * Draw the four corner markers.
    * During TRANSFORMED / CONFIRM_RESET, corners are transformed by appliedMatrix.
+   * During POINTS_CALCULATED, any dragged corner uses its temporary position.
    */
   private drawCorners(grid: DOMRect, phase: AppPhase, appliedMatrix: Matrix2x2): void {
     const { ctx } = this;
     if (!this.corners) return;
 
+    // Substitute temporary positions for any dragged corner during drag phase
+    let drawCorners = this.corners;
+    if (phase === "POINTS_CALCULATED") {
+      drawCorners = [...this.corners];
+      for (let i = 0; i < 4; i++) {
+        if (this.cornerDragPos[i]) drawCorners[i] = this.cornerDragPos[i]!;
+      }
+    }
+
     const applyMat = (phase === "TRANSFORMED" || phase === "CONFIRM_RESET");
-    const pts = this.corners.map((c) => {
+    const pts = drawCorners.map((c) => {
       const p = applyMat
         ? { x: appliedMatrix[0] * c.x + appliedMatrix[1] * c.y, y: appliedMatrix[2] * c.x + appliedMatrix[3] * c.y }
         : c;
       return this.gridToCanvas(p, grid);
     });
-
-    // Apply dragged corner position (phase 3 override)
-    if (phase === "POINTS_CALCULATED" && this.draggedCornerPos && this.corners) {
-      const draggedCanvas = this.gridToCanvas(this.draggedCornerPos, grid);
-      pts[0] = draggedCanvas;
-    }
 
     // Draw connecting rectangle lines
     ctx.strokeStyle = C.corner;
@@ -321,13 +364,28 @@ export class TabletopUI {
     // Draw corner circles
     for (let i = 0; i < pts.length; i++) {
       const p = pts[i]!;
-      const isDraggedCorner = i === 0 && phase === "POINTS_CALCULATED" && this.draggedCornerPos !== null;
+      const isDragged = phase === "POINTS_CALCULATED" && this.cornerDragPos[i] !== null;
+      const isLocked = phase === "POINTS_CALCULATED" && this.cornerLocked[i];
       ctx.beginPath();
-      ctx.arc(p.x, p.y, isDraggedCorner ? 14 : 10, 0, Math.PI * 2);
-      ctx.fillStyle = isDraggedCorner ? "rgba(230, 120, 30, 0.4)" : C.cornerFill;
+      ctx.arc(p.x, p.y, isDragged ? 14 : 10, 0, Math.PI * 2);
+      // Priority: 1) dragged (blue), 2) locked (white with blue border), 3) normal (white with black border)
+      if (isDragged) {
+        // Being dragged - always show blue
+        ctx.fillStyle = C.hlBg;
+        ctx.strokeStyle = C.hlStroke;
+        ctx.lineWidth = 3;
+      } else if (isLocked) {
+        // Locked (after 3 seconds) - white with blue border
+        ctx.fillStyle = "#ffffff";
+        ctx.strokeStyle = C.hl;
+        ctx.lineWidth = 3;
+      } else {
+        // Normal state - white with black border
+        ctx.fillStyle = C.cornerFill;
+        ctx.strokeStyle = C.corner;
+        ctx.lineWidth = 2;
+      }
       ctx.fill();
-      ctx.strokeStyle = isDraggedCorner ? "#e6781e" : C.corner;
-      ctx.lineWidth = isDraggedCorner ? 3 : 2;
       ctx.stroke();
     }
   }
@@ -377,6 +435,28 @@ export class TabletopUI {
     ctx.fillText(`[ ${c}  ${d} ]`, x, y + 20);
   }
 
+  // ─── Detection Outline ─────────────────────────────────────────────────
+
+  /** Draw the detected object outline (semi-transparent fill + solid border, black). */
+  private drawDetectionOutline(grid: DOMRect, phase: AppPhase): void {
+    if (!this.detectionOutline || this.detectionOutline.length < 3) return;
+    if (phase !== "WAITING_FOR_OBJECT" && phase !== "OBJECT_DETECTED") return;
+
+    const { ctx } = this;
+    const pts = this.detectionOutline.map(p => this.gridToCanvas(p, grid));
+
+    ctx.beginPath();
+    ctx.moveTo(pts[0]!.x, pts[0]!.y);
+    for (let i = 1; i < pts.length; i++) ctx.lineTo(pts[i]!.x, pts[i]!.y);
+    ctx.closePath();
+
+    ctx.fillStyle = "rgba(0, 0, 0, 0.2)";
+    ctx.fill();
+    ctx.strokeStyle = "#000";
+    ctx.lineWidth = 2;
+    ctx.stroke();
+  }
+
   // ─── Demo rendering: Virtual Object ───────────────────────────────────────
 
   /** Draw the pre-placed virtual quadrilateral. Transformed during phases 7-8. */
@@ -390,10 +470,19 @@ export class TabletopUI {
       phase !== "CONFIRM_RESET"
     ) return;
 
+    // During corner-drag phase, substitute temporary positions for any dragged corner
+    let drawCorners = this.corners;
+    if (phase === "POINTS_CALCULATED") {
+      drawCorners = [...this.corners];
+      for (let i = 0; i < 4; i++) {
+        if (this.cornerDragPos[i]) drawCorners[i] = this.cornerDragPos[i]!;
+      }
+    }
+
     const shouldTransform = phase === "TRANSFORMED" || phase === "CONFIRM_RESET";
     const [a, b, c, d] = shouldTransform ? appliedMatrix : [1, 0, 0, 1];
 
-    const pts = this.corners.map(p => {
+    const pts = drawCorners.map(p => {
       const tx = a * p.x + b * p.y;
       const ty = c * p.x + d * p.y;
       return this.gridToCanvas({ x: tx, y: ty }, grid);
@@ -404,41 +493,17 @@ export class TabletopUI {
     ctx.moveTo(pts[0]!.x, pts[0]!.y);
     for (let i = 1; i < 4; i++) ctx.lineTo(pts[i]!.x, pts[i]!.y);
     ctx.closePath();
-    ctx.fillStyle = "rgba(230, 49, 70, 0.35)";
+    ctx.fillStyle = "rgba(58, 123, 213, 0.35)";
     ctx.fill();
-    ctx.strokeStyle = "rgba(230, 49, 70, 0.5)";
+    ctx.strokeStyle = "rgba(58, 123, 213, 0.5)";
     ctx.lineWidth = 1.5;
     ctx.stroke();
-  }
-
-  // ─── Demo rendering: Start Button ─────────────────────────────────────────
-
-  /** Draw "▶ Start Demo" button centred in the grid during WAITING_FOR_OBJECT. */
-  private drawStartButton(grid: DOMRect): void {
-    const ctx = this.ctx;
-    const bw = 180;
-    const bh = 48;
-    const bx = (this.W - bw) / 2;
-    const by = grid.y + grid.height / 2 - bh / 2;
-
-    ctx.fillStyle = "#3a5a7a";
-    ctx.beginPath();
-    roundRect(ctx, bx, by, bw, bh, 8);
-    ctx.fill();
-
-    ctx.fillStyle = "#fff";
-    ctx.font = "bold 20px Arial";
-    ctx.textAlign = "center";
-    ctx.fillText("▶  Start Demo", bx + bw / 2, by + 32);
-    ctx.textAlign = "left";
-
-    this.btnStart = new DOMRect(bx, by, bw, bh);
   }
 
   // ─── Demo rendering: Continue Button ──────────────────────────────────────
 
   /** Draw "Continue →" button during TRANSFORMED phase. */
-  private drawContinueButton(grid: DOMRect): void {
+  private drawContinueButton(_grid: DOMRect): void {
     const ctx = this.ctx;
     const text = "Object has been linearly transformed";
     ctx.font = "18px 'Courier New', monospace";
@@ -447,7 +512,7 @@ export class TabletopUI {
     const bw = 100;
     const bh = 28;
     const x = this.W / 2 - tw / 2 + tw + gap + 4;
-    const y = grid.y - 26 - bh + 4;
+    const y = TEXT_STRIP_H + 6;
 
     ctx.fillStyle = "#3a5a7a";
     ctx.beginPath();
@@ -463,45 +528,98 @@ export class TabletopUI {
     this.btnContinue = new DOMRect(x, y, bw, bh);
   }
 
-  // ─── Demo rendering: Drag Target (Phase 3) ────────────────────────────────
-
-  /** Pulsing target circle at the drag destination during POINTS_CALCULATED. */
-  private drawDragTarget(grid: DOMRect): void {
-    if (!this.targetPos) return;
+  /** Highlight dragged corners during POINTS_CALCULATED — show drag circle, filled dot when snapped. */
+  private drawDragFeedback(grid: DOMRect): void {
     const ctx = this.ctx;
-    const p = this.gridToCanvas(this.targetPos, grid);
-    const pulse = 0.4 + 0.3 * Math.sin(Date.now() * 0.004);
-    const color = this.cornerInTarget
-      ? `rgba(50, 200, 50, ${0.5 + 0.3 * Math.sin(Date.now() * 0.005)})`
-      : `rgba(230, 120, 30, ${pulse})`;
 
-    ctx.beginPath();
-    ctx.arc(p.x, p.y, 20, 0, Math.PI * 2);
-    ctx.strokeStyle = color;
-    ctx.lineWidth = 3;
-    ctx.stroke();
+    for (let i = 0; i < 4; i++) {
+      const pos = this.cornerDragPos[i];
+      const snapped = this.cornerSnapped[i];
+      if (!pos) continue;
+      const p = this.gridToCanvas(pos, grid);
 
-    if (this.cornerInTarget) {
+      if (snapped) {
+        ctx.beginPath();
+        ctx.arc(p.x, p.y, 8, 0, Math.PI * 2);
+        ctx.fillStyle = C.hl;
+        ctx.fill();
+        continue;
+      }
+
       ctx.beginPath();
-      ctx.arc(p.x, p.y, 18, 0, Math.PI * 2);
-      ctx.fillStyle = "rgba(50, 200, 50, 0.15)";
+      ctx.arc(p.x, p.y, 14, 0, Math.PI * 2);
+      ctx.fillStyle = C.hlBg;
+      ctx.fill();
+      ctx.strokeStyle = C.hlStroke;
+      ctx.lineWidth = 3;
+      ctx.stroke();
+    }
+  }
+
+  // ─── Demo rendering: Snap Preview (Phase 3) ────────────────────────────────
+
+  /** Pulsing highlight ring at the nearest grid intersection while dragging a corner. */
+  private drawSnapPreview(grid: DOMRect): void {
+    const ctx = this.ctx;
+    const pulse = 0.4 + 0.3 * Math.sin(Date.now() * 0.005);
+
+    for (let i = 0; i < 4; i++) {
+      const pos = this.cornerDragPos[i];
+      if (!pos) continue;
+      const snap = this.nearestGridIntersection(pos);
+      if (!snap) continue;
+      const p = this.gridToCanvas(snap, grid);
+      ctx.beginPath();
+      ctx.arc(p.x, p.y, 16, 0, Math.PI * 2);
+      ctx.strokeStyle = `rgba(58, 123, 213, ${pulse})`;
+      ctx.lineWidth = 3;
+      ctx.stroke();
+      ctx.beginPath();
+      ctx.arc(p.x, p.y, 14, 0, Math.PI * 2);
+      ctx.fillStyle = `rgba(58, 123, 213, 0.1)`;
       ctx.fill();
     }
   }
 
-  /** Highlight the dragged corner during POINTS_CALCULATED drag. */
-  private drawDragFeedback(grid: DOMRect): void {
-    if (!this.draggedCornerPos) return;
-    const ctx = this.ctx;
-    const p = this.gridToCanvas(this.draggedCornerPos, grid);
+  // ─── Demo rendering: Done Prompt (Phase 3) ───────────────────────────────
 
+  /** Draw "Are you done adjusting the corners?" prompt at top with Yes/No buttons. */
+  private drawDoneButton(_grid: DOMRect): void {
+    const ctx = this.ctx;
+    const promptY = 55;
+    const btnW = 80;
+    const btnH = 36;
+    const btnSpacing = 30;
+    const totalW = btnW * 2 + btnSpacing;
+    const startX = (this.W - totalW) / 2;
+
+    ctx.fillStyle = C.instrBlue;
+    ctx.font = "bold 16px Arial";
+    ctx.textAlign = "center";
+    ctx.fillText("Are you done adjusting the corners?", this.W / 2, promptY);
+    ctx.textAlign = "left";
+
+    const noBtn = { x: startX, y: promptY + 8, w: btnW, h: btnH };
+    const yesBtn = { x: startX + btnW + btnSpacing, y: promptY + 8, w: btnW, h: btnH };
+
+    ctx.fillStyle = "#555";
     ctx.beginPath();
-    ctx.arc(p.x, p.y, 14, 0, Math.PI * 2);
-    ctx.fillStyle = this.cornerInTarget ? "rgba(50, 200, 50, 0.4)" : "rgba(230, 120, 30, 0.4)";
+    roundRect(ctx, noBtn.x, noBtn.y, noBtn.w, noBtn.h, 5);
     ctx.fill();
-    ctx.strokeStyle = this.cornerInTarget ? "#32c832" : "#e6781e";
-    ctx.lineWidth = 3;
-    ctx.stroke();
+    ctx.fillStyle = "#fff";
+    ctx.font = "bold 14px Arial";
+    ctx.textAlign = "center";
+    ctx.fillText("No", noBtn.x + noBtn.w / 2, noBtn.y + 24);
+    ctx.textAlign = "left";
+
+    ctx.fillStyle = "#3a5a7a";
+    ctx.beginPath();
+    roundRect(ctx, yesBtn.x, yesBtn.y, yesBtn.w, yesBtn.h, 5);
+    ctx.fill();
+    ctx.fillStyle = "#fff";
+    ctx.fillText("Yes", yesBtn.x + yesBtn.w / 2, yesBtn.y + 24);
+
+    this.btnDone = new DOMRect(yesBtn.x, yesBtn.y, yesBtn.w, yesBtn.h);
   }
 
   // ─── Demo rendering: Ghost Arrows (Phase 5) ───────────────────────────────
@@ -520,11 +638,11 @@ export class TabletopUI {
 
     const e1x = cx + this.ghostArrows.e1.x * scale;
     const e1y = cy - this.ghostArrows.e1.y * scale;
-    drawArrow(ctx, cx, cy, e1x, e1y, "#e63030", 2);
+    drawArrow(ctx, cx, cy, e1x, e1y, C.hl, 2);
 
     const e2x = cx + this.ghostArrows.e2.x * scale;
     const e2y = cy - this.ghostArrows.e2.y * scale;
-    drawArrow(ctx, cx, cy, e2x, e2y, "#22aa22", 2);
+    drawArrow(ctx, cx, cy, e2x, e2y, C.hlActive, 2);
 
     ctx.restore();
   }
@@ -542,9 +660,9 @@ export class TabletopUI {
       const ty = cy - mat[2] * scale;
       ctx.beginPath();
       ctx.arc(tx, ty, 8, 0, Math.PI * 2);
-      ctx.fillStyle = "rgba(50, 200, 50, 0.5)";
+      ctx.fillStyle = C.hlBg;
       ctx.fill();
-      ctx.strokeStyle = "#32c832";
+      ctx.strokeStyle = C.hlStroke;
       ctx.lineWidth = 2;
       ctx.stroke();
     }
@@ -553,9 +671,9 @@ export class TabletopUI {
       const ty = cy - mat[3] * scale;
       ctx.beginPath();
       ctx.arc(tx, ty, 8, 0, Math.PI * 2);
-      ctx.fillStyle = "rgba(50, 200, 50, 0.5)";
+      ctx.fillStyle = C.hlActiveBg;
       ctx.fill();
-      ctx.strokeStyle = "#32c832";
+      ctx.strokeStyle = C.hlActive;
       ctx.lineWidth = 2;
       ctx.stroke();
     }
@@ -571,14 +689,14 @@ export class TabletopUI {
     const ctx = this.ctx;
     ctx.beginPath();
     ctx.arc(x, y, 14, 0, Math.PI * 2);
-    ctx.fillStyle = "rgba(60, 180, 255, 0.5)";
+    ctx.fillStyle = C.hlBg;
     ctx.fill();
-    ctx.strokeStyle = "rgba(60, 180, 255, 0.9)";
+    ctx.strokeStyle = C.hlStroke;
     ctx.lineWidth = 2;
     ctx.stroke();
     ctx.beginPath();
     ctx.arc(x, y, 4, 0, Math.PI * 2);
-    ctx.fillStyle = "rgba(60, 180, 255, 0.9)";
+    ctx.fillStyle = C.hl;
     ctx.fill();
   }
 
@@ -684,6 +802,41 @@ export class TabletopUI {
     };
   }
 
+  /** Snap a grid-space point to the nearest integer grid intersection. */
+  snapToGrid(p: Point2D): Point2D {
+    return { x: Math.round(p.x), y: Math.round(p.y) };
+  }
+
+  /** Return the nearest grid intersection if within snap radius, or null. */
+  nearestGridIntersection(p: Point2D): Point2D | null {
+    const snapped = this.snapToGrid(p);
+    const dx = p.x - snapped.x;
+    const dy = p.y - snapped.y;
+    const dist = Math.sqrt(dx * dx + dy * dy);
+    return dist <= GRID_SNAP_RADIUS ? snapped : null;
+  }
+
+  // ─── Mouse tracking (corner drag fallback) ─────────────────────────────────
+
+  isMouseDown(): boolean { return this.mouseDown; }
+  getMouseCanvasPos(): Point2D | null { return this.mouseCanvasPos; }
+
+  private handleMouseDown(e: MouseEvent): void {
+    this.mouseDown = true;
+    const rect = this.canvas.getBoundingClientRect();
+    this.mouseCanvasPos = { x: e.clientX - rect.left, y: e.clientY - rect.top };
+  }
+
+  private handleMouseMove(e: MouseEvent): void {
+    if (!this.mouseDown) return;
+    const rect = this.canvas.getBoundingClientRect();
+    this.mouseCanvasPos = { x: e.clientX - rect.left, y: e.clientY - rect.top };
+  }
+
+  private handleMouseUp(): void {
+    this.mouseDown = false;
+  }
+
   // ─── Input handling ────────────────────────────────────────────────────────
 
   private handleClick(e: MouseEvent): void {
@@ -691,10 +844,7 @@ export class TabletopUI {
     const mx = e.clientX - rect.left;
     const my = e.clientY - rect.top;
 
-    if (this.btnStart && hitTest(mx, my, this.btnStart)) {
-      this.btnStart = null;
-      this.onStart?.();
-    } else if (this.btnYes && hitTest(mx, my, this.btnYes)) {
+    if (this.btnYes && hitTest(mx, my, this.btnYes)) {
       this.btnYes = null; this.btnNo = null;
       this.onYes?.();
     } else if (this.btnNo && hitTest(mx, my, this.btnNo)) {
@@ -703,6 +853,9 @@ export class TabletopUI {
     } else if (this.btnContinue && hitTest(mx, my, this.btnContinue)) {
       this.btnContinue = null;
       this.onContinue?.();
+    } else if (this.btnDone && hitTest(mx, my, this.btnDone)) {
+      this.btnDone = null;
+      this.onDone?.();
     }
   }
 }
