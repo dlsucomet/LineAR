@@ -1,4 +1,4 @@
 *.env
+eng.traineddata
 /node_modules
 /captures
-Makefile

@@ -642,18 +642,24 @@ function setBoxState(ids, state) {
 }
 
 function clearAllBoxes() {
-
-  const boxes =
-    document.querySelectorAll(".box");
+  const boxes = document.querySelectorAll(".box");
 
   boxes.forEach(box => {
-
     box.classList.remove(
       "copy-box",
       "correct-box",
       "wrong-box"
     );
+  });
 
+  const bigBox = document.querySelectorAll(".big-box");
+
+  bigBox.forEach(box => {
+    box.classList.remove(
+      "copy-box",
+      "correct-box",
+      "wrong-box"
+    );
   });
 
 }
