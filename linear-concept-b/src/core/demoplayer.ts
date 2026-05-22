@@ -43,8 +43,11 @@ export const PHASE_TIMINGS = {
 
 export const HOVER_DWELL_MS = 400;
 export const GRAB_RADIUS_PX = 60;
-export const ARROW_GRAB_RADIUS_PX = 30;
-export const ARROW_SNAP_PX = 15;
+export const ARROW_GRAB_RADIUS_PX = 70;
+export const ARROW_SNAP_PX = 25;
+export const ARROW_DWELL_PLACE_MS = 600;
+export const ARROW_PLACED_LOCK_MS = 3000;
+export const ARROW_LOCK_COOLDOWN_MS = 5000;
 export const CORNER_SNAP_RADIUS = 1.5;
 
 // ─── Demo instruction overrides ─────────────────────────────────────────────

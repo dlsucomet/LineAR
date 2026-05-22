@@ -2,6 +2,7 @@
   "dependencies": {
     "@tensorflow-models/hand-pose-detection": "^2.0.1",
     "@tensorflow/tfjs": "^4.22.0",
+    "@tensorflow/tfjs-backend-wasm": "^4.22.0",
     "jsxgraph": "^1.12.2",
     "ml-matrix": "^6.12.2",
     "p5": "^2.2.3"

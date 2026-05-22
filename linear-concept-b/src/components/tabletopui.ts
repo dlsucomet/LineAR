@@ -54,6 +54,9 @@ export class TabletopUI {
   private H = 0;
   private lastGridRect: DOMRect | null = null;
 
+  panX = 0;
+  panY = 0;
+
   private matrix: Matrix2x2 = [1, 0, 0, 1];
   private appliedMatrix: Matrix2x2 = [1, 0, 0, 1];
   private corners: [Point2D, Point2D, Point2D, Point2D] | null = null;
@@ -81,6 +84,10 @@ export class TabletopUI {
   private ghostArrows: { e1: Point2D; e2: Point2D } | null = null;
   private e1Snapped = false;
   private e2Snapped = false;
+  private e1Locked = false;
+  private e2Locked = false;
+  private e1Dwelling = false;
+  private e2Dwelling = false;
 
   // Mouse tracking for corner drag fallback
   private mouseDown = false;
@@ -135,6 +142,8 @@ export class TabletopUI {
 
   setGhostArrows(e1: Point2D, e2: Point2D): void { this.ghostArrows = { e1, e2 }; }
   setArrowSnapped(e1: boolean, e2: boolean): void { this.e1Snapped = e1; this.e2Snapped = e2; }
+  setArrowLocked(e1: boolean, e2: boolean): void { this.e1Locked = e1; this.e2Locked = e2; }
+  setDwellingIndicators(e1: boolean, e2: boolean): void { this.e1Dwelling = e1; this.e2Dwelling = e2; }
   setRawHands(hands: DetectedHand[] | null): void { this.rawHands = hands; }
 
   getButtonRects(): { yes: DOMRect | null; no: DOMRect | null; continue: DOMRect | null; done: DOMRect | null } {
@@ -144,6 +153,36 @@ export class TabletopUI {
       continue: this.btnContinue,
       done: this.btnDone,
     };
+  }
+
+  getPanOffset(): { x: number; y: number } {
+    return { x: this.panX, y: this.panY };
+  }
+
+  setPanOffset(x: number, y: number): void {
+    this.panX = x;
+    this.panY = y;
+  }
+
+  autoFrameTransformed(corners: Point2D[], matrix: Matrix2x2, grid: DOMRect): void {
+    if (!corners || corners.length < 4) return;
+    const [a, b, c, d] = matrix;
+    const pts = corners.map(p => ({
+      x: a * p.x + b * p.y,
+      y: c * p.x + d * p.y,
+    }));
+    let minX = Infinity, maxX = -Infinity, minY = Infinity, maxY = -Infinity;
+    for (const p of pts) {
+      if (p.x < minX) minX = p.x;
+      if (p.x > maxX) maxX = p.x;
+      if (p.y < minY) minY = p.y;
+      if (p.y > maxY) maxY = p.y;
+    }
+    const centerX = (minX + maxX) / 2;
+    const centerY = (minY + maxY) / 2;
+    const scale = Math.min(grid.width, grid.height) / 20;
+    this.panX = -centerX * scale;
+    this.panY = centerY * scale;
   }
 
   getLayoutProperties(): { gridX: number; gridY: number; gridWidth: number; gridHeight: number; scale: number } | null {
@@ -168,35 +207,29 @@ export class TabletopUI {
     ctx.fillRect(0, 0, W, H);
 
     const grid = this.computeGridRect();
+
+    // Grid background
+    ctx.fillStyle = C.gridBg;
+    ctx.fillRect(grid.x, grid.y, grid.width, grid.height);
+
+    // ── Pannable content (clipped to grid) ──
+    ctx.save();
+    ctx.beginPath();
+    ctx.rect(grid.x, grid.y, grid.width, grid.height);
+    ctx.clip();
+
     this.drawGrid(grid);
-
-    // Detection outline (shows object being tracked)
     this.drawDetectionOutline(grid, state.phase);
-
-    // Virtual object (pre-placed quadrilateral)
     this.drawVirtualObject(grid, state.phase, state.appliedMatrix);
 
-    this.drawInstruction(state.phase, grid);
-
-    // Yes/No buttons during confirm phases
-    if (showConfirmButtons(state.phase)) this.drawButtons(grid, state.phase);
-
-    // Continue button during TRANSFORMED
-    if (state.phase === "TRANSFORMED") this.drawContinueButton(grid);
-
-    // Grid snap preview + drag feedback + Done button during POINTS_CALCULATED
     if (state.phase === "POINTS_CALCULATED") {
       this.drawSnapPreview(grid);
       this.drawDragFeedback(grid);
-      if (this.showDoneButton) this.drawDoneButton(grid);
     }
-
-    // Ghost arrows + drag feedback during SHOW_BASIS_VECTORS
     if (state.phase === "SHOW_BASIS_VECTORS" && this.ghostArrows) {
       this.drawGhostArrows(grid, state.phase);
       this.drawArrowDragFeedback(grid);
     }
-
     if (showCorners(state.phase) && this.corners) this.drawCorners(grid, state.phase, state.appliedMatrix);
     if (showBasisVectors(state.phase)) {
       const mat = state.phase === "TRANSFORMED" || state.phase === "CONFIRM_RESET"
@@ -205,11 +238,22 @@ export class TabletopUI {
       this.drawBasisArrows(grid, mat);
     }
 
-    // Hand skeleton visualization (debug overlay)
+    ctx.restore();
+
+    // Grid border (fixed)
+    ctx.strokeStyle = "rgba(100,160,220,0.8)";
+    ctx.lineWidth = 1.2;
+    ctx.strokeRect(grid.x, grid.y, grid.width, grid.height);
+
+    // Fixed position elements
+    this.drawInstruction(state.phase, grid);
+    if (showConfirmButtons(state.phase)) this.drawButtons(grid, state.phase);
+    if (state.phase === "TRANSFORMED") this.drawContinueButton(grid);
+    if (state.phase === "POINTS_CALCULATED") {
+      if (this.showDoneButton) this.drawDoneButton(grid);
+    }
     this.drawHandSkeleton();
     this.drawHandStatus();
-
-    // Finger cursor (always on top)
     this.drawCursor();
     this.drawDwellIndicator();
   }
@@ -225,12 +269,8 @@ export class TabletopUI {
 
   private drawGrid(r: DOMRect): void {
     const { ctx, W, H } = this;
-    // Background fills the full grid rect
-    ctx.fillStyle = C.gridBg;
-    ctx.fillRect(r.x, r.y, r.width, r.height);
-
-    const cx = r.x + r.width * 0.5;
-    const cy = r.y + r.height * 0.5;
+    const cx = r.x + r.width * 0.5 + this.panX;
+    const cy = r.y + r.height * 0.5 + this.panY;
     const scale = Math.min(r.width, r.height) / (GRID_RANGE * 2);
 
     // Vertical lines at every integer grid x that falls within the canvas
@@ -256,11 +296,6 @@ export class TabletopUI {
       ctx.lineTo(W, y);
       ctx.stroke();
     }
-
-    // Thin border around grid
-    ctx.strokeStyle = "rgba(100,160,220,0.8)";
-    ctx.lineWidth = 1.2;
-    ctx.strokeRect(r.x, r.y, r.width, r.height);
   }
 
   private drawInstruction(phase: AppPhase, _grid: DOMRect): void {
@@ -345,6 +380,7 @@ export class TabletopUI {
     }
 
     const applyMat = (phase === "TRANSFORMED" || phase === "CONFIRM_RESET");
+
     const pts = drawCorners.map((c) => {
       const p = applyMat
         ? { x: appliedMatrix[0] * c.x + appliedMatrix[1] * c.y, y: appliedMatrix[2] * c.x + appliedMatrix[3] * c.y }
@@ -387,6 +423,18 @@ export class TabletopUI {
       }
       ctx.fill();
       ctx.stroke();
+
+      // Coordinate labels during transformed phases
+      if (applyMat) {
+        const orig = drawCorners[i]!;
+        const tx = appliedMatrix[0] * orig.x + appliedMatrix[1] * orig.y;
+        const ty = appliedMatrix[2] * orig.x + appliedMatrix[3] * orig.y;
+        const fmt = (n: number) => Math.round(n * 10) / 10;
+        ctx.font = "10px 'Courier New', monospace";
+        ctx.fillStyle = "#333";
+        ctx.textAlign = "left";
+        ctx.fillText(`(${fmt(orig.x)},${fmt(orig.y)}) → (${fmt(tx)},${fmt(ty)})`, p.x + 14, p.y + 4);
+      }
     }
   }
 
@@ -396,9 +444,9 @@ export class TabletopUI {
    */
   private drawBasisArrows(grid: DOMRect, mat: Matrix2x2): void {
     const { ctx } = this;
-    const cx = grid.x + grid.width * 0.45;
-    const cy = grid.y + grid.height * 0.52;
-    const scale = Math.min(grid.width, grid.height) * 0.13;
+    const cx = grid.x + grid.width * 0.5 + this.panX;
+    const cy = grid.y + grid.height * 0.5 + this.panY;
+    const scale = Math.min(grid.width, grid.height) / 20;
 
     // e1 = first column of matrix → (mat[0], mat[2])
     const e1x = cx + mat[0] * scale;
@@ -628,9 +676,9 @@ export class TabletopUI {
   private drawGhostArrows(grid: DOMRect, _phase: AppPhase): void {
     if (!this.ghostArrows) return;
     const ctx = this.ctx;
-    const cx = grid.x + grid.width * 0.45;
-    const cy = grid.y + grid.height * 0.52;
-    const scale = Math.min(grid.width, grid.height) * 0.13;
+    const cx = grid.x + grid.width * 0.5 + this.panX;
+    const cy = grid.y + grid.height * 0.5 + this.panY;
+    const scale = Math.min(grid.width, grid.height) / 20;
 
     ctx.save();
     ctx.globalAlpha = 0.3;
@@ -647,33 +695,57 @@ export class TabletopUI {
     ctx.restore();
   }
 
-  /** Draw snap indicators on arrows that have been aligned to ghost targets. */
+  /** Draw snap/lock indicators on basis arrows. */
   private drawArrowDragFeedback(grid: DOMRect): void {
     const ctx = this.ctx;
-    const cx = grid.x + grid.width * 0.45;
-    const cy = grid.y + grid.height * 0.52;
-    const scale = Math.min(grid.width, grid.height) * 0.13;
+    const cx = grid.x + grid.width * 0.5 + this.panX;
+    const cy = grid.y + grid.height * 0.5 + this.panY;
+    const scale = Math.min(grid.width, grid.height) / 20;
 
     const mat = this.matrix;
-    if (this.e1Snapped) {
-      const tx = cx + mat[0] * scale;
-      const ty = cy - mat[2] * scale;
+
+    const drawTip = (tx: number, ty: number, snapped: boolean, locked: boolean, snapColor: string, snapBg: string) => {
+      if (locked) {
+        ctx.beginPath();
+        ctx.arc(tx, ty, 10, 0, Math.PI * 2);
+        ctx.strokeStyle = "#fff";
+        ctx.lineWidth = 3;
+        ctx.stroke();
+      } else if (snapped) {
+        ctx.beginPath();
+        ctx.arc(tx, ty, 8, 0, Math.PI * 2);
+        ctx.fillStyle = snapBg;
+        ctx.fill();
+        ctx.strokeStyle = snapColor;
+        ctx.lineWidth = 2;
+        ctx.stroke();
+      }
+    };
+
+    drawTip(
+      cx + mat[0] * scale, cy - mat[2] * scale,
+      this.e1Snapped, this.e1Locked, C.hl, C.hlBg,
+    );
+    drawTip(
+      cx + mat[1] * scale, cy - mat[3] * scale,
+      this.e2Snapped, this.e2Locked, C.hlActive, C.hlActiveBg,
+    );
+
+    // Pulsing dwell ring
+    const pulseAlpha = 0.3 + 0.4 * Math.sin(Date.now() * 0.008);
+    if (this.e1Dwelling) {
+      const tx = cx + mat[0] * scale, ty = cy - mat[2] * scale;
       ctx.beginPath();
-      ctx.arc(tx, ty, 8, 0, Math.PI * 2);
-      ctx.fillStyle = C.hlBg;
-      ctx.fill();
-      ctx.strokeStyle = C.hlStroke;
+      ctx.arc(tx, ty, 14, 0, Math.PI * 2);
+      ctx.strokeStyle = `rgba(58, 123, 213, ${pulseAlpha})`;
       ctx.lineWidth = 2;
       ctx.stroke();
     }
-    if (this.e2Snapped) {
-      const tx = cx + mat[1] * scale;
-      const ty = cy - mat[3] * scale;
+    if (this.e2Dwelling) {
+      const tx = cx + mat[1] * scale, ty = cy - mat[3] * scale;
       ctx.beginPath();
-      ctx.arc(tx, ty, 8, 0, Math.PI * 2);
-      ctx.fillStyle = C.hlActiveBg;
-      ctx.fill();
-      ctx.strokeStyle = C.hlActive;
+      ctx.arc(tx, ty, 14, 0, Math.PI * 2);
+      ctx.strokeStyle = `rgba(91, 156, 245, ${pulseAlpha})`;
       ctx.lineWidth = 2;
       ctx.stroke();
     }
@@ -782,8 +854,8 @@ export class TabletopUI {
    * The grid is centred at (0.5, 0.5) of the grid rect.
    */
   gridToCanvas(p: Point2D, grid: DOMRect): Point2D {
-    const cx = grid.x + grid.width * 0.5;
-    const cy = grid.y + grid.height * 0.5;
+    const cx = grid.x + grid.width * 0.5 + this.panX;
+    const cy = grid.y + grid.height * 0.5 + this.panY;
     const scale = Math.min(grid.width, grid.height) / 20;
     return {
       x: cx + p.x * scale,
@@ -793,8 +865,8 @@ export class TabletopUI {
 
   /** Inverse of gridToCanvas: map canvas pixel coords back to grid space (–10..10). */
   canvasToGrid(p: Point2D, grid: DOMRect): Point2D {
-    const cx = grid.x + grid.width * 0.5;
-    const cy = grid.y + grid.height * 0.5;
+    const cx = grid.x + grid.width * 0.5 + this.panX;
+    const cy = grid.y + grid.height * 0.5 + this.panY;
     const scale = Math.min(grid.width, grid.height) / 20;
     return {
       x: (p.x - cx) / scale,

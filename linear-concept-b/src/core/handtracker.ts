@@ -4,6 +4,8 @@
 
 import * as handPoseDetection from "@tensorflow-models/hand-pose-detection";
 import "@tensorflow/tfjs-backend-webgl";
+import "@tensorflow/tfjs-backend-wasm";
+import * as tf from "@tensorflow/tfjs-core";
 import type { DetectedHand, HandGesture, HandLandmark } from "../types/index.ts";
 
 // ---------------------------------------------------------------------------
@@ -39,6 +41,8 @@ export class HandTracker {
   private isRunning = false;
   private animFrameId: number | null = null;
   private frameCallback: ((hands: DetectedHand[]) => void) | null = null;
+  private frameCount = 0;
+  private readonly FRAME_SKIP = 1;
   private videoEl: HTMLVideoElement | null = null;
   private config: HandTrackerConfig;
 
@@ -52,6 +56,7 @@ export class HandTracker {
 
   /** Initialise the TensorFlow model (downloads weights). */
   async init(): Promise<void> {
+    await tf.setBackend("wasm");
     const model = handPoseDetection.SupportedModels.MediaPipeHands;
     const detectorConfig: handPoseDetection.MediaPipeHandsTfjsModelConfig = {
       runtime: "tfjs",
@@ -90,6 +95,13 @@ export class HandTracker {
 
   private loop(): void {
     if (!this.isRunning || !this.videoEl || !this.detector) return;
+
+    this.frameCount++;
+
+    if (this.frameCount % this.FRAME_SKIP !== 0) {
+      this.animFrameId = requestAnimationFrame(() => this.loop());
+      return;
+    }
 
     this.detector
       .estimateHands(this.videoEl, { flipHorizontal: false })

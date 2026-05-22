@@ -64,7 +64,7 @@ export interface AppState {
 }
 
 // Frames an object must be stable before we consider it locked-in
-const STABLE_FRAME_THRESHOLD = 15;
+const STABLE_FRAME_THRESHOLD = 10;
 
 // Identity matrix shorthand
 const IDENTITY: Matrix2x2 = [1, 0, 0, 1];
