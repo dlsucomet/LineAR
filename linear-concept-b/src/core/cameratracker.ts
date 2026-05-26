@@ -77,6 +77,16 @@ export class CameraTracker {
   private lastConfirmedPosition: Point2D | null = null;
   private cachedObjects: DetectedObject[] = [];
 
+  // ── Background Subtraction (projector-friendly) ────────────────────────────
+  /** Accumulated background grayscale frame (null until capture completes). */
+  private backgroundGray: any = null;
+  /** Number of frames fed into background accumulation. */
+  private bgFrameCount = 0;
+  /** Number of frames to average for background. */
+  private readonly BG_CAPTURE_FRAMES = 10;
+  /** True once background has been fully captured. */
+  private bgCaptured = false;
+
   constructor(
     videoEl: HTMLVideoElement,
     canvasEl: HTMLCanvasElement,
@@ -129,6 +139,7 @@ export class CameraTracker {
       this.stream.getTracks().forEach((t) => t.stop());
       this.stream = null;
     }
+    this.disposeBackground();
   }
 
   /** Pause detection - returns empty results without running OpenCV. */
@@ -136,6 +147,7 @@ export class CameraTracker {
     this.isPaused = true;
     this.recentPositions = [];
     this.lastConfirmedPosition = null;
+    this.disposeBackground();
     console.log("[CameraTracker] Paused");
   }
 
@@ -190,16 +202,8 @@ export class CameraTracker {
    * approximating them to quadrilaterals.
    */
   private detectObjects(): DetectedObject[] {
-    console.log("[CameraTracker] detectObjects called - frame:", this.frameCount, "paused:", this.isPaused, "lockout:", this.frameCount < LOCKOUT_FRAMES);
     const cv = window.cv;
     if (!cv) {
-      console.log("[CameraTracker] OpenCV not loaded - cannot detect");
-      return [];
-    }
-    console.log("[CameraTracker] OpenCV loaded, proceeding with detection");
-
-    // ── Layer 4: Initial lockout ────────────────────────────────────────────────
-    if (this.frameCount < LOCKOUT_FRAMES) {
       return [];
     }
 
@@ -221,6 +225,36 @@ export class CameraTracker {
 
     // Convert to grayscale
     cv.cvtColor(src, gray, cv.COLOR_RGBA2GRAY, 0);
+
+    // ── Layer 4: Background capture (replaces initial lockout) ────────────────
+    // First BG_CAPTURE_FRAMES frames are used to build a clean background model.
+    // This enables background subtraction so the projected grid is invisible to
+    // contour detection. After capture, the foreground mask is applied before Canny.
+    if (!this.bgCaptured) {
+      if (this.backgroundGray === null) {
+        this.backgroundGray = gray.clone();
+        this.bgFrameCount = 1;
+      } else {
+        cv.addWeighted(this.backgroundGray, 0.9, gray, 0.1, 0, this.backgroundGray);
+        this.bgFrameCount++;
+      }
+      if (this.bgFrameCount >= this.BG_CAPTURE_FRAMES) {
+        this.bgCaptured = true;
+        console.log("[CameraTracker] Background captured (" + this.BG_CAPTURE_FRAMES + " frames)");
+      }
+      // No detection during capture
+      src.delete(); gray.delete(); edges.delete(); contours.delete(); hierarchy.delete();
+      return [];
+    }
+
+    // Apply background subtraction: zero out pixels that match the background
+    const diff = new cv.Mat();
+    const fgMask = new cv.Mat();
+    cv.absdiff(gray, this.backgroundGray, diff);
+    cv.threshold(diff, fgMask, 30, 255, cv.THRESH_BINARY);
+    diff.delete();
+    cv.bitwise_and(gray, gray, gray, fgMask);
+    fgMask.delete();
 
     // Apply Gaussian blur to reduce noise
     const blurred = new cv.Mat();
@@ -325,8 +359,6 @@ export class CameraTracker {
       approx.delete();
     }
 
-    console.log(`[CameraTracker] Frame #${this.frameCount}: contours=${contours.size()}, skip={{area:${debugSkip.area},ratio:${debugSkip.ratio},vertices:${debugSkip.vertices},aspect:${debugSkip.aspect},size:${debugSkip.size}}}`);
-
     // ── Layer 3: Multi-frame position consistency ─────────────────────────────
     const results: DetectedObject[] = [];
     if (bestQuad) {
@@ -411,6 +443,16 @@ export class CameraTracker {
   // -------------------------------------------------------------------------
   // Utility
   // -------------------------------------------------------------------------
+
+  /** Clean up background subtraction resources. */
+  private disposeBackground(): void {
+    if (this.backgroundGray) {
+      try { this.backgroundGray.delete(); } catch { /* ignore */ }
+      this.backgroundGray = null;
+    }
+    this.bgFrameCount = 0;
+    this.bgCaptured = false;
+  }
 
   /** Return available video input devices. */
   static async listCameras(): Promise<MediaDeviceInfo[]> {

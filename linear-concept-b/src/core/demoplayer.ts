@@ -54,7 +54,7 @@ export const CORNER_SNAP_RADIUS = 1.5;
 
 export const DEMO_INSTRUCTIONS: Record<string, string> = {
   WAITING_FOR_OBJECT: "Point at ▶ Start Demo and hold still",
-  POINTS_CALCULATED: "Drag bottom corners to grid positions, then tap Done ✓",
+  POINTS_CALCULATED: "Drag bottom corners to grid positions, then tap Done ✓",  // [REMOVED: Done prompt — kept for demo instructions]
   SHOW_BASIS_VECTORS: "Drag each arrow tip to the dotted target",
   CONFIRM_TRANSFORM: "Basis Vectors adjusted. Start Linear Transformation",
 };

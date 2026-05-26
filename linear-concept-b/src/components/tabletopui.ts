@@ -24,16 +24,19 @@ const C = {
   btnYesBg: "#3a5a7a",
   btnNoBg: "#555",
   btnText: "#fff",
-  e1: "#3a7bd5",
-  e2: "#5b9cf5",
+  e1: "#d53a3a",
+  e2: "#3ad56b",
   corner: "#222",
   cornerFill: "#fff",
   matrixText: "#111",
-  hl: "#3a7bd5",
-  hlBg: "rgba(58, 123, 213, 0.4)",
-  hlStroke: "#3a7bd5",
-  hlActive: "#5b9cf5",
-  hlActiveBg: "rgba(91, 156, 245, 0.4)",
+  hl: "#d53a3a",
+  hlBg: "rgba(213, 58, 58, 0.4)",
+  hlStroke: "#d53a3a",
+  hlActive: "#3ad56b",
+  hlActiveBg: "rgba(58, 213, 107, 0.4)",
+  cursor: "#3a7bd5",
+  cursorBg: "rgba(58, 123, 213, 0.4)",
+  cursorStroke: "#3a7bd5",
 };
 
 // ---------------------------------------------------------------------------
@@ -75,10 +78,10 @@ export class TabletopUI {
   private cornerSnapped: [boolean, boolean, boolean, boolean] = [false, false, false, false];
   private cornerLocked: [boolean, boolean, boolean, boolean] = [false, false, false, false];
 
-  // Done button (phase 3)
-  showDoneButton = false;
-  btnDone: DOMRect | null = null;
-  onDone: (() => void) | null = null;
+  // [REMOVED: Done button prompt — corner adjustment phase removed]
+  // showDoneButton = false;
+  // btnDone: DOMRect | null = null;
+  // onDone: (() => void) | null = null;
 
   // Arrow drag state (phase 5: SHOW_BASIS_VECTORS)
   private ghostArrows: { e1: Point2D; e2: Point2D } | null = null;
@@ -146,12 +149,11 @@ export class TabletopUI {
   setDwellingIndicators(e1: boolean, e2: boolean): void { this.e1Dwelling = e1; this.e2Dwelling = e2; }
   setRawHands(hands: DetectedHand[] | null): void { this.rawHands = hands; }
 
-  getButtonRects(): { yes: DOMRect | null; no: DOMRect | null; continue: DOMRect | null; done: DOMRect | null } {
+  getButtonRects(): { yes: DOMRect | null; no: DOMRect | null; continue: DOMRect | null } {
     return {
       yes: this.btnYes,
       no: this.btnNo,
       continue: this.btnContinue,
-      done: this.btnDone,
     };
   }
 
@@ -249,9 +251,10 @@ export class TabletopUI {
     this.drawInstruction(state.phase, grid);
     if (showConfirmButtons(state.phase)) this.drawButtons(grid, state.phase);
     if (state.phase === "TRANSFORMED") this.drawContinueButton(grid);
-    if (state.phase === "POINTS_CALCULATED") {
-      if (this.showDoneButton) this.drawDoneButton(grid);
-    }
+    // [REMOVED: Done button prompt during POINTS_CALCULATED]
+    // if (state.phase === "POINTS_CALCULATED") {
+    //   if (this.showDoneButton) this.drawDoneButton(grid);
+    // }
     this.drawHandSkeleton();
     this.drawHandStatus();
     this.drawCursor();
@@ -300,11 +303,9 @@ export class TabletopUI {
 
   private drawInstruction(phase: AppPhase, _grid: DOMRect): void {
     const { ctx, W } = this;
-    const override = this.demoInstructions?.[phase];
-    const text = override ?? getInstructionText(phase);
+    const text = this.demoInstructions?.[phase] ?? getInstructionText(phase);
     if (!text) return;
 
-    // Text in the clear strip at the top, nothing else
     let color = C.instrBlue;
     if (phase === "OBJECT_DETECTED") color = C.instrOrange;
     if (phase === "TRANSFORMED") color = C.instrCyan;
@@ -315,8 +316,20 @@ export class TabletopUI {
 
     ctx.fillStyle = color;
     ctx.font = "18px 'Courier New', monospace";
-    ctx.textAlign = "center";
-    ctx.fillText(text, W / 2, TEXT_STRIP_H - 12);
+
+    // For phases with buttons, left-align text as part of a centered group (text + buttons)
+    if (phase === "CONFIRM_TRANSFORM" || phase === "CONFIRM_RESET" || phase === "TRANSFORMED") {
+      const buttonWidth = phase === "TRANSFORMED" ? 100 : 64 * 2 + 10;
+      const tw = ctx.measureText(text).width;
+      const gap = 10;
+      const groupWidth = tw + gap + buttonWidth;
+      const groupStartX = (W - groupWidth) / 2;
+      ctx.textAlign = "left";
+      ctx.fillText(text, groupStartX, TEXT_STRIP_H - 12);
+    } else {
+      ctx.textAlign = "center";
+      ctx.fillText(text, W / 2, TEXT_STRIP_H - 12);
+    }
     ctx.textAlign = "left";
   }
 
@@ -326,15 +339,16 @@ export class TabletopUI {
     const bh = 28;
     const gap = 10;
 
-    // Position buttons just below the text strip, overlaying the grid
     ctx.font = "18px 'Courier New', monospace";
-    const text = getInstructionText(phase);
+    const text = this.demoInstructions?.[phase] ?? getInstructionText(phase);
     const tw = ctx.measureText(text).width;
-    const startX = W / 2 - tw / 2 + tw + gap + 4;
+    const buttonGroupWidth = bw * 2 + gap;
+    const groupWidth = tw + gap + buttonGroupWidth;
+    const groupStartX = (W - groupWidth) / 2;
 
-    const yesX = startX;
+    const yesX = groupStartX + tw + gap;
     const noX = yesX + bw + gap;
-    const btnY = TEXT_STRIP_H + 6;
+    const btnY = 6;
 
     // Yes button (darker blue in frames)
     ctx.fillStyle = C.btnYesBg;
@@ -553,14 +567,16 @@ export class TabletopUI {
   /** Draw "Continue →" button during TRANSFORMED phase. */
   private drawContinueButton(_grid: DOMRect): void {
     const ctx = this.ctx;
-    const text = "Object has been linearly transformed";
     ctx.font = "18px 'Courier New', monospace";
+    const text = this.demoInstructions?.["TRANSFORMED"] ?? getInstructionText("TRANSFORMED");
     const tw = ctx.measureText(text).width;
     const gap = 10;
     const bw = 100;
     const bh = 28;
-    const x = this.W / 2 - tw / 2 + tw + gap + 4;
-    const y = TEXT_STRIP_H + 6;
+    const groupWidth = tw + gap + bw;
+    const groupStartX = (this.W - groupWidth) / 2;
+    const x = groupStartX + tw + gap;
+    const y = 6;
 
     ctx.fillStyle = "#3a5a7a";
     ctx.beginPath();
@@ -629,46 +645,8 @@ export class TabletopUI {
     }
   }
 
-  // ─── Demo rendering: Done Prompt (Phase 3) ───────────────────────────────
-
-  /** Draw "Are you done adjusting the corners?" prompt at top with Yes/No buttons. */
-  private drawDoneButton(_grid: DOMRect): void {
-    const ctx = this.ctx;
-    const promptY = 55;
-    const btnW = 80;
-    const btnH = 36;
-    const btnSpacing = 30;
-    const totalW = btnW * 2 + btnSpacing;
-    const startX = (this.W - totalW) / 2;
-
-    ctx.fillStyle = C.instrBlue;
-    ctx.font = "bold 16px Arial";
-    ctx.textAlign = "center";
-    ctx.fillText("Are you done adjusting the corners?", this.W / 2, promptY);
-    ctx.textAlign = "left";
-
-    const noBtn = { x: startX, y: promptY + 8, w: btnW, h: btnH };
-    const yesBtn = { x: startX + btnW + btnSpacing, y: promptY + 8, w: btnW, h: btnH };
-
-    ctx.fillStyle = "#555";
-    ctx.beginPath();
-    roundRect(ctx, noBtn.x, noBtn.y, noBtn.w, noBtn.h, 5);
-    ctx.fill();
-    ctx.fillStyle = "#fff";
-    ctx.font = "bold 14px Arial";
-    ctx.textAlign = "center";
-    ctx.fillText("No", noBtn.x + noBtn.w / 2, noBtn.y + 24);
-    ctx.textAlign = "left";
-
-    ctx.fillStyle = "#3a5a7a";
-    ctx.beginPath();
-    roundRect(ctx, yesBtn.x, yesBtn.y, yesBtn.w, yesBtn.h, 5);
-    ctx.fill();
-    ctx.fillStyle = "#fff";
-    ctx.fillText("Yes", yesBtn.x + yesBtn.w / 2, yesBtn.y + 24);
-
-    this.btnDone = new DOMRect(yesBtn.x, yesBtn.y, yesBtn.w, yesBtn.h);
-  }
+  // [REMOVED: drawDoneButton — corner adjustment prompt removed]
+  // private drawDoneButton(_grid: DOMRect): void { ... }
 
   // ─── Demo rendering: Ghost Arrows (Phase 5) ───────────────────────────────
 
@@ -761,14 +739,14 @@ export class TabletopUI {
     const ctx = this.ctx;
     ctx.beginPath();
     ctx.arc(x, y, 14, 0, Math.PI * 2);
-    ctx.fillStyle = C.hlBg;
+    ctx.fillStyle = C.cursorBg;
     ctx.fill();
-    ctx.strokeStyle = C.hlStroke;
+    ctx.strokeStyle = C.cursorStroke;
     ctx.lineWidth = 2;
     ctx.stroke();
     ctx.beginPath();
     ctx.arc(x, y, 4, 0, Math.PI * 2);
-    ctx.fillStyle = C.hl;
+    ctx.fillStyle = C.cursor;
     ctx.fill();
   }
 
@@ -925,10 +903,12 @@ export class TabletopUI {
     } else if (this.btnContinue && hitTest(mx, my, this.btnContinue)) {
       this.btnContinue = null;
       this.onContinue?.();
-    } else if (this.btnDone && hitTest(mx, my, this.btnDone)) {
-      this.btnDone = null;
-      this.onDone?.();
     }
+    // [REMOVED: Done button hit test]
+    // } else if (this.btnDone && hitTest(mx, my, this.btnDone)) {
+    //   this.btnDone = null;
+    //   this.onDone?.();
+    // }
   }
 }
 

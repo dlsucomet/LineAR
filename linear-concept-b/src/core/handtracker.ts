@@ -43,6 +43,7 @@ export class HandTracker {
   private frameCallback: ((hands: DetectedHand[]) => void) | null = null;
   private frameCount = 0;
   private readonly FRAME_SKIP = 1;
+  private inferenceBusy = false;
   private videoEl: HTMLVideoElement | null = null;
   private config: HandTrackerConfig;
 
@@ -56,7 +57,7 @@ export class HandTracker {
 
   /** Initialise the TensorFlow model (downloads weights). */
   async init(): Promise<void> {
-    await tf.setBackend("wasm");
+    tf.env().set("WEBGL_CPU_FORWARD", false);
     const model = handPoseDetection.SupportedModels.MediaPipeHands;
     const detectorConfig: handPoseDetection.MediaPipeHandsTfjsModelConfig = {
       runtime: "tfjs",
@@ -64,6 +65,7 @@ export class HandTracker {
       maxHands: this.config.maxHands ?? DEFAULT_MAX_HANDS,
     };
     this.detector = await handPoseDetection.createDetector(model, detectorConfig);
+    console.log("[HandTracker] TF.js backend:", tf.getBackend());
   }
 
   /** Begin tracking hands in the given video element. */
@@ -98,14 +100,22 @@ export class HandTracker {
 
     this.frameCount++;
 
+    // Skip if previous inference hasn't finished yet (prevents overlapping promises)
+    if (this.inferenceBusy) {
+      this.animFrameId = requestAnimationFrame(() => this.loop());
+      return;
+    }
+
     if (this.frameCount % this.FRAME_SKIP !== 0) {
       this.animFrameId = requestAnimationFrame(() => this.loop());
       return;
     }
 
+    this.inferenceBusy = true;
     this.detector
       .estimateHands(this.videoEl, { flipHorizontal: false })
       .then((rawHands) => {
+        this.inferenceBusy = false;
         const hands: DetectedHand[] = rawHands.map((h): DetectedHand => {
           const toLandmark = (kp: { x: number; y: number; z?: number; name?: string }): HandLandmark => ({
             x: kp.x,
@@ -128,6 +138,7 @@ export class HandTracker {
         this.animFrameId = requestAnimationFrame(() => this.loop());
       })
       .catch((err) => {
+        this.inferenceBusy = false;
         console.warn("[HandTracker] Frame error:", err);
         this.animFrameId = requestAnimationFrame(() => this.loop());
       });

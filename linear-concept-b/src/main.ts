@@ -107,12 +107,12 @@ window.addEventListener("load", () => {
   if (FINGER_GUIDED_DEMO) {
     ui.setDemoInstructions(DEMO_INSTRUCTIONS);
     ui.setCorners(VIRTUAL_OBJECT.corners);
-    ui.onDone = () => {
-      ds.cornerCPlaced = false;
-      ds.cornerDPlaced = false;
-      ui.showDoneButton = false;
-      dispatch({ type: "OBJECTS_CLEARED" });
-    };
+    // ui.onDone = () => {  // [REMOVED: Done button prompt]
+    //   ds.cornerCPlaced = false;
+    //   ds.cornerDPlaced = false;
+    //   ui.showDoneButton = false;
+    //   dispatch({ type: "OBJECTS_CLEARED" });
+    // };
     ui.onContinue = () => dispatch({ type: "TRANSFORMATION_DONE" });
   }
 
@@ -138,7 +138,7 @@ window.addEventListener("load", () => {
         ds.cornerDLocked = false;
         ds.cornerCPlaced = false;
         ds.cornerDPlaced = false;
-        ds.showDonePrompt = false;
+        // ds.showDonePrompt = false;  // [REMOVED: Done button prompt]
         ds.hasAdjustedCorner = false;
         ds.cornerASnapTime = 0;
         ds.cornerBSnapTime = 0;
@@ -179,6 +179,7 @@ window.addEventListener("load", () => {
         ds.e1DwellIntersection = null;
         ds.e2DwellIntersection = null;
         ds.e1ReGrabCooldown = 0;
+        ds.handsAbsentSince = 0;
         ds.e2ReGrabCooldown = 0;
         ds.showBasisProceed = false;
         ui.setArrowSnapped(false, false);
@@ -282,6 +283,9 @@ async function bootstrap(
       let detectionHistory: boolean[] = [];
       let windowObjects: DetectedObject[] = [];
       cameraTracker.onFrame((objects) => {
+        // Only process object detection during phases that need it
+        if (!["WAITING_FOR_OBJECT", "OBJECT_DETECTED", "POINTS_CALCULATED"].includes(currentPhase)) return;
+
         const rawDetected = objects.length > 0;
         detectionHistory.push(rawDetected);
         if (detectionHistory.length > DETECTION_WINDOW_SIZE) {
@@ -397,7 +401,19 @@ async function bootstrap(
         if (hands.length > 0) {
           const hand = hands[0]!;
           if (hand.score >= 0.1 && hand.landmarks[8]) {
-            latestHandPosition = toMirroredCanvas(hand.landmarks[8]);
+        const rawPoint = toMirroredCanvas(hand.landmarks[8]);
+        const SMOOTH_ALPHA = 0.5;
+        const DEADZONE_PX = 3;
+            if (latestHandPosition === null) {
+              latestHandPosition = { ...rawPoint };
+            } else {
+              const dx = rawPoint.x - latestHandPosition.x;
+              const dy = rawPoint.y - latestHandPosition.y;
+              if (dx * dx + dy * dy > DEADZONE_PX * DEADZONE_PX) {
+                latestHandPosition.x += SMOOTH_ALPHA * dx;
+                latestHandPosition.y += SMOOTH_ALPHA * dy;
+              }
+            }
             lastHandSeenTime = Date.now();
           }
 
@@ -408,7 +424,6 @@ async function bootstrap(
             landmarks: h.landmarks.map((lm) => ({ ...lm, ...toMirroredCanvas(lm) })),
           }));
           ui.setRawHands(mirroredHands);
-          console.log("[LineAR] Hand detected:", hands.length, "hand(s)");
         } else {
           latestHandPosition = null;
           ui.setRawHands(null);
@@ -460,6 +475,8 @@ interface DemoInteractionState {
   e1CooldownUntil: number;
   e2CooldownUntil: number;
   arrowTransitionFired: boolean;
+  // Timestamp when hand was last detected (for auto-prompt after 5 min absence)
+  handsAbsentSince: number;
   previousPhase: string | null;
   arrowMatrix: Matrix2x2;
   fingerHistory: Point2D[];
@@ -498,8 +515,7 @@ interface DemoInteractionState {
   // Track initial corner positions to detect when corners are adjusted
   initialCornerPositions: [Point2D, Point2D, Point2D, Point2D] | null;
   hasAdjustedCorner: boolean;
-  // Done prompt visibility
-  showDonePrompt: boolean;
+  // showDonePrompt: boolean;  // [REMOVED: Done button prompt]
 
   // Viewport pan state
   isPanning: boolean;
@@ -553,6 +569,7 @@ function createDemoState(): DemoInteractionState {
     e2ReGrabCooldown: 0,
     showBasisProceed: false,
     arrowTransitionFired: false,
+    handsAbsentSince: 0,
     previousPhase: null,
     arrowMatrix: [1, 0, 0, 1],
     fingerHistory: [],
@@ -571,7 +588,7 @@ function createDemoState(): DemoInteractionState {
     globalCooldownUntil: 0,
     initialCornerPositions: null,
     hasAdjustedCorner: false,
-    showDonePrompt: false,
+    // showDonePrompt: false,  // [REMOVED: Done button prompt]
     isPanning: false,
     panStartX: 0,
     panStartY: 0,
@@ -616,10 +633,20 @@ async function setupDemoTracker(canvas: HTMLCanvasElement, video: HTMLVideoEleme
     if (hands.length > 0) {
       const hand = hands[0]!;
       if (hand.score >= 0.1 && hand.landmarks[8]) {
-        const rawPoint = toMirroredCanvas(hand.landmarks[8]);
-
-        latestHandPosition = { ...rawPoint };
-        lastHandSeenTime = Date.now();
+            const rawPoint = toMirroredCanvas(hand.landmarks[8]);
+            const SMOOTH_ALPHA = 0.5;
+            const DEADZONE_PX = 3;
+            if (latestHandPosition === null) {
+              latestHandPosition = { ...rawPoint };
+            } else {
+              const dx = rawPoint.x - latestHandPosition.x;
+              const dy = rawPoint.y - latestHandPosition.y;
+              if (dx * dx + dy * dy > DEADZONE_PX * DEADZONE_PX) {
+                latestHandPosition.x += SMOOTH_ALPHA * dx;
+                latestHandPosition.y += SMOOTH_ALPHA * dy;
+              }
+            }
+            lastHandSeenTime = Date.now();
       }
 
       const mirroredHands: DetectedHand[] = hands.map((h) => ({
@@ -813,19 +840,8 @@ function processInteractionFrame(
     ui.setCornerLockedStates([ds.cornerALocked, ds.cornerBLocked, ds.cornerCLocked, ds.cornerDLocked]);
 
     if (!ds.isDraggingCornerA && !ds.isDraggingCornerB && !ds.isDraggingCornerC && !ds.isDraggingCornerD) {
-      // Check if any corner has been adjusted from initial position
-      if (!ds.hasAdjustedCorner && ds.initialCornerPositions) {
-        for (let i = 0; i < 4; i++) {
-          const init = ds.initialCornerPositions[i]!;
-          const curr = corners[i]!;
-          if (Math.abs(init.x - curr.x) > 0.01 || Math.abs(init.y - curr.y) > 0.01) {
-            ds.hasAdjustedCorner = true;
-            ds.showDonePrompt = true;
-            break;
-          }
-        }
-      }
-
+      // [REMOVED: hasAdjustedCorner / showDonePrompt check — Done prompt removed]
+    
       if (dist(pointerCanvas, getCanvasCorner(0)) < GRAB_RADIUS_PX && canGrabCorner()) {
         ds.isDraggingCornerA = true;
         ds.cornerALocked = false; // Reset locked state when grabbing
@@ -1098,15 +1114,15 @@ function processInteractionFrame(
         }
       }
 
-      // Grab e2 if free (not placed, not locked)
-      if (!ds.e2Placed && !ds.e2Locked) {
+      // Grab e2 if free (not placed, not locked), only if e1 wasn't already grabbed
+      if (!ds.isDraggingE1 && !ds.e2Placed && !ds.e2Locked) {
         if (dist(pointerCanvas, e2Tip) < ARROW_GRAB_RADIUS_PX) {
           ds.isDraggingE2 = true;
           console.log("[LineAR] e2 grabbed");
         }
       }
       // Re-grab e2 if placed but not locked (with cooldown)
-      if (ds.e2Placed && !ds.e2Locked && Date.now() > ds.e2ReGrabCooldown) {
+      if (!ds.isDraggingE1 && ds.e2Placed && !ds.e2Locked && Date.now() > ds.e2ReGrabCooldown) {
         if (dist(pointerCanvas, e2Tip) < ARROW_GRAB_RADIUS_PX) {
           ds.isDraggingE2 = true;
           ds.e2Placed = false;
@@ -1125,7 +1141,21 @@ function processInteractionFrame(
       ds.isDraggingE2 && ds.e2DwellIntersection !== null,
     );
 
-    // ── 5. Both locked → show proceed prompt (HTML header) ────────────────────
+    // ── 5a. Auto-prompt: arrows adjusted + no hands for 5 minutes ──────────
+    const arrowsAdjusted = mat[0] !== 1 || mat[1] !== 0 || mat[2] !== 0 || mat[3] !== 1;
+    if (arrowsAdjusted && !isHandActive && !ds.arrowTransitionFired) {
+      if (ds.handsAbsentSince === 0) {
+        ds.handsAbsentSince = Date.now();
+      } else if (Date.now() - ds.handsAbsentSince >= 300_000) {
+        ds.arrowTransitionFired = true;
+        ds.handsAbsentSince = 0;
+        dispatch({ type: "BASIS_ADJUSTED", payload: [...ds.arrowMatrix] });
+      }
+    } else {
+      ds.handsAbsentSince = 0;
+    }
+
+    // ── 5. Both locked → show proceed prompt ────────────────────
     ds.showBasisProceed = ds.e1Locked && ds.e2Locked;
     if (ds.e1Locked && ds.e2Locked && !ds.arrowTransitionFired) {
       ds.arrowTransitionFired = true;
