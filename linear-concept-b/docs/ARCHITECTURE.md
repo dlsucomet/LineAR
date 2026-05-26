@@ -12,11 +12,17 @@ src/
 │   ├── appstatemachine.ts           Phase state machine (reducer pattern)
 │   ├── cameratracker.ts             OpenCV.js object detection
 │   ├── demoplayer.ts                Demo data, interaction thresholds, phase timings
-│   └── handtracker.ts               MediaPipe hand pose detection (TF.js WASM backend)
+│   └── handtracker.ts               MediaPipe hand pose detection (TF.js WebGL backend)
 ├── camera/
 │   └── cameramanager.ts             Camera stream management
-└── shims/
-    └── mediapipe-hands.ts           Stub for @mediapipe/hands (WASM not used by TF.js path)
+├── shims/
+│   └── mediapipe-hands.ts           Stub for @mediapipe/hands (not used by TF.js path)
+├── utils/
+│   └── helpers.ts                   Coordinate conversion helpers
+└── docs/
+    ├── ARCHITECTURE.md              This file
+    ├── INTERACTION.md               Input handling, dwell, basis vectors, pan
+    └── CONFIGURATION.md             All thresholds, timings, constants
 ```
 
 ## Phase State Machine
@@ -36,13 +42,14 @@ SHOW_CORNERS
 SHOW_BASIS_VECTORS   ←──────────────────────┐
   → (both arrows locked → BASIS_ADJUSTED)   │
        → CONFIRM_TRANSFORM                  │
-                                           │
+                                            │
 CONFIRM_TRANSFORM                           │
   → Yes (CONFIRM_YES) → TRANSFORMED         │
   → No  (CONFIRM_NO)  → SHOW_BASIS_VECTORS ─┘
 
 TRANSFORMED
-  → Continue button dwell → TRANSFORMATION_DONE → CONFIRM_RESET
+  → Continue button dwell (only way to advance)
+  → TRANSFORMATION_DONE → CONFIRM_RESET
 
 CONFIRM_RESET
   → Yes → WAITING_FOR_OBJECT (full reset)
@@ -68,3 +75,9 @@ CONFIRM_RESET
 2. Mouse / touch — fallback via `ui.getMouseCanvasPos()`
 
 `isHandActive = latestHandPosition != null && (Date.now() - lastHandSeenTime < HAND_TIMEOUT_MS)`
+
+## Camera Detection Guard
+
+During interactive phases (SHOW_BASIS_VECTORS, CONFIRM_TRANSFORM, TRANSFORMED, CONFIRM_RESET), the camera detection handler returns early — it does NOT count absent frames or dispatch `OBJECTS_CLEARED`. This prevents flickering/blinking from OpenCV failing to find quads during phases where the object is intentionally absent.
+
+Detection phases: WAITING_FOR_OBJECT, OBJECT_DETECTED, POINTS_CALCULATED.

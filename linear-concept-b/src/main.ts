@@ -25,8 +25,8 @@ import {
 } from "./core/demoplayer.ts";
 import type { DetectedHand, DetectedObject, HandLandmark, Matrix2x2, Point2D } from "./types/index.ts";
 
-const CAM_W = 1280;
-const CAM_H = 720;
+const CAM_W = 640;
+const CAM_H = 360;
 const CAM_FPS = 30;
 const BOARD_HALF = 10;
 const STABLE_THRESHOLD = 10;
@@ -50,6 +50,7 @@ const CORNER_MOVE_THRESHOLD_PX = 10;
 // ── Centralised Input Streams for Unified Loop ─────────────────────────────
 let latestHandPosition: Point2D | null = null;
 let lastHandSeenTime = 0;
+let handEmptyCount = 0;
 const HAND_TIMEOUT_MS = 400; // Hand tracking grace period before falling back to mouse
 
 // Current app phase (updated in dispatch, used by hand tracker callback)
@@ -402,7 +403,7 @@ async function bootstrap(
           const hand = hands[0]!;
           if (hand.score >= 0.1 && hand.landmarks[8]) {
         const rawPoint = toMirroredCanvas(hand.landmarks[8]);
-        const SMOOTH_ALPHA = 0.5;
+        const SMOOTH_ALPHA = 0.7;
         const DEADZONE_PX = 3;
             if (latestHandPosition === null) {
               latestHandPosition = { ...rawPoint };
@@ -424,9 +425,13 @@ async function bootstrap(
             landmarks: h.landmarks.map((lm) => ({ ...lm, ...toMirroredCanvas(lm) })),
           }));
           ui.setRawHands(mirroredHands);
+          handEmptyCount = 0;
         } else {
-          latestHandPosition = null;
-          ui.setRawHands(null);
+          handEmptyCount++;
+          if (handEmptyCount >= 5) {
+            latestHandPosition = null;
+            ui.setRawHands(null);
+          }
         }
       });
     } catch (err) {
@@ -634,7 +639,7 @@ async function setupDemoTracker(canvas: HTMLCanvasElement, video: HTMLVideoEleme
       const hand = hands[0]!;
       if (hand.score >= 0.1 && hand.landmarks[8]) {
             const rawPoint = toMirroredCanvas(hand.landmarks[8]);
-            const SMOOTH_ALPHA = 0.5;
+            const SMOOTH_ALPHA = 0.7;
             const DEADZONE_PX = 3;
             if (latestHandPosition === null) {
               latestHandPosition = { ...rawPoint };
@@ -656,9 +661,13 @@ async function setupDemoTracker(canvas: HTMLCanvasElement, video: HTMLVideoEleme
         landmarks: h.landmarks.map((lm) => ({ ...lm, ...toMirroredCanvas(lm) })),
       }));
       ui.setRawHands(mirroredHands);
+      handEmptyCount = 0;
     } else {
-      latestHandPosition = null;
-      ui.setRawHands(null);
+      handEmptyCount++;
+      if (handEmptyCount >= 5) {
+        latestHandPosition = null;
+        ui.setRawHands(null);
+      }
     }
   });
 }

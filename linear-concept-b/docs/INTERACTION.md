@@ -2,12 +2,21 @@
 
 ## Pointer Input
 
-Two input sources, resolved each frame in `main.ts:processInteractionFrame`:
+Two input sources, resolved each frame in the render loop (`main.ts`):
 
-1. **Hand tracking** (camera + MediaPipe) — index fingertip mapped to canvas coordinates. Active when `isHandActive` is true (hand seen within last 400ms).
+1. **Hand tracking** (camera + TF.js WebGL backend) — index fingertip mapped to canvas coordinates. Active when `isHandActive` is true (hand seen within last 400ms).
 2. **Mouse / touch** — fallback via `ui.getMouseCanvasPos()`.
 
-Hand tracking uses TF.js WASM backend (`@tensorflow/tfjs-backend-wasm`) for inference. The `lite` model is used with `maxHands: 1`.
+Hand tracking uses TF.js WebGL backend (`@tensorflow/tfjs-backend-webgl`) with `WEBGL_CPU_FORWARD=false`. Inference runs every 2nd animation frame (`FRAME_SKIP=2`). The `lite` model is used with `maxHands: 1`.
+
+### Smoothing Pipeline
+
+Raw landmark coordinates from TF.js pass through two filters before use:
+
+1. **8px deadzone** — position only updates if finger moved ≥8px since last frame (filters sensor noise)
+2. **EMA smoothing** (`alpha=0.5`) — `newPos = prevPos + 0.5 * delta` (dampens jitter)
+
+Applied in both `bootstrap` and `setupDemoTracker` callbacks.
 
 ## Dwell Interaction
 
@@ -23,8 +32,12 @@ Pan is available only during **TRANSFORMED** phase. Enabled via pointer-down dra
 - Pan offsets stored in `TabletopUI.panX` / `panY`
 - Grid center = `(canvas.width/2 + panX, TEXT_STRIP_H + gridHeight/2 + panY)`
 - All grid-drawn content (grid lines, corners, basis arrows) respects pan offset
+- Origin 0,0 is at grid centre
+- Pan not available during CONFIRM_TRANSFORM, CONFIRM_RESET, or SHOW_BASIS_VECTORS to avoid competing with button/arrow interaction
 
-Pan not available during CONFIRM_TRANSFORM, CONFIRM_RESET, or SHOW_BASIS_VECTORS to avoid competing with button/arrow interaction.
+### Corner Coordinate Labels
+
+During TRANSFORMED and CONFIRM_RESET, each corner displays a label: `(origX,origY) → (transformedX,transformedY)` showing the original and transformed grid coordinates.
 
 ## Basis Vectors (SHOW_BASIS_VECTORS Phase)
 
@@ -32,8 +45,8 @@ Two arrow tips (e1, e2) represent the 2×2 transformation matrix columns:
 
 | Arrow | Matrix column | Initial position |
 |---|---|---|
-| e1 (blue) | `[mat[0], mat[2]]` | (1, 0) |
-| e2 (light blue) | `[mat[1], mat[3]]` | (0, 1) |
+| e1 (red) | `[mat[0], mat[2]]` | (1, 0) |
+| e2 (green) | `[mat[1], mat[3]]` | (0, 1) |
 
 ### Arrow Interaction Sequence
 
@@ -67,7 +80,7 @@ Four corner circles of the detected object. Drag to adjust, snap to nearest inte
 
 ## Transformed Phase
 
-- Continue button at top-right of instruction text (dwell to advance to CONFIRM_RESET)
+- Continue button at top-right of instruction text (dwell to advance to CONFIRM_RESET) — **only** way to advance (no auto-transition)
 - Pan available anywhere outside Continue button
 - Corner labels show `(origX,origY) → (transformedX,transformedY)` for each corner
 - Basis arrows show the applied matrix; matrix label displayed next to arrow origin
@@ -76,7 +89,11 @@ Four corner circles of the detected object. Drag to adjust, snap to nearest inte
 
 | Function | Purpose | Location |
 |---|---|---|
-| `gridToCanvas(p, grid)` | Grid coords → canvas pixels | `tabletopui.ts:843` |
-| `canvasToGrid(p, grid)` | Canvas pixels → grid coords | `tabletopui.ts:854` |
+| `gridToCanvas(p, grid)` | Grid coords → canvas pixels | `tabletopui.ts` |
+| `canvasToGrid(p, grid)` | Canvas pixels → grid coords | `tabletopui.ts` |
 
 Both use: center = `grid center + pan`, scale = `min(grid.width, grid.height) / 20`, Y-flip.
+
+## Detection Phase Guard
+
+During interactive phases (SHOW_BASIS_VECTORS, CONFIRM_TRANSFORM, TRANSFORMED, CONFIRM_RESET), the camera detection handler returns early — it does NOT count absent frames or dispatch `OBJECTS_CLEARED`. This prevents flickering from OpenCV failing to find quads in later phases where the object is intentionally absent.

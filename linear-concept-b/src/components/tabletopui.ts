@@ -60,6 +60,9 @@ export class TabletopUI {
   panX = 0;
   panY = 0;
 
+  private animStartTime = 0;
+  private readonly ANIM_DURATION = 10000;
+
   private matrix: Matrix2x2 = [1, 0, 0, 1];
   private appliedMatrix: Matrix2x2 = [1, 0, 0, 1];
   private corners: [Point2D, Point2D, Point2D, Point2D] | null = null;
@@ -201,6 +204,26 @@ export class TabletopUI {
     };
   }
 
+  /**
+   * Compute shared animation progress for the TRANSFORMED phase.
+   * Animation plays once: triggers on first TRANSFORMED frame (animStartTime === 0),
+   * runs for ANIM_DURATION ms, then sets animStartTime = -1 (done) so it never
+   * retriggers. All other phases return animT = 1 (no interpolation).
+   */
+  private getAnimationProgress(phase: AppPhase): { animT: number; eased: number } {
+    if (phase === "TRANSFORMED" && this.animStartTime === 0) {
+      this.animStartTime = Date.now();
+    }
+
+    let animT = 1;
+    if (phase === "TRANSFORMED" && this.animStartTime > 0) {
+      animT = Math.min(1, (Date.now() - this.animStartTime) / this.ANIM_DURATION);
+      if (animT >= 1) this.animStartTime = -1;
+    }
+    const eased = 1 - Math.pow(1 - animT, 3);
+    return { animT, eased };
+  }
+
   /** Main draw call — renders every frame. */
   draw(state: AppState): void {
     const { ctx, W, H } = this;
@@ -222,7 +245,8 @@ export class TabletopUI {
 
     this.drawGrid(grid);
     this.drawDetectionOutline(grid, state.phase);
-    this.drawVirtualObject(grid, state.phase, state.appliedMatrix);
+    const anim = this.getAnimationProgress(state.phase);
+    this.drawVirtualObject(grid, state.phase, state.appliedMatrix, anim);
 
     if (state.phase === "POINTS_CALCULATED") {
       this.drawSnapPreview(grid);
@@ -232,7 +256,7 @@ export class TabletopUI {
       this.drawGhostArrows(grid, state.phase);
       this.drawArrowDragFeedback(grid);
     }
-    if (showCorners(state.phase) && this.corners) this.drawCorners(grid, state.phase, state.appliedMatrix);
+    if (showCorners(state.phase) && this.corners) this.drawCorners(grid, state.phase, state.appliedMatrix, anim);
     if (showBasisVectors(state.phase)) {
       const mat = state.phase === "TRANSFORMED" || state.phase === "CONFIRM_RESET"
         ? state.appliedMatrix
@@ -380,11 +404,10 @@ export class TabletopUI {
    * During TRANSFORMED / CONFIRM_RESET, corners are transformed by appliedMatrix.
    * During POINTS_CALCULATED, any dragged corner uses its temporary position.
    */
-  private drawCorners(grid: DOMRect, phase: AppPhase, appliedMatrix: Matrix2x2): void {
+  private drawCorners(grid: DOMRect, phase: AppPhase, appliedMatrix: Matrix2x2, anim: { animT: number; eased: number }): void {
     const { ctx } = this;
     if (!this.corners) return;
 
-    // Substitute temporary positions for any dragged corner during drag phase
     let drawCorners = this.corners;
     if (phase === "POINTS_CALCULATED") {
       drawCorners = [...this.corners];
@@ -394,12 +417,21 @@ export class TabletopUI {
     }
 
     const applyMat = (phase === "TRANSFORMED" || phase === "CONFIRM_RESET");
+    const { animT, eased } = anim;
 
     const pts = drawCorners.map((c) => {
-      const p = applyMat
-        ? { x: appliedMatrix[0] * c.x + appliedMatrix[1] * c.y, y: appliedMatrix[2] * c.x + appliedMatrix[3] * c.y }
-        : c;
-      return this.gridToCanvas(p, grid);
+      if (!applyMat) return this.gridToCanvas(c, grid);
+
+      const tx = appliedMatrix[0] * c.x + appliedMatrix[1] * c.y;
+      const ty = appliedMatrix[2] * c.x + appliedMatrix[3] * c.y;
+
+      if (animT < 1) {
+        return this.gridToCanvas({
+          x: c.x + (tx - c.x) * eased,
+          y: c.y + (ty - c.y) * eased,
+        }, grid);
+      }
+      return this.gridToCanvas({ x: tx, y: ty }, grid);
     });
 
     // Draw connecting rectangle lines
@@ -418,19 +450,15 @@ export class TabletopUI {
       const isLocked = phase === "POINTS_CALCULATED" && this.cornerLocked[i];
       ctx.beginPath();
       ctx.arc(p.x, p.y, isDragged ? 14 : 10, 0, Math.PI * 2);
-      // Priority: 1) dragged (blue), 2) locked (white with blue border), 3) normal (white with black border)
       if (isDragged) {
-        // Being dragged - always show blue
         ctx.fillStyle = C.hlBg;
         ctx.strokeStyle = C.hlStroke;
         ctx.lineWidth = 3;
       } else if (isLocked) {
-        // Locked (after 3 seconds) - white with blue border
         ctx.fillStyle = "#ffffff";
         ctx.strokeStyle = C.hl;
         ctx.lineWidth = 3;
       } else {
-        // Normal state - white with black border
         ctx.fillStyle = C.cornerFill;
         ctx.strokeStyle = C.corner;
         ctx.lineWidth = 2;
@@ -445,7 +473,7 @@ export class TabletopUI {
         const ty = appliedMatrix[2] * orig.x + appliedMatrix[3] * orig.y;
         const fmt = (n: number) => Math.round(n * 10) / 10;
         ctx.font = "10px 'Courier New', monospace";
-        ctx.fillStyle = "#333";
+        ctx.fillStyle = `rgba(51, 51, 51, ${animT})`;
         ctx.textAlign = "left";
         ctx.fillText(`(${fmt(orig.x)},${fmt(orig.y)}) → (${fmt(tx)},${fmt(ty)})`, p.x + 14, p.y + 4);
       }
@@ -522,7 +550,7 @@ export class TabletopUI {
   // ─── Demo rendering: Virtual Object ───────────────────────────────────────
 
   /** Draw the pre-placed virtual quadrilateral. Transformed during phases 7-8. */
-  private drawVirtualObject(grid: DOMRect, phase: AppPhase, appliedMatrix: Matrix2x2): void {
+  private drawVirtualObject(grid: DOMRect, phase: AppPhase, appliedMatrix: Matrix2x2, anim: { animT: number; eased: number }): void {
     if (!this.corners) return;
     if (
       phase !== "WAITING_FOR_OBJECT" &&
@@ -543,10 +571,17 @@ export class TabletopUI {
 
     const shouldTransform = phase === "TRANSFORMED" || phase === "CONFIRM_RESET";
     const [a, b, c, d] = shouldTransform ? appliedMatrix : [1, 0, 0, 1];
+    const { animT, eased } = anim;
 
     const pts = drawCorners.map(p => {
       const tx = a * p.x + b * p.y;
       const ty = c * p.x + d * p.y;
+      if (shouldTransform && animT < 1) {
+        return this.gridToCanvas({
+          x: p.x + (tx - p.x) * eased,
+          y: p.y + (ty - p.y) * eased,
+        }, grid);
+      }
       return this.gridToCanvas({ x: tx, y: ty }, grid);
     });
 

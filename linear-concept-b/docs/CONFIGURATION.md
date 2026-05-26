@@ -26,12 +26,14 @@ All tunable constants, grouped by source file.
 | `CORNER_MOVE_THRESHOLD_PX` | 10 | Finger movement threshold to reset snap timer (px) |
 | `GRID_BOUNDS` | 15 | Maximum grid coordinate bound |
 
-### Hand Tracking
+### Hand Tracking — Post-Processing
 
 | Constant | Value | Description |
 |---|---|---|
 | `HAND_TIMEOUT_MS` | 400 | Grace period before falling back to mouse (ms) |
 | `EPSILON` | 0.001 | Floating point epsilon for zero-crossing |
+| `SMOOTH_ALPHA` | 0.5 | EMA smoothing factor for raw landmark coordinates |
+| `DEADZONE_PX` | 8 | Minimum pixel movement to accept new position (both callbacks) |
 
 ## `src/core/demoplayer.ts`
 
@@ -57,6 +59,8 @@ All tunable constants, grouped by source file.
 | `PHASE_TIMINGS.SHOW_BASIS_VECTORS` | 1500 | Demo phase timing (ms) |
 | `PHASE_TIMINGS.TRANSFORMED` | 2500 | Demo phase timing (ms) |
 
+Note: TRANSFORMED auto-advance is commented out — Continue button is the only way to advance.
+
 ### Presets
 
 | Constant | Description |
@@ -69,13 +73,14 @@ All tunable constants, grouped by source file.
 
 | Setting | Value | Description |
 |---|---|---|
-| TF.js backend | WASM (`@tensorflow/tfjs-backend-wasm`) | Primary inference backend |
-| Fallback backend | WebGL (`@tensorflow/tfjs-backend-webgl`) | Initializes but WASM takes priority |
+| TF.js backend | WebGL (`@tensorflow/tfjs-backend-webgl`) | Primary inference backend; WASM also imported as fallback |
+| `WEBGL_CPU_FORWARD` | `false` | Forced to false to prefer GPU execution path |
 | Model type | `lite` | Faster/less accurate model |
-| `maxHands` | 1 | Single hand tracking |
+| `maxHands` | 1 | Single hand tracking (configured in bootstrap/main.ts) |
 | Gesture smoothing | 2 frames | Gesture must be consistent 2 frames before classification |
+| `FRAME_SKIP` | 2 | Run inference every 2nd animation frame (halves inference calls) |
 
-Smoothing in `setupDemoTracker` (`main.ts`): raw finger position used directly (no EMA). Frame-skip disabled (inference every animation frame).
+Smoothing in `main.ts` callbacks: 8px deadzone + EMA alpha=0.5 applied to index fingertip landmark.
 
 ## `src/components/tabletopui.ts`
 
@@ -92,8 +97,8 @@ Smoothing in `setupDemoTracker` (`main.ts`): raw finger position used directly (
 |---|---|---|
 | `C.gridLine` | `rgba(100,160,220,0.55)` | Grid lines |
 | `C.gridBg` | `#eef4fb` | Grid background |
-| `C.e1` | `#3a7bd5` | Basis vector e1 (arrow + ghost) |
-| `C.e2` | `#5b9cf5` | Basis vector e2 (arrow + ghost) |
+| `C.e1` | `#d53a3a` | Basis vector e1 — X axis (red) |
+| `C.e2` | `#3ad56b` | Basis vector e2 — Y axis (green) |
 | `C.corner` | `#222` | Corner circle stroke |
 | `C.cornerFill` | `#fff` | Corner circle fill |
 | `C.matrixText` | `#111` | Matrix label text |
@@ -111,6 +116,14 @@ Buttons are drawn on the canvas in fixed position (not pannable):
 
 Button dimensions: ~64×28px (Yes/No), 100×28px (Continue). Dwell-activated at `HOVER_DWELL_MS`.
 
+### Pan
+
+| Setting | Value | Description |
+|---|---|---|
+| Available phases | TRANSFORMED only | Pan disabled during CONFIRM_TRANSFORM and CONFIRM_RESET |
+| Pan origin | 0,0 at grid centre | Pan offsets apply from grid centre + canvas centre |
+| Coordinate labels | `(orig) → (transformed)` | Shown for each corner during TRANSFORMED and CONFIRM_RESET |
+
 ## `src/core/cameratracker.ts`
 
 | Setting | Value | Description |
@@ -118,4 +131,4 @@ Button dimensions: ~64×28px (Yes/No), 100×28px (Continue). Dwell-activated at 
 | `DETECTION_INTERVAL` | Every 5th frame | Run OpenCV detection every N frames |
 | `LOCKOUT_FRAMES` | 30 | Skip first N frames after start (camera warm-up) |
 
-Camera runs continuously in all phases (no pause during interactive phases — fixed to prevent object-detection cycling).
+Camera runs continuously in all phases. Detection handler returns early during interactive phases (SHOW_BASIS_VECTORS, CONFIRM_TRANSFORM, TRANSFORMED, CONFIRM_RESET) — does NOT count absent frames or dispatch OBJECTS_CLEARED.
