@@ -766,15 +766,15 @@ async function recognitionLoop() {
     await fetch("http://localhost:3000/frame", {
         method: "POST",
         headers: {
-          "Content-Type":
-            "application/json"
+          "Content-Type": "application/json"
         },
         body: JSON.stringify({
-          image:
-            currentFrame
+          image: currentFrame
         })
       }
     );
+
+    console.log("Processing image");
 
     const response = await fetch("http://localhost:3000/frame", {
         method: "POST",
@@ -793,23 +793,84 @@ async function recognitionLoop() {
 
     console.log(result);
 
-    if (
-      result.state === "correct"
-    ) {
-
+    if(currentStep == 1) {
       currentStep += 1;
-
-      if(currentStep >= 26) {
-        currentStep = 0;
-      }
-
       renderStep(currentStep);
+    } else if(currentStep == 23 || currentStep == 24) {
+      currentStep += 1;
+      renderStep(currentStep);
+      setTimeout(recognitionLoop, 8000);
+    } else if(currentStep == 25) {
+      setTimeout(recognitionLoop, 200000);
+    } else if (result.state === "correct") {
+      switch(currentStep) {
+        case 2:
+          currentStep = 3;
+          renderStep(currentStep);
+          break;
+        case 5:
+          currentStep = 6;
+          renderStep(currentStep);
+          break;
+        case 8:
+          currentStep = 9;
+          renderStep(currentStep);
+          break;
+        case 11:
+          currentStep = 12;
+          renderStep(currentStep);
+          break;
+        case 14:
+          currentStep = 15;
+          renderStep(currentStep);
+          break;
+        case 17:
+          currentStep = 18;
+          renderStep(currentStep);
+          break;
+        case 20:
+          currentStep = 21;
+          renderStep(currentStep);
+          break;
+      } 
 
+      setTimeout(recognitionLoop, 8000);
+
+    } else if(result.state === "wrong") {
+      switch(currentStep) {
+        case 2:
+          currentStep = 4;
+          renderStep(currentStep);
+          break;
+        case 5:
+          currentStep = 7;
+          renderStep(currentStep);
+          break;
+        case 8:
+          currentStep = 10;
+          renderStep(currentStep);
+          break;
+        case 11:
+          currentStep = 13;
+          renderStep(currentStep);
+          break;
+        case 14:
+          currentStep = 16;
+          renderStep(currentStep);
+          break;
+        case 17:
+          currentStep = 19;
+          renderStep(currentStep);
+          break;
+        case 20:
+          currentStep = 22;
+          renderStep(currentStep);
+          break;
+      } 
+
+      setTimeout(recognitionLoop, 8000);
     }
-
   }
-  
-  setTimeout(recognitionLoop, 3000);
 }
 
 async function initializeSystem() {
