@@ -7,7 +7,15 @@ import {
   type AppAction,
 } from "./core/appstatemachine.ts";
 import { TabletopUI } from "./components/tabletopui.ts";
-import { camToBoard, generateId } from "./utils/helpers.ts";
+import { generateId } from "./utils/helpers.ts";
+import { CoordinateMapper } from "./utils/coordinatemapper.ts";
+import {
+  detectMarkers,
+  computeHomography,
+  saveCalibration,
+  loadCalibration,
+  type DetectionResult,
+} from "./core/calibration.ts";
 import {
   VIRTUAL_OBJECT,
   PRESET_MATRIX,
@@ -35,6 +43,24 @@ const OPENCV_TIMEOUT = 10_000;
 const FINGER_GUIDED_DEMO = false;
 const EPSILON = 0.001;
 const GRID_BOUNDS = 15;
+
+// ── Coordinate Mapper (calibrated camera→grid transform) ─────────────────
+let coordMapper: CoordinateMapper;
+
+// ── Hand Tracking Mirror Config ────────────────────────────────────────────
+// Reads public/mirror-config.txt (0 = true view, 1 = mirrored selfie mode).
+// Defaults to true view (0) if file is missing.
+let mirrorHandTracking = false;
+
+async function loadMirrorConfig() {
+  try {
+    const res = await fetch('/mirror-config.txt');
+    mirrorHandTracking = (await res.text()).trim() === '1';
+  } catch {
+    mirrorHandTracking = false;
+  }
+}
+loadMirrorConfig();
 
 // ── Corner Auto-Release & Cooldown Configuration ───────────────────────────────
 // Auto-release: 3 seconds of stable position after snapping to lock corner
@@ -203,6 +229,10 @@ window.addEventListener("load", () => {
         ds.panStartX = 0;
         ds.panStartY = 0;
       }
+      if (state.phase === "WAITING_FOR_OBJECT") {
+        ui.setPanBounds(null);
+        ui.setPanOffset(0, 0);
+      }
     }
 
     // 2. Resolve Pointer Hierarchy: Hand tracking wins, Mouse acts as a smart hover fallback
@@ -278,6 +308,31 @@ async function bootstrap(
       await cameraTracker.start({ width: CAM_W, height: CAM_H, fps: CAM_FPS });
       console.log("[CameraTracker] Camera started successfully with resolution:", cameraTracker.resolution);
 
+      // Create calibrated coordinate mapper
+      const res = cameraTracker.resolution;
+      coordMapper = new CoordinateMapper(res.width, res.height, BOARD_HALF);
+
+      // Check for saved calibration
+      const savedMatrix = loadCalibration();
+      if (savedMatrix) {
+        coordMapper.setTransform({ type: "homography", matrix: savedMatrix });
+        console.log("[LineAR] Loaded saved calibration");
+      } else {
+        console.log("[LineAR] No calibration found — entering calibration mode");
+        dispatch({ type: "CALIBRATE" });
+        const calibrated = await runCalibrationSequence(
+          cameraTracker, coordMapper, 3,
+          (msg) => ui.setDemoInstructions({ CALIBRATING: msg }),
+        );
+        ui.setDemoInstructions(null);
+        dispatch({ type: "CALIBRATION_DONE" });
+        if (calibrated) {
+          console.log("[LineAR] Calibration complete");
+        } else {
+          console.warn("[LineAR] Continuing without calibration");
+        }
+      }
+
       let absentFrames = 0;
       const DETECTION_WINDOW_SIZE = 10;
       const DETECTION_WINDOW_THRESHOLD = 4;
@@ -332,7 +387,7 @@ async function bootstrap(
         dispatch({ type: "OBJECTS_DETECTED", payload: smoothedObjects });
 
         const { x, y, width, height } = avgObj.boundingBox;
-        const tb = (p: Point2D) => camToBoard(p, CAM_W, CAM_H, BOARD_HALF);
+        const tb = (p: Point2D) => coordMapper.cameraToGrid(p);
         const outline: Point2D[] = [
           tb({ x, y }),
           tb({ x: x + width, y }),
@@ -395,7 +450,7 @@ async function bootstrap(
         const offsetY = (canvas.height - vh * uniformScale) / 2;
 
         const toMirroredCanvas = (lm: HandLandmark): Point2D => ({
-          x: (vw - lm.x) * uniformScale + offsetX,
+          x: (mirrorHandTracking ? vw - lm.x : lm.x) * uniformScale + offsetX,
           y: lm.y * uniformScale + offsetY,
         });
 
@@ -444,6 +499,55 @@ async function safeImport<T>(factory: () => Promise<T>): Promise<Partial<T>> {
   try { return await factory(); } catch (err) {
     return {};
   }
+}
+
+function sleep(ms: number): Promise<void> {
+  return new Promise((resolve) => setTimeout(resolve, ms));
+}
+
+/**
+ * Run the projector-camera calibration sequence.
+ * Captures a camera frame, detects markers, computes homography, saves.
+ * Retries up to `retries` times on failure.
+ * Returns true if calibration succeeded, false otherwise.
+ */
+async function runCalibrationSequence(
+  cameraTracker: import("./core/cameratracker.ts").CameraTracker,
+  mapper: CoordinateMapper,
+  retries: number,
+  onStatus?: (msg: string) => void,
+): Promise<boolean> {
+  for (let attempt = 0; attempt < retries; attempt++) {
+    if (attempt > 0) {
+      onStatus?.(`Calibration attempt ${attempt + 1} of ${retries}…`);
+      await sleep(2000);
+    } else {
+      onStatus?.("Capturing calibration markers…");
+      await sleep(1500);
+    }
+
+    const canvas = cameraTracker.processCanvas;
+    const ctx = canvas.getContext("2d");
+    if (!ctx) continue;
+
+    const imageData = ctx.getImageData(0, 0, canvas.width, canvas.height);
+    const result: DetectionResult | null = detectMarkers(imageData, canvas.width, canvas.height);
+
+    if (result && result.cameraPoints.length >= 4) {
+      const homography = computeHomography(result.cameraPoints, result.gridPoints);
+      if (homography) {
+        mapper.setTransform({ type: "homography", matrix: homography });
+        saveCalibration(homography);
+        console.log(`[LineAR] Calibration succeeded (${result.method}, ${result.cameraPoints.length} points)`);
+        return true;
+      }
+    }
+
+    console.warn(`[LineAR] Calibration attempt ${attempt + 1} failed`);
+  }
+
+  console.warn("[LineAR] Calibration failed after all retries — using direct mapping");
+  return false;
 }
 
 // ============================================================================
@@ -631,7 +735,7 @@ async function setupDemoTracker(canvas: HTMLCanvasElement, video: HTMLVideoEleme
     const offsetY = (canvas.height - vh * uniformScale) / 2;
 
     const toMirroredCanvas = (lm: HandLandmark): Point2D => ({
-      x: (vw - lm.x) * uniformScale + offsetX,
+      x: (mirrorHandTracking ? vw - lm.x : lm.x) * uniformScale + offsetX,
       y: lm.y * uniformScale + offsetY,
     });
 

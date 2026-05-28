@@ -1,192 +1,331 @@
-// ─── src/core/calibration.ts ──────────────────────────────────────────────────
-// Projector ↔ Camera homography calibration.
-// Computes a 3×3 homography that maps camera pixel coordinates to projector
-// pixel coordinates using four corresponding point pairs (one per corner).
+import type { Point2D } from "../types/index.ts";
 
-import type { HomographyCalibration, Matrix3x3, Point2D } from "../types/index.ts";
+// ── Marker Definitions ────────────────────────────────────────────────────
 
-// ---------------------------------------------------------------------------
-// 4-point DLT homography
-// ---------------------------------------------------------------------------
+/** ArUco markers (DICT_4X4_50) projected at these grid positions. 4×3 grid. */
+export const ARUCO_MARKERS: { id: number; gridX: number; gridY: number }[] = [
+  { id: 0,  gridX: -7, gridY:  7 },
+  { id: 1,  gridX: -3, gridY:  7 },
+  { id: 2,  gridX:  3, gridY:  7 },
+  { id: 3,  gridX:  7, gridY:  7 },
+  { id: 4,  gridX: -7, gridY:  2 },
+  { id: 5,  gridX: -3, gridY:  2 },
+  { id: 6,  gridX:  3, gridY:  2 },
+  { id: 7,  gridX:  7, gridY:  2 },
+  { id: 8,  gridX: -7, gridY: -3 },
+  { id: 9,  gridX: -3, gridY: -3 },
+  { id: 10, gridX:  3, gridY: -3 },
+  { id: 11, gridX:  7, gridY: -3 },
+];
+
+/** Fallback corner circles at 4 corners (simpler detection). */
+export const CIRCLE_MARKERS: Point2D[] = [
+  { x: -7.5, y:  7.5 },
+  { x:  7.5, y:  7.5 },
+  { x:  7.5, y: -7.5 },
+  { x: -7.5, y: -7.5 },
+];
+
+const ARUCO_MARKER_PX = 48;
+const STORAGE_KEY = "linear_calibration_homography";
+
+// ── ArUco Support Check ────────────────────────────────────────────────────
+
+export function hasAruco(): boolean {
+  const cv = window.cv;
+  return !!(cv?.aruco?.detectMarkers && cv?.aruco?.drawMarker);
+}
+
+// ── Marker Image Cache (ArUco) ──────────────────────────────────────────────
+
+let arucoCache: HTMLCanvasElement[] | null = null;
+
+function getArucoCanvas(id: number): HTMLCanvasElement | null {
+  if (!arucoCache) buildArucoCache();
+  return arucoCache?.[id] ?? null;
+}
+
+function buildArucoCache(): void {
+  const cv = window.cv;
+  if (!cv?.aruco?.drawMarker) { arucoCache = []; return; }
+
+  try {
+    const dict = cv.aruco.getPredefinedDictionary(cv.aruco.DICT_4X4_50);
+    arucoCache = [];
+    for (const m of ARUCO_MARKERS) {
+      const markerMat = new cv.Mat();
+      cv.aruco.drawMarker(dict, m.id, ARUCO_MARKER_PX, markerMat, 1);
+      const temp = document.createElement("canvas");
+      temp.width = ARUCO_MARKER_PX;
+      temp.height = ARUCO_MARKER_PX;
+      cv.imshow(temp, markerMat);
+      markerMat.delete();
+      arucoCache.push(temp);
+    }
+  } catch (e) {
+    console.warn("[Calibration] Failed to build ArUco cache:", e);
+    arucoCache = [];
+  }
+}
+
+// ── Detection ───────────────────────────────────────────────────────────────
+
+export interface DetectionResult {
+  cameraPoints: Point2D[];  // detected positions in camera pixel space
+  gridPoints: Point2D[];    // corresponding known grid positions
+  method: "aruco" | "circles";
+}
 
 /**
- * Compute a 3×3 homography matrix from 4 point correspondences.
- *
- * @param src - 4 points in camera pixel space.
- * @param dst - 4 corresponding points in projector pixel space.
- * @returns A HomographyCalibration with the computed matrix.
+ * Attempt to detect calibration markers in a camera frame.
+ * Tries ArUco first, falls back to circle blob detection.
  */
-export function computeHomography(
-  src: [Point2D, Point2D, Point2D, Point2D],
-  dst: [Point2D, Point2D, Point2D, Point2D],
-): HomographyCalibration {
-  const A: number[][] = [];
+export function detectMarkers(
+  imageData: ImageData,
+  camW: number,
+  camH: number,
+): DetectionResult | null {
+  const cv = window.cv;
+  if (!cv) return null;
 
-  for (let i = 0; i < 4; i++) {
-    const { x: sx, y: sy } = src[i]!;
-    const { x: dx, y: dy } = dst[i]!;
+  const src = cv.matFromImageData(imageData);
+  const gray = new cv.Mat();
+  cv.cvtColor(src, gray, cv.COLOR_RGBA2GRAY, 0);
 
-    // Two equations per point correspondence (DLT)
-    A.push([-sx, -sy, -1, 0, 0, 0, dx * sx, dx * sy, dx]);
-    A.push([0, 0, 0, -sx, -sy, -1, dy * sx, dy * sy, dy]);
+  let result: DetectionResult | null = null;
+
+  // Try ArUco
+  if (hasAruco()) {
+    result = detectAruco(gray, cv);
   }
 
-  const h = solveDLT(A);
+  // Fallback: corner circles
+  if (!result) {
+    result = detectCircles(gray, cv, camW, camH);
+  }
 
-  const matrix: Matrix3x3 = [
-    h[0]!, h[1]!, h[2]!,
-    h[3]!, h[4]!, h[5]!,
-    h[6]!, h[7]!, h[8]!,
-  ];
-
-  return {
-    matrix,
-    calibrated: true,
-    calibratedAt: new Date().toISOString(),
-  };
+  src.delete();
+  gray.delete();
+  return result;
 }
 
-/**
- * Apply a 3×3 homography to a single camera-space point,
- * returning the corresponding projector-space point.
- */
-export function applyHomography(h: Matrix3x3, p: Point2D): Point2D {
-  const [h0, h1, h2, h3, h4, h5, h6, h7, h8] = h;
-  const w = h6! * p.x + h7! * p.y + h8!;
-  return {
-    x: (h0! * p.x + h1! * p.y + h2!) / w,
-    y: (h3! * p.x + h4! * p.y + h5!) / w,
-  };
-}
-
-/**
- * Persist calibration data to localStorage.
- */
-export function saveCalibration(cal: HomographyCalibration): void {
-  localStorage.setItem("lineAR_calibration", JSON.stringify(cal));
-}
-
-/**
- * Load calibration data from localStorage.
- * Returns null if none is stored.
- */
-export function loadCalibration(): HomographyCalibration | null {
-  const raw = localStorage.getItem("lineAR_calibration");
-  if (!raw) return null;
+function detectAruco(gray: any, cv: any): DetectionResult | null {
   try {
-    return JSON.parse(raw) as HomographyCalibration;
+    const dict = cv.aruco.getPredefinedDictionary(cv.aruco.DICT_4X4_50);
+    const corners = new cv.MatVector();
+    const ids = new cv.Mat();
+    cv.aruco.detectMarkers(gray, dict, corners, ids);
+
+    if (ids.rows === 0) {
+      corners.delete();
+      ids.delete();
+      return null;
+    }
+
+    const cameraPoints: Point2D[] = [];
+    const gridPoints: Point2D[] = [];
+
+    for (let i = 0; i < ids.rows; i++) {
+      const id = ids.data32S[i];
+      const marker = ARUCO_MARKERS.find((m) => m.id === id);
+      if (!marker) continue;
+
+      const cornerMat = corners.get(i);
+      // cornerMat is 4×1 CV_32FC2 (or 1×4 CV_32FC2 — varies by OpenCV.js version)
+      let cx = 0, cy = 0;
+      const data = cornerMat.data32S ?? cornerMat.data32F;
+      if (!data) continue;
+
+      // Handle both possible layouts
+      const rows = cornerMat.rows;
+      const cols = cornerMat.cols;
+      const step = cornerMat.channels();
+
+      if (rows === 4 && cols === 1 && step >= 2) {
+        // Layout: 4 rows × 1 col, each element is (x, y)
+        for (let j = 0; j < 4; j++) {
+          cx += data[j * step];
+          cy += data[j * step + 1];
+        }
+      } else if (rows === 1 && cols >= 4 && step >= 2) {
+        // Layout: 1 row × N cols
+        for (let j = 0; j < Math.min(cols, 4); j++) {
+          cx += data[j * step];
+          cy += data[j * step + 1];
+        }
+      }
+
+      cx /= 4;
+      cy /= 4;
+
+      cameraPoints.push({ x: cx, y: cy });
+      gridPoints.push({ x: marker.gridX, y: marker.gridY });
+    }
+
+    corners.delete();
+    ids.delete();
+
+    if (cameraPoints.length < 4) return null;
+
+    return { cameraPoints, gridPoints, method: "aruco" };
+  } catch (e) {
+    console.warn("[Calibration] ArUco detection failed:", e);
+    return null;
+  }
+}
+
+function detectCircles(gray: any, cv: any, camW: number, camH: number): DetectionResult | null {
+  try {
+    // Threshold to find bright blobs (projected circles are bright on white cartolina)
+    const thresholded = new cv.Mat();
+    cv.threshold(gray, thresholded, 200, 255, cv.THRESH_BINARY);
+
+    const contours = new cv.MatVector();
+    const hierarchy = new cv.Mat();
+    cv.findContours(thresholded, contours, hierarchy, cv.RETR_EXTERNAL, cv.CHAIN_APPROX_SIMPLE);
+
+    const blobs: { x: number; y: number; area: number }[] = [];
+
+    for (let i = 0; i < contours.size(); i++) {
+      const contour = contours.get(i);
+      const area = cv.contourArea(contour);
+      if (area < 100 || area > camW * camH * 0.1) { contour.delete(); continue; }
+
+      const perimeter = cv.arcLength(contour, true);
+      if (perimeter <= 0) { contour.delete(); continue; }
+      const circularity = 4 * Math.PI * area / (perimeter * perimeter);
+      if (circularity < 0.5) { contour.delete(); continue; }
+
+      const M = cv.moments(contour);
+      if (M.m00 === 0) { contour.delete(); continue; }
+      const cx = M.m10 / M.m00;
+      const cy = M.m01 / M.m00;
+
+      blobs.push({ x: cx, y: cy, area });
+      contour.delete();
+    }
+
+    thresholded.delete();
+    hierarchy.delete();
+    contours.delete();
+
+    if (blobs.length < 4) return null;
+
+    // Sort by area descending, take top 4
+    blobs.sort((a, b) => b.area - a.area);
+    const top4 = blobs.slice(0, 4);
+
+    // Sort by position: top-left, top-right, bottom-right, bottom-left
+    // (matching CIRCLE_MARKERS order)
+    const cx = top4.reduce((s, b) => s + b.x, 0) / top4.length;
+    const cy = top4.reduce((s, b) => s + b.y, 0) / top4.length;
+
+    const quadrant = (b: { x: number; y: number }): number => {
+      if (b.x <= cx && b.y <= cy) return 0; // top-left
+      if (b.x > cx && b.y <= cy) return 1;  // top-right
+      if (b.x > cx && b.y > cy) return 2;   // bottom-right
+      return 3;                               // bottom-left
+    };
+
+    const sorted = [...top4].sort((a, b) => quadrant(a) - quadrant(b));
+
+    return {
+      cameraPoints: sorted.map((b) => ({ x: b.x, y: b.y })),
+      gridPoints: [...CIRCLE_MARKERS],
+      method: "circles",
+    };
+  } catch (e) {
+    console.warn("[Calibration] Circle detection failed:", e);
+    return null;
+  }
+}
+
+// ── Homography ──────────────────────────────────────────────────────────────
+
+/**
+ * Compute a 3×3 homography matrix from point correspondences.
+ * Returns row-major array of 9 numbers, or null on failure.
+ */
+export function computeHomography(
+  srcPoints: Point2D[],
+  dstPoints: Point2D[],
+): number[] | null {
+  const cv = window.cv;
+  if (!cv || srcPoints.length < 4 || dstPoints.length < 4) return null;
+
+  try {
+    const srcMat = cv.matFromArray(srcPoints.length, 1, cv.CV_32FC2);
+    const dstMat = cv.matFromArray(dstPoints.length, 1, cv.CV_32FC2);
+
+    // Fill source points
+    for (let i = 0; i < srcPoints.length; i++) {
+      srcMat.data32F[i * 2] = srcPoints[i]!.x;
+      srcMat.data32F[i * 2 + 1] = srcPoints[i]!.y;
+    }
+    // Fill destination points
+    for (let i = 0; i < dstPoints.length; i++) {
+      dstMat.data32F[i * 2] = dstPoints[i]!.x;
+      dstMat.data32F[i * 2 + 1] = dstPoints[i]!.y;
+    }
+
+    const mask = new cv.Mat();
+    const H = cv.findHomography(srcMat, dstMat, cv.RANSAC, 3, mask);
+
+    // Extract 3×3 matrix as row-major array
+    // H is CV_64F (double) → H.data64F
+    const matrix: number[] = [];
+    for (let i = 0; i < 9; i++) {
+      matrix.push(H.data64F[i]);
+    }
+
+    srcMat.delete();
+    dstMat.delete();
+    mask.delete();
+    H.delete();
+
+    return matrix;
+  } catch (e) {
+    console.warn("[Calibration] Homography computation failed:", e);
+    return null;
+  }
+}
+
+// ── Persistence ───────────────────────────────────────────────────────────────
+
+export function saveCalibration(matrix: number[]): void {
+  try {
+    localStorage.setItem(STORAGE_KEY, JSON.stringify(matrix));
+    console.log("[Calibration] Homography saved to localStorage");
+  } catch (e) {
+    console.warn("[Calibration] Failed to save homography:", e);
+  }
+}
+
+export function loadCalibration(): number[] | null {
+  try {
+    const raw = localStorage.getItem(STORAGE_KEY);
+    if (!raw) return null;
+    const matrix = JSON.parse(raw);
+    if (!Array.isArray(matrix) || matrix.length !== 9) return null;
+    console.log("[Calibration] Homography loaded from localStorage");
+    return matrix;
   } catch {
     return null;
   }
 }
 
-// ---------------------------------------------------------------------------
-// DLT solver (Gaussian elimination on the 8×9 coefficient matrix)
-// ---------------------------------------------------------------------------
-
-/**
- * Solve the homogeneous system Ah = 0 for an 8×9 matrix A using
- * simple Gaussian elimination with back-substitution.
- * Returns the 9-element solution vector (normalised so h[8]=1).
- */
-function solveDLT(A: number[][]): number[] {
-  const rows = A.length;   // 8
-  const cols = 9;
-
-  // Forward elimination
-  for (let col = 0; col < cols - 1; col++) {
-    // Find pivot
-    let maxRow = col;
-    let maxVal = Math.abs(A[col]![col]!);
-    for (let row = col + 1; row < rows; row++) {
-      const val = Math.abs(A[row]![col]!);
-      if (val > maxVal) { maxVal = val; maxRow = row; }
-    }
-    [A[col], A[maxRow]] = [A[maxRow]!, A[col]!];
-
-    for (let row = col + 1; row < rows; row++) {
-      if (Math.abs(A[col]![col]!) < 1e-12) continue;
-      const factor = A[row]![col]! / A[col]![col]!;
-      for (let k = col; k < cols; k++) {
-        A[row]![k]! -= factor * A[col]![k]!;
-      }
-    }
-  }
-
-  // The 9th variable h[8] is free; set it to 1
-  const h = new Array<number>(cols).fill(0);
-  h[8] = 1;
-
-  // Back-substitution
-  for (let row = rows - 1; row >= 0; row--) {
-    let sum = A[row]![cols - 1]! * h[cols - 1]!;
-    for (let col = row + 1; col < cols - 1; col++) {
-      sum += A[row]![col]! * h[col]!;
-    }
-    const pivot = A[row]![row];
-    h[row] = pivot && Math.abs(pivot) > 1e-12 ? -sum / pivot : 0;
-  }
-
-  return h;
+export function clearCalibration(): void {
+  try {
+    localStorage.removeItem(STORAGE_KEY);
+    console.log("[Calibration] Homography cleared");
+  } catch { /* ignore */ }
 }
 
-// ---------------------------------------------------------------------------
-// Calibration UI state machine (used by the CalibrationPanel component)
-// ---------------------------------------------------------------------------
+// ── Rendering helpers (used by tabletopui) ──────────────────────────────────
 
-export type CalibrationCorner = "top-left" | "top-right" | "bottom-right" | "bottom-left";
-
-export const CALIBRATION_CORNER_ORDER: CalibrationCorner[] = [
-  "top-left", "top-right", "bottom-right", "bottom-left",
-];
-
-export interface CalibrationSession {
-  /** Points captured from camera so far (one per corner). */
-  capturedCameraPoints: Partial<Record<CalibrationCorner, Point2D>>;
-  /** Points projected (known) on projector canvas. */
-  projectorPoints: Record<CalibrationCorner, Point2D>;
+/** Returns the ArUco marker canvas for a given ID, or null. */
+export function getMarkerCanvas(id: number): HTMLCanvasElement | null {
+  return getArucoCanvas(id);
 }
 
-/**
- * Create a new calibration session with a known projector corner layout.
- */
-export function createCalibrationSession(
-  projectorWidth: number,
-  projectorHeight: number,
-  margin = 40,
-): CalibrationSession {
-  return {
-    capturedCameraPoints: {},
-    projectorPoints: {
-      "top-left": { x: margin, y: margin },
-      "top-right": { x: projectorWidth - margin, y: margin },
-      "bottom-right": { x: projectorWidth - margin, y: projectorHeight - margin },
-      "bottom-left": { x: margin, y: projectorHeight - margin },
-    },
-  };
-}
-
-/**
- * Attempt to finalise the calibration once all four camera points are captured.
- * Returns null if any point is missing.
- */
-export function finaliseCalibration(
-  session: CalibrationSession,
-): HomographyCalibration | null {
-  const corners = CALIBRATION_CORNER_ORDER;
-  const srcPoints: Point2D[] = [];
-  const dstPoints: Point2D[] = [];
-
-  for (const corner of corners) {
-    const cam = session.capturedCameraPoints[corner];
-    const proj = session.projectorPoints[corner];
-    if (!cam) return null;
-    srcPoints.push(cam);
-    dstPoints.push(proj);
-  }
-
-  return computeHomography(
-    srcPoints as [Point2D, Point2D, Point2D, Point2D],
-    dstPoints as [Point2D, Point2D, Point2D, Point2D],
-  );
-}
+export { ARUCO_MARKER_PX };

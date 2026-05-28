@@ -10,6 +10,12 @@ import {
   showConfirmButtons,
   showCorners,
 } from "../core/appstatemachine.ts";
+import {
+  ARUCO_MARKERS,
+  CIRCLE_MARKERS,
+  getMarkerCanvas,
+  ARUCO_MARKER_PX,
+} from "../core/calibration.ts";
 import type { DetectedHand, Matrix2x2, Point2D } from "../types/index.ts";
 
 // ---------------------------------------------------------------------------
@@ -45,6 +51,7 @@ const C = {
 const GRID_RANGE = 10;
 const GRID_SNAP_RADIUS = 2.0;
 const TEXT_STRIP_H = 40;
+const PAN_PADDING = 4;
 
 // ---------------------------------------------------------------------------
 // TabletopUI
@@ -59,6 +66,7 @@ export class TabletopUI {
 
   panX = 0;
   panY = 0;
+  private panBounds: { minX: number; maxX: number; minY: number; maxY: number } | null = null;
 
   private animStartTime = 0;
   private readonly ANIM_DURATION = 10000;
@@ -164,9 +172,31 @@ export class TabletopUI {
     return { x: this.panX, y: this.panY };
   }
 
+  setPanBounds(bounds: { minX: number; maxX: number; minY: number; maxY: number } | null): void {
+    this.panBounds = bounds;
+  }
+
   setPanOffset(x: number, y: number): void {
     this.panX = x;
     this.panY = y;
+    if (!this.panBounds) return;
+
+    const gridH = this.H - TEXT_STRIP_H;
+    const scale = Math.min(this.W, gridH) / (GRID_RANGE * 2);
+    const halfW = (this.W / 2) / scale;
+    const halfH = (gridH / 2) / scale;
+
+    const pkMin = -(this.panBounds.maxX * scale - this.W / 2);
+    const pkMax = -(this.panBounds.minX * scale + this.W / 2);
+    this.panX = pkMin > pkMax
+      ? (pkMin + pkMax) / 2
+      : Math.max(pkMin, Math.min(pkMax, this.panX));
+
+    const pyMin = this.panBounds.minY * scale + gridH / 2;
+    const pyMax = this.panBounds.maxY * scale - gridH / 2;
+    this.panY = pyMin > pyMax
+      ? (pyMin + pyMax) / 2
+      : Math.max(pyMin, Math.min(pyMax, this.panY));
   }
 
   autoFrameTransformed(corners: Point2D[], matrix: Matrix2x2, grid: DOMRect): void {
@@ -188,6 +218,14 @@ export class TabletopUI {
     const scale = Math.min(grid.width, grid.height) / 20;
     this.panX = -centerX * scale;
     this.panY = centerY * scale;
+
+    this.panBounds = {
+      minX: minX - PAN_PADDING,
+      maxX: maxX + PAN_PADDING,
+      minY: minY - PAN_PADDING,
+      maxY: maxY + PAN_PADDING,
+    };
+    this.setPanOffset(this.panX, this.panY);
   }
 
   getLayoutProperties(): { gridX: number; gridY: number; gridWidth: number; gridHeight: number; scale: number } | null {
@@ -244,6 +282,7 @@ export class TabletopUI {
     ctx.clip();
 
     this.drawGrid(grid);
+    this.drawCalibrationMarkers(grid, state.phase);
     this.drawDetectionOutline(grid, state.phase);
     const anim = this.getAnimationProgress(state.phase);
     this.drawVirtualObject(grid, state.phase, state.appliedMatrix, anim);
@@ -293,6 +332,36 @@ export class TabletopUI {
 
   /** Get the most recently computed grid rect (for external coordinate conversions). */
   getLastGridRect(): DOMRect | null { return this.lastGridRect; }
+
+  /** Draw calibration markers during CALIBRATING phase. */
+  private drawCalibrationMarkers(grid: DOMRect, phase: AppPhase): void {
+    if (phase !== "CALIBRATING") return;
+
+    const { ctx } = this;
+
+    // Try ArUco markers first
+    const firstMarker = getMarkerCanvas(ARUCO_MARKERS[0]!.id);
+    if (firstMarker) {
+      for (const m of ARUCO_MARKERS) {
+        const canvas = getMarkerCanvas(m.id);
+        if (!canvas) continue;
+        const p = this.gridToCanvas({ x: m.gridX, y: m.gridY }, grid);
+        ctx.drawImage(canvas, p.x - ARUCO_MARKER_PX / 2, p.y - ARUCO_MARKER_PX / 2);
+      }
+    } else {
+      // Fallback: 4 bright corner circles
+      for (const m of CIRCLE_MARKERS) {
+        const p = this.gridToCanvas(m, grid);
+        ctx.beginPath();
+        ctx.arc(p.x, p.y, 16, 0, Math.PI * 2);
+        ctx.fillStyle = "#ffffff";
+        ctx.fill();
+        ctx.strokeStyle = "#000000";
+        ctx.lineWidth = 2.5;
+        ctx.stroke();
+      }
+    }
+  }
 
   private drawGrid(r: DOMRect): void {
     const { ctx, W, H } = this;
@@ -474,8 +543,14 @@ export class TabletopUI {
         const fmt = (n: number) => Math.round(n * 10) / 10;
         ctx.font = "10px 'Courier New', monospace";
         ctx.fillStyle = `rgba(51, 51, 51, ${animT})`;
-        ctx.textAlign = "left";
-        ctx.fillText(`(${fmt(orig.x)},${fmt(orig.y)}) → (${fmt(tx)},${fmt(ty)})`, p.x + 14, p.y + 4);
+        const label = `(${fmt(orig.x)},${fmt(orig.y)}) → (${fmt(tx)},${fmt(ty)})`;
+        if (i === 0 || i === 3) {
+          ctx.textAlign = "right";
+          ctx.fillText(label, p.x - 14, p.y + 4);
+        } else {
+          ctx.textAlign = "left";
+          ctx.fillText(label, p.x + 14, p.y + 4);
+        }
       }
     }
   }

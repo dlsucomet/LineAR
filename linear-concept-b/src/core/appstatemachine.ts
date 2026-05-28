@@ -36,7 +36,8 @@ export type AppPhase =
   | "SHOW_BASIS_VECTORS"    // Frame 4 – identity basis vectors overlaid
   | "CONFIRM_TRANSFORM"     // Frame 3 – adjusted basis, yes/no prompt
   | "TRANSFORMED"           // Frame 2 – grid/object transformed
-  | "CONFIRM_RESET";        // Frame 1 – yes/no reset prompt
+  | "CONFIRM_RESET"         // Frame 1 – yes/no reset prompt
+  | "CALIBRATING";          // Projector-camera calibration — projecting markers
 
 export interface AppState {
   phase: AppPhase;
@@ -100,7 +101,9 @@ export type AppAction =
   | { type: "CONFIRM_NO" }
   | { type: "TRANSFORMATION_DONE" }
   | { type: "RESET_CONFIRMED" }
-  | { type: "PHASE_ADVANCE" };
+  | { type: "PHASE_ADVANCE" }
+  | { type: "CALIBRATE" }
+  | { type: "CALIBRATION_DONE" };
 
 export function transition(state: AppState, action: AppAction): AppState {
   switch (action.type) {
@@ -205,6 +208,16 @@ export function transition(state: AppState, action: AppAction): AppState {
       return { ...state, phase: "SHOW_BASIS_VECTORS" };
     }
 
+    case "CALIBRATE": {
+      if (state.phase !== "WAITING_FOR_OBJECT") return state;
+      return { ...state, phase: "CALIBRATING" };
+    }
+
+    case "CALIBRATION_DONE": {
+      if (state.phase !== "CALIBRATING") return state;
+      return { ...createInitialState() };
+    }
+
     default:
       return state;
   }
@@ -225,6 +238,7 @@ export function getInstructionText(phase: AppPhase): string {
     case "CONFIRM_TRANSFORM": return "Basis vectors adjusted. Start linear transformation?";
     case "TRANSFORMED": return "Object has been linearly transformed";
     case "CONFIRM_RESET": return "Reset the Grid?";
+    case "CALIBRATING": return "Calibrating projector alignment. Please wait…";
   }
 }
 

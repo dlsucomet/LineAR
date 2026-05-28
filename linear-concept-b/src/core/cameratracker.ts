@@ -467,4 +467,9 @@ export class CameraTracker {
   get resolution(): { width: number; height: number } {
     return { width: this.canvas.width, height: this.canvas.height };
   }
+
+  /** The off-screen canvas where the camera frame is drawn for processing. */
+  get processCanvas(): HTMLCanvasElement {
+    return this.canvas;
+  }
 }
