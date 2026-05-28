@@ -1249,9 +1249,13 @@ function processInteractionFrame(
     const e1UISnapped = ds.e1Placed || ds.e1Locked || (ds.isDraggingE1 && ds.e1DwellIntersection !== null);
     const e2UISnapped = ds.e2Placed || ds.e2Locked || (ds.isDraggingE2 && ds.e2DwellIntersection !== null);
     ui.setArrowSnapped(e1UISnapped, e2UISnapped);
-    ui.setDwellingIndicators(
-      ds.isDraggingE1 && ds.e1DwellIntersection !== null,
-      ds.isDraggingE2 && ds.e2DwellIntersection !== null,
+    ui.setDwellProgress(
+      ds.isDraggingE1 && ds.e1DwellIntersection !== null
+        ? Math.min(1, (Date.now() - ds.e1DwellStart) / ARROW_DWELL_PLACE_MS)
+        : 0,
+      ds.isDraggingE2 && ds.e2DwellIntersection !== null
+        ? Math.min(1, (Date.now() - ds.e2DwellStart) / ARROW_DWELL_PLACE_MS)
+        : 0,
     );
 
     // ── 5a. Auto-prompt: arrows adjusted + no hands for 5 minutes ──────────
@@ -1268,9 +1272,8 @@ function processInteractionFrame(
       ds.handsAbsentSince = 0;
     }
 
-    // ── 5. Both locked → show proceed prompt ────────────────────
-    ds.showBasisProceed = ds.e1Locked && ds.e2Locked;
-    if (ds.e1Locked && ds.e2Locked && !ds.arrowTransitionFired) {
+    // ── 5. Any locked → proceed ───────────────────────────────
+    if ((ds.e1Locked || ds.e2Locked) && !ds.arrowTransitionFired) {
       ds.arrowTransitionFired = true;
       dispatch({ type: "BASIS_ADJUSTED", payload: [...ds.arrowMatrix] });
     }

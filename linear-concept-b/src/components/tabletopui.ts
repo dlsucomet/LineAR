@@ -100,8 +100,8 @@ export class TabletopUI {
   private e2Snapped = false;
   private e1Locked = false;
   private e2Locked = false;
-  private e1Dwelling = false;
-  private e2Dwelling = false;
+  private e1DwellProgress = 0;
+  private e2DwellProgress = 0;
 
   // Mouse tracking for corner drag fallback
   private mouseDown = false;
@@ -157,7 +157,7 @@ export class TabletopUI {
   setGhostArrows(e1: Point2D, e2: Point2D): void { this.ghostArrows = { e1, e2 }; }
   setArrowSnapped(e1: boolean, e2: boolean): void { this.e1Snapped = e1; this.e2Snapped = e2; }
   setArrowLocked(e1: boolean, e2: boolean): void { this.e1Locked = e1; this.e2Locked = e2; }
-  setDwellingIndicators(e1: boolean, e2: boolean): void { this.e1Dwelling = e1; this.e2Dwelling = e2; }
+  setDwellProgress(e1: number, e2: number): void { this.e1DwellProgress = e1; this.e2DwellProgress = e2; }
   setRawHands(hands: DetectedHand[] | null): void { this.rawHands = hands; }
 
   getButtonRects(): { yes: DOMRect | null; no: DOMRect | null; continue: DOMRect | null } {
@@ -573,8 +573,8 @@ export class TabletopUI {
     const e2x = cx + mat[1] * scale;
     const e2y = cy - mat[3] * scale;
 
-    drawArrow(ctx, cx, cy, e1x, e1y, C.e1, 3);
-    drawArrow(ctx, cx, cy, e2x, e2y, C.e2, 3);
+    drawArrow(ctx, cx, cy, e1x, e1y, this.dwellColor(C.e1, this.e1DwellProgress), 3);
+    drawArrow(ctx, cx, cy, e2x, e2y, this.dwellColor(C.e2, this.e2DwellProgress), 3);
 
     // Matrix label — positioned just to the right of arrow origin
     const lx = cx + 12;
@@ -598,6 +598,16 @@ export class TabletopUI {
 
     ctx.fillText(`[ ${a}  ${b} ]`, x, y);
     ctx.fillText(`[ ${c}  ${d} ]`, x, y + 20);
+  }
+
+  private dwellColor(baseHex: string, progress: number): string {
+    if (progress <= 0 || progress >= 1) return baseHex;
+    const t = Math.sin(progress * Math.PI);
+    const r = parseInt(baseHex.slice(1, 3), 16);
+    const g = parseInt(baseHex.slice(3, 5), 16);
+    const b = parseInt(baseHex.slice(5, 7), 16);
+    const blend = (ch: number, w: number) => Math.round(ch + (255 - ch) * w);
+    return `rgb(${blend(r, t)},${blend(g, t)},${blend(b, t)})`;
   }
 
   // ─── Detection Outline ─────────────────────────────────────────────────
@@ -821,7 +831,7 @@ export class TabletopUI {
 
     // Pulsing dwell ring
     const pulseAlpha = 0.3 + 0.4 * Math.sin(Date.now() * 0.008);
-    if (this.e1Dwelling) {
+    if (this.e1DwellProgress > 0) {
       const tx = cx + mat[0] * scale, ty = cy - mat[2] * scale;
       ctx.beginPath();
       ctx.arc(tx, ty, 14, 0, Math.PI * 2);
@@ -829,7 +839,7 @@ export class TabletopUI {
       ctx.lineWidth = 2;
       ctx.stroke();
     }
-    if (this.e2Dwelling) {
+    if (this.e2DwellProgress > 0) {
       const tx = cx + mat[1] * scale, ty = cy - mat[3] * scale;
       ctx.beginPath();
       ctx.arc(tx, ty, 14, 0, Math.PI * 2);
