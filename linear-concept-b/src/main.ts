@@ -194,7 +194,10 @@ window.addEventListener("load", () => {
         ds.isDraggingE1 = false;
         ds.isDraggingE2 = false;
         ds.arrowTransitionFired = false;
-        ds.arrowMatrix = [1, 0, 0, 1];
+        ds.e1Locked = false;
+        ds.e2Locked = false;
+        // Restore previous adjustment from pendingMatrix on re-entry after "No"
+        ds.arrowMatrix = [...state.pendingMatrix];
         ds.e1Placed = false;
         ds.e2Placed = false;
         ds.e1PlaceTime = 0;
@@ -211,7 +214,7 @@ window.addEventListener("load", () => {
         ds.showBasisProceed = false;
         ui.setArrowSnapped(false, false);
         ui.setArrowLocked(false, false);
-        ui.setMatrix([1, 0, 0, 1]);
+        ui.setMatrix([...state.pendingMatrix]);
       }
       if (state.phase === "TRANSFORMED") {
         ds.isPanning = false;

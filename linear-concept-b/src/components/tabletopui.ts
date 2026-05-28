@@ -40,6 +40,7 @@ const C = {
   hlStroke: "#d53a3a",
   hlActive: "#3ad56b",
   hlActiveBg: "rgba(58, 213, 107, 0.4)",
+  locked: "#3a7bd5",
   cursor: "#3a7bd5",
   cursorBg: "rgba(58, 123, 213, 0.4)",
   cursorStroke: "#3a7bd5",
@@ -573,8 +574,8 @@ export class TabletopUI {
     const e2x = cx + mat[1] * scale;
     const e2y = cy - mat[3] * scale;
 
-    drawArrow(ctx, cx, cy, e1x, e1y, this.dwellColor(C.e1, this.e1DwellProgress), 3);
-    drawArrow(ctx, cx, cy, e2x, e2y, this.dwellColor(C.e2, this.e2DwellProgress), 3);
+    drawArrow(ctx, cx, cy, e1x, e1y, C.e1, 3, this.e1Locked ? C.locked : undefined);
+    drawArrow(ctx, cx, cy, e2x, e2y, C.e2, 3, this.e2Locked ? C.locked : undefined);
 
     // Matrix label — positioned just to the right of arrow origin
     const lx = cx + 12;
@@ -804,9 +805,10 @@ export class TabletopUI {
 
     const drawTip = (tx: number, ty: number, snapped: boolean, locked: boolean, snapColor: string, snapBg: string) => {
       if (locked) {
+        const lockPulse = 0.4 + 0.6 * Math.sin(Date.now() * 0.004);
         ctx.beginPath();
-        ctx.arc(tx, ty, 10, 0, Math.PI * 2);
-        ctx.strokeStyle = "#fff";
+        ctx.arc(tx, ty, 14, 0, Math.PI * 2);
+        ctx.strokeStyle = `rgba(255, 255, 255, ${lockPulse})`;
         ctx.lineWidth = 3;
         ctx.stroke();
       } else if (snapped) {
@@ -1042,9 +1044,28 @@ function drawArrow(
   toX: number, toY: number,
   color: string,
   lineWidth: number,
+  outlineColor?: string,
 ): void {
   const headLen = 12;
   const angle = Math.atan2(toY - fromY, toX - fromX);
+
+  if (outlineColor) {
+    ctx.strokeStyle = outlineColor;
+    ctx.fillStyle = outlineColor;
+    ctx.lineWidth = lineWidth + 3;
+
+    ctx.beginPath();
+    ctx.moveTo(fromX, fromY);
+    ctx.lineTo(toX, toY);
+    ctx.stroke();
+
+    ctx.beginPath();
+    ctx.moveTo(toX, toY);
+    ctx.lineTo(toX - headLen * Math.cos(angle - Math.PI / 6), toY - headLen * Math.sin(angle - Math.PI / 6));
+    ctx.lineTo(toX - headLen * Math.cos(angle + Math.PI / 6), toY - headLen * Math.sin(angle + Math.PI / 6));
+    ctx.closePath();
+    ctx.stroke();
+  }
 
   ctx.strokeStyle = color;
   ctx.fillStyle = color;
@@ -1055,17 +1076,10 @@ function drawArrow(
   ctx.lineTo(toX, toY);
   ctx.stroke();
 
-  // Arrow head
   ctx.beginPath();
   ctx.moveTo(toX, toY);
-  ctx.lineTo(
-    toX - headLen * Math.cos(angle - Math.PI / 6),
-    toY - headLen * Math.sin(angle - Math.PI / 6),
-  );
-  ctx.lineTo(
-    toX - headLen * Math.cos(angle + Math.PI / 6),
-    toY - headLen * Math.sin(angle + Math.PI / 6),
-  );
+  ctx.lineTo(toX - headLen * Math.cos(angle - Math.PI / 6), toY - headLen * Math.sin(angle - Math.PI / 6));
+  ctx.lineTo(toX - headLen * Math.cos(angle + Math.PI / 6), toY - headLen * Math.sin(angle + Math.PI / 6));
   ctx.closePath();
   ctx.fill();
 }
