@@ -10,12 +10,6 @@ import {
   showConfirmButtons,
   showCorners,
 } from "../core/appstatemachine.ts";
-import {
-  ARUCO_MARKERS,
-  CIRCLE_MARKERS,
-  getMarkerCanvas,
-  ARUCO_MARKER_PX,
-} from "../core/calibration.ts";
 import type { DetectedHand, Matrix2x2, Point2D } from "../types/index.ts";
 
 // ---------------------------------------------------------------------------
@@ -75,27 +69,16 @@ export class TabletopUI {
   private matrix: Matrix2x2 = [1, 0, 0, 1];
   private appliedMatrix: Matrix2x2 = [1, 0, 0, 1];
   private corners: [Point2D, Point2D, Point2D, Point2D] | null = null;
-  private detectionOutline: Point2D[] | null = null;
   private btnYes: DOMRect | null = null;
   private btnNo: DOMRect | null = null;
   private btnContinue: DOMRect | null = null;
 
   // Demo-specific state
   private fingerPos: Point2D | null = null;
-  private dwellProgress = 0;
+  private cursorDwellProgress = 0;
   private demoInstructions: Record<string, string> | null = null;
 
-  // Drag state (phase 3: POINTS_CALCULATED) — all 4 corners snap to grid intersections
-  private cornerDragPos: [Point2D | null, Point2D | null, Point2D | null, Point2D | null] = [null, null, null, null];
-  private cornerSnapped: [boolean, boolean, boolean, boolean] = [false, false, false, false];
-  private cornerLocked: [boolean, boolean, boolean, boolean] = [false, false, false, false];
-
-  // [REMOVED: Done button prompt — corner adjustment phase removed]
-  // showDoneButton = false;
-  // btnDone: DOMRect | null = null;
-  // onDone: (() => void) | null = null;
-
-  // Arrow drag state (phase 5: SHOW_BASIS_VECTORS)
+  // Arrow drag state (SHOW_BASIS_VECTORS)
   private ghostArrows: { e1: Point2D; e2: Point2D } | null = null;
   private e1Snapped = false;
   private e2Snapped = false;
@@ -110,6 +93,11 @@ export class TabletopUI {
 
   // Raw hand data for skeleton visualization
   private rawHands: DetectedHand[] | null = null;
+
+  // Camera background
+  private videoEl: HTMLVideoElement | null = null;
+  private flipH = false;
+  private flipV = false;
 
   onYes: (() => void) | null = null;
   onNo: (() => void) | null = null;
@@ -137,29 +125,18 @@ export class TabletopUI {
   setAppliedMatrix(m: Matrix2x2): void { this.appliedMatrix = m; }
   setCorners(c: [Point2D, Point2D, Point2D, Point2D] | null): void { this.corners = c; }
 
-  setDetectionOutline(outline: Point2D[] | null): void { this.detectionOutline = outline; }
-
   // Demo setters
   setFingerPosition(pos: Point2D | null): void { this.fingerPos = pos; }
-  setDwellProgress(v: number): void { this.dwellProgress = v; }
+  setCursorDwellProgress(v: number): void { this.cursorDwellProgress = v; }
   setDemoInstructions(overrides: Record<string, string> | null): void { this.demoInstructions = overrides; }
-
-  setCornerDrag(index: number, pos: Point2D | null, snapped: boolean): void {
-    this.cornerDragPos[index] = pos;
-    this.cornerSnapped[index] = snapped;
-  }
-
-  setCornerLockedStates(states: [boolean, boolean, boolean, boolean]): void {
-    this.cornerLocked = states;
-  }
-
-  getDragPos(index: number): Point2D | null { return this.cornerDragPos[index] as Point2D | null; }
 
   setGhostArrows(e1: Point2D, e2: Point2D): void { this.ghostArrows = { e1, e2 }; }
   setArrowSnapped(e1: boolean, e2: boolean): void { this.e1Snapped = e1; this.e2Snapped = e2; }
   setArrowLocked(e1: boolean, e2: boolean): void { this.e1Locked = e1; this.e2Locked = e2; }
   setDwellProgress(e1: number, e2: number): void { this.e1DwellProgress = e1; this.e2DwellProgress = e2; }
   setRawHands(hands: DetectedHand[] | null): void { this.rawHands = hands; }
+  setVideoSource(video: HTMLVideoElement | null): void { this.videoEl = video; }
+  setFlipFlags(h: boolean, v: boolean): void { this.flipH = h; this.flipV = v; }
 
   getButtonRects(): { yes: DOMRect | null; no: DOMRect | null; continue: DOMRect | null } {
     return {
@@ -263,11 +240,35 @@ export class TabletopUI {
     return { animT, eased };
   }
 
+  /** Draw the camera feed as the canvas background, with flipH/flipV applied. */
+  private drawCameraBackground(): void {
+    if (!this.videoEl) return;
+    const { ctx, W, H } = this;
+    const vw = this.videoEl.videoWidth;
+    const vh = this.videoEl.videoHeight;
+    if (!vw || !vh) return;
+
+    const scale = Math.min(W / vw, H / vh); // letterbox (same as toMirroredCanvas)
+    const dx = (W - vw * scale) / 2;
+    const dy = (H - vh * scale) / 2;
+
+    ctx.save();
+    ctx.translate(W / 2, H / 2);
+    ctx.scale(this.flipH ? -1 : 1, this.flipV ? -1 : 1);
+    ctx.translate(-W / 2, -H / 2);
+    ctx.drawImage(this.videoEl, dx, dy, vw * scale, vh * scale);
+    ctx.restore();
+  }
+
   /** Main draw call — renders every frame. */
   draw(state: AppState): void {
     const { ctx, W, H } = this;
     ctx.clearRect(0, 0, W, H);
-    ctx.fillStyle = "#fff";
+
+    // Camera background (behind everything)
+    this.drawCameraBackground();
+    // Semi-transparent overlay so grid stays readable on top of the feed
+    ctx.fillStyle = "rgba(255, 255, 255, 0.75)";
     ctx.fillRect(0, 0, W, H);
 
     const grid = this.computeGridRect();
@@ -283,20 +284,18 @@ export class TabletopUI {
     ctx.clip();
 
     this.drawGrid(grid);
-    this.drawCalibrationMarkers(grid, state.phase);
-    this.drawDetectionOutline(grid, state.phase);
     const anim = this.getAnimationProgress(state.phase);
+
+    if (this.corners) {
+      this.drawObjectHighlight(grid, state.phase);
+      this.drawCorners(grid, state.phase, state.appliedMatrix, anim);
+    }
     this.drawVirtualObject(grid, state.phase, state.appliedMatrix, anim);
 
-    if (state.phase === "POINTS_CALCULATED") {
-      this.drawSnapPreview(grid);
-      this.drawDragFeedback(grid);
-    }
     if (state.phase === "SHOW_BASIS_VECTORS" && this.ghostArrows) {
-      this.drawGhostArrows(grid, state.phase);
+      this.drawBasisTargetCircles(grid);
       this.drawArrowDragFeedback(grid);
     }
-    if (showCorners(state.phase) && this.corners) this.drawCorners(grid, state.phase, state.appliedMatrix, anim);
     if (showBasisVectors(state.phase)) {
       const mat = state.phase === "TRANSFORMED" || state.phase === "CONFIRM_RESET"
         ? state.appliedMatrix
@@ -315,10 +314,6 @@ export class TabletopUI {
     this.drawInstruction(state.phase, grid);
     if (showConfirmButtons(state.phase)) this.drawButtons(grid, state.phase);
     if (state.phase === "TRANSFORMED") this.drawContinueButton(grid);
-    // [REMOVED: Done button prompt during POINTS_CALCULATED]
-    // if (state.phase === "POINTS_CALCULATED") {
-    //   if (this.showDoneButton) this.drawDoneButton(grid);
-    // }
     this.drawHandSkeleton();
     this.drawHandStatus();
     this.drawCursor();
@@ -333,36 +328,6 @@ export class TabletopUI {
 
   /** Get the most recently computed grid rect (for external coordinate conversions). */
   getLastGridRect(): DOMRect | null { return this.lastGridRect; }
-
-  /** Draw calibration markers during CALIBRATING phase. */
-  private drawCalibrationMarkers(grid: DOMRect, phase: AppPhase): void {
-    if (phase !== "CALIBRATING") return;
-
-    const { ctx } = this;
-
-    // Try ArUco markers first
-    const firstMarker = getMarkerCanvas(ARUCO_MARKERS[0]!.id);
-    if (firstMarker) {
-      for (const m of ARUCO_MARKERS) {
-        const canvas = getMarkerCanvas(m.id);
-        if (!canvas) continue;
-        const p = this.gridToCanvas({ x: m.gridX, y: m.gridY }, grid);
-        ctx.drawImage(canvas, p.x - ARUCO_MARKER_PX / 2, p.y - ARUCO_MARKER_PX / 2);
-      }
-    } else {
-      // Fallback: 4 bright corner circles
-      for (const m of CIRCLE_MARKERS) {
-        const p = this.gridToCanvas(m, grid);
-        ctx.beginPath();
-        ctx.arc(p.x, p.y, 16, 0, Math.PI * 2);
-        ctx.fillStyle = "#ffffff";
-        ctx.fill();
-        ctx.strokeStyle = "#000000";
-        ctx.lineWidth = 2.5;
-        ctx.stroke();
-      }
-    }
-  }
 
   private drawGrid(r: DOMRect): void {
     const { ctx, W, H } = this;
@@ -401,10 +366,7 @@ export class TabletopUI {
     if (!text) return;
 
     let color = C.instrBlue;
-    if (phase === "OBJECT_DETECTED") color = C.instrOrange;
     if (phase === "TRANSFORMED") color = C.instrCyan;
-    if (phase === "WAITING_FOR_OBJECT") color = C.instrBlue;
-    if (phase === "POINTS_CALCULATED") color = C.instrCyan;
     if (phase === "CONFIRM_TRANSFORM") color = C.instrBlue;
     if (phase === "CONFIRM_RESET") color = C.instrBlue;
 
@@ -472,24 +434,15 @@ export class TabletopUI {
   /**
    * Draw the four corner markers.
    * During TRANSFORMED / CONFIRM_RESET, corners are transformed by appliedMatrix.
-   * During POINTS_CALCULATED, any dragged corner uses its temporary position.
    */
   private drawCorners(grid: DOMRect, phase: AppPhase, appliedMatrix: Matrix2x2, anim: { animT: number; eased: number }): void {
     const { ctx } = this;
     if (!this.corners) return;
 
-    let drawCorners = this.corners;
-    if (phase === "POINTS_CALCULATED") {
-      drawCorners = [...this.corners];
-      for (let i = 0; i < 4; i++) {
-        if (this.cornerDragPos[i]) drawCorners[i] = this.cornerDragPos[i]!;
-      }
-    }
-
     const applyMat = (phase === "TRANSFORMED" || phase === "CONFIRM_RESET");
     const { animT, eased } = anim;
 
-    const pts = drawCorners.map((c) => {
+    const pts = this.corners.map((c) => {
       if (!applyMat) return this.gridToCanvas(c, grid);
 
       const tx = appliedMatrix[0] * c.x + appliedMatrix[1] * c.y;
@@ -504,41 +457,34 @@ export class TabletopUI {
       return this.gridToCanvas({ x: tx, y: ty }, grid);
     });
 
-    // Draw connecting rectangle lines
-    ctx.strokeStyle = C.corner;
-    ctx.lineWidth = 2;
-    ctx.beginPath();
-    ctx.moveTo(pts[0]!.x, pts[0]!.y);
-    for (let i = 1; i < 4; i++) ctx.lineTo(pts[i]!.x, pts[i]!.y);
-    ctx.closePath();
-    ctx.stroke();
+    if (phase !== "SHOW_CORNERS") {
+      // Draw connecting rectangle lines
+      ctx.strokeStyle = C.corner;
+      ctx.lineWidth = 2;
+      ctx.beginPath();
+      ctx.moveTo(pts[0]!.x, pts[0]!.y);
+      for (let i = 1; i < 4; i++) ctx.lineTo(pts[i]!.x, pts[i]!.y);
+      ctx.closePath();
+      ctx.stroke();
+    }
 
-    // Draw corner circles
+    // Draw corner circles + coordinate labels
     for (let i = 0; i < pts.length; i++) {
       const p = pts[i]!;
-      const isDragged = phase === "POINTS_CALCULATED" && this.cornerDragPos[i] !== null;
-      const isLocked = phase === "POINTS_CALCULATED" && this.cornerLocked[i];
-      ctx.beginPath();
-      ctx.arc(p.x, p.y, isDragged ? 14 : 10, 0, Math.PI * 2);
-      if (isDragged) {
-        ctx.fillStyle = C.hlBg;
-        ctx.strokeStyle = C.hlStroke;
-        ctx.lineWidth = 3;
-      } else if (isLocked) {
-        ctx.fillStyle = "#ffffff";
-        ctx.strokeStyle = C.hl;
-        ctx.lineWidth = 3;
-      } else {
+
+      if (phase !== "SHOW_CORNERS") {
+        ctx.beginPath();
+        ctx.arc(p.x, p.y, 10, 0, Math.PI * 2);
         ctx.fillStyle = C.cornerFill;
         ctx.strokeStyle = C.corner;
         ctx.lineWidth = 2;
+        ctx.fill();
+        ctx.stroke();
       }
-      ctx.fill();
-      ctx.stroke();
 
       // Coordinate labels during transformed phases
       if (applyMat) {
-        const orig = drawCorners[i]!;
+        const orig = this.corners[i]!;
         const tx = appliedMatrix[0] * orig.x + appliedMatrix[1] * orig.y;
         const ty = appliedMatrix[2] * orig.x + appliedMatrix[3] * orig.y;
         const fmt = (n: number) => Math.round(n * 10) / 10;
@@ -611,58 +557,21 @@ export class TabletopUI {
     return `rgb(${blend(r, t)},${blend(g, t)},${blend(b, t)})`;
   }
 
-  // ─── Detection Outline ─────────────────────────────────────────────────
-
-  /** Draw the detected object outline (semi-transparent fill + solid border, black). */
-  private drawDetectionOutline(grid: DOMRect, phase: AppPhase): void {
-    if (!this.detectionOutline || this.detectionOutline.length < 3) return;
-    if (phase !== "WAITING_FOR_OBJECT" && phase !== "OBJECT_DETECTED") return;
-
-    const { ctx } = this;
-    const pts = this.detectionOutline.map(p => this.gridToCanvas(p, grid));
-
-    ctx.beginPath();
-    ctx.moveTo(pts[0]!.x, pts[0]!.y);
-    for (let i = 1; i < pts.length; i++) ctx.lineTo(pts[i]!.x, pts[i]!.y);
-    ctx.closePath();
-
-    ctx.fillStyle = "rgba(0, 0, 0, 0.2)";
-    ctx.fill();
-    ctx.strokeStyle = "#000";
-    ctx.lineWidth = 2;
-    ctx.stroke();
-  }
-
   // ─── Demo rendering: Virtual Object ───────────────────────────────────────
 
-  /** Draw the pre-placed virtual quadrilateral. Transformed during phases 7-8. */
+  /** Draw the transformed filled object rect (after basis vectors confirmed). */
   private drawVirtualObject(grid: DOMRect, phase: AppPhase, appliedMatrix: Matrix2x2, anim: { animT: number; eased: number }): void {
     if (!this.corners) return;
-    if (
-      phase !== "WAITING_FOR_OBJECT" &&
-      phase !== "OBJECT_DETECTED" &&
-      phase !== "POINTS_CALCULATED" &&
-      phase !== "TRANSFORMED" &&
-      phase !== "CONFIRM_RESET"
-    ) return;
+    if (phase !== "TRANSFORMED" && phase !== "CONFIRM_RESET") return;
 
-    // During corner-drag phase, substitute temporary positions for any dragged corner
-    let drawCorners = this.corners;
-    if (phase === "POINTS_CALCULATED") {
-      drawCorners = [...this.corners];
-      for (let i = 0; i < 4; i++) {
-        if (this.cornerDragPos[i]) drawCorners[i] = this.cornerDragPos[i]!;
-      }
-    }
-
-    const shouldTransform = phase === "TRANSFORMED" || phase === "CONFIRM_RESET";
-    const [a, b, c, d] = shouldTransform ? appliedMatrix : [1, 0, 0, 1];
+    const shouldTransform = true;
+    const [a, b, c, d] = appliedMatrix;
     const { animT, eased } = anim;
 
-    const pts = drawCorners.map(p => {
+    const pts = this.corners.map(p => {
       const tx = a * p.x + b * p.y;
       const ty = c * p.x + d * p.y;
-      if (shouldTransform && animT < 1) {
+      if (animT < 1) {
         return this.gridToCanvas({
           x: p.x + (tx - p.x) * eased,
           y: p.y + (ty - p.y) * eased,
@@ -681,6 +590,25 @@ export class TabletopUI {
     ctx.strokeStyle = "rgba(58, 123, 213, 0.5)";
     ctx.lineWidth = 1.5;
     ctx.stroke();
+  }
+
+  /** Dashed highight rect for the 5×3 object placement zone (pre-transformation). */
+  private drawObjectHighlight(grid: DOMRect, phase: AppPhase): void {
+    if (phase === "TRANSFORMED" || phase === "CONFIRM_RESET") return;
+    if (!this.corners) return;
+    const { ctx } = this;
+
+    const pts = this.corners.map(c => this.gridToCanvas(c, grid));
+    ctx.save();
+    ctx.setLineDash([8, 6]);
+    ctx.strokeStyle = "rgba(58, 123, 213, 0.7)";
+    ctx.lineWidth = 2.5;
+    ctx.beginPath();
+    ctx.moveTo(pts[0]!.x, pts[0]!.y);
+    for (let i = 1; i < 4; i++) ctx.lineTo(pts[i]!.x, pts[i]!.y);
+    ctx.closePath();
+    ctx.stroke();
+    ctx.restore();
   }
 
   // ─── Demo rendering: Continue Button ──────────────────────────────────────
@@ -713,85 +641,39 @@ export class TabletopUI {
     this.btnContinue = new DOMRect(x, y, bw, bh);
   }
 
-  /** Highlight dragged corners during POINTS_CALCULATED — show drag circle, filled dot when snapped. */
-  private drawDragFeedback(grid: DOMRect): void {
-    const ctx = this.ctx;
+  // ─── Demo rendering: Basis Target Circles ──────────────────────────────────
 
-    for (let i = 0; i < 4; i++) {
-      const pos = this.cornerDragPos[i];
-      const snapped = this.cornerSnapped[i];
-      if (!pos) continue;
-      const p = this.gridToCanvas(pos, grid);
-
-      if (snapped) {
-        ctx.beginPath();
-        ctx.arc(p.x, p.y, 8, 0, Math.PI * 2);
-        ctx.fillStyle = C.hl;
-        ctx.fill();
-        continue;
-      }
-
-      ctx.beginPath();
-      ctx.arc(p.x, p.y, 14, 0, Math.PI * 2);
-      ctx.fillStyle = C.hlBg;
-      ctx.fill();
-      ctx.strokeStyle = C.hlStroke;
-      ctx.lineWidth = 3;
-      ctx.stroke();
-    }
-  }
-
-  // ─── Demo rendering: Snap Preview (Phase 3) ────────────────────────────────
-
-  /** Pulsing highlight ring at the nearest grid intersection while dragging a corner. */
-  private drawSnapPreview(grid: DOMRect): void {
-    const ctx = this.ctx;
-    const pulse = 0.4 + 0.3 * Math.sin(Date.now() * 0.005);
-
-    for (let i = 0; i < 4; i++) {
-      const pos = this.cornerDragPos[i];
-      if (!pos) continue;
-      const snap = this.nearestGridIntersection(pos);
-      if (!snap) continue;
-      const p = this.gridToCanvas(snap, grid);
-      ctx.beginPath();
-      ctx.arc(p.x, p.y, 16, 0, Math.PI * 2);
-      ctx.strokeStyle = `rgba(58, 123, 213, ${pulse})`;
-      ctx.lineWidth = 3;
-      ctx.stroke();
-      ctx.beginPath();
-      ctx.arc(p.x, p.y, 14, 0, Math.PI * 2);
-      ctx.fillStyle = `rgba(58, 123, 213, 0.1)`;
-      ctx.fill();
-    }
-  }
-
-  // [REMOVED: drawDoneButton — corner adjustment prompt removed]
-  // private drawDoneButton(_grid: DOMRect): void { ... }
-
-  // ─── Demo rendering: Ghost Arrows (Phase 5) ───────────────────────────────
-
-  /** Semi-transparent dashed ghost arrows at the preset matrix target positions. */
-  private drawGhostArrows(grid: DOMRect, _phase: AppPhase): void {
+  /** Draw encircled grid intersections at the preset arrow target positions. */
+  private drawBasisTargetCircles(grid: DOMRect): void {
     if (!this.ghostArrows) return;
-    const ctx = this.ctx;
+    const { ctx } = this;
     const cx = grid.x + grid.width * 0.5 + this.panX;
     const cy = grid.y + grid.height * 0.5 + this.panY;
     const scale = Math.min(grid.width, grid.height) / 20;
 
-    ctx.save();
-    ctx.globalAlpha = 0.3;
-    ctx.setLineDash([6, 4]);
+    const drawTarget = (gx: number, gy: number, color: string) => {
+      const px = cx + gx * scale;
+      const py = cy - gy * scale;
+      const pulse = 0.5 + 0.3 * Math.sin(Date.now() * 0.004);
 
-    const e1x = cx + this.ghostArrows.e1.x * scale;
-    const e1y = cy - this.ghostArrows.e1.y * scale;
-    drawArrow(ctx, cx, cy, e1x, e1y, C.hl, 2);
+      ctx.beginPath();
+      ctx.arc(px, py, 18, 0, Math.PI * 2);
+      ctx.strokeStyle = color;
+      ctx.lineWidth = 3;
+      ctx.globalAlpha = pulse;
+      ctx.stroke();
+      ctx.globalAlpha = 1;
 
-    const e2x = cx + this.ghostArrows.e2.x * scale;
-    const e2y = cy - this.ghostArrows.e2.y * scale;
-    drawArrow(ctx, cx, cy, e2x, e2y, C.hlActive, 2);
+      ctx.beginPath();
+      ctx.arc(px, py, 10, 0, Math.PI * 2);
+      ctx.fillStyle = color;
+      ctx.globalAlpha = 0.25;
+      ctx.fill();
+      ctx.globalAlpha = 1;
+    };
 
-    ctx.restore();
+    drawTarget(this.ghostArrows.e1.x, this.ghostArrows.e1.y, C.hl);
+    drawTarget(this.ghostArrows.e2.x, this.ghostArrows.e2.y, C.hlActive);
   }
 
   /** Draw snap/lock indicators on basis arrows. */
@@ -874,10 +756,10 @@ export class TabletopUI {
 
   /** Draw the dwell progress arc around the cursor when hovering a button. */
   private drawDwellIndicator(): void {
-    if (!this.fingerPos || this.dwellProgress <= 0) return;
+    if (!this.fingerPos || this.cursorDwellProgress <= 0) return;
     const ctx = this.ctx;
     const startAngle = -Math.PI / 2;
-    const endAngle = startAngle + Math.PI * 2 * this.dwellProgress;
+    const endAngle = startAngle + Math.PI * 2 * this.cursorDwellProgress;
 
     ctx.beginPath();
     ctx.arc(this.fingerPos.x, this.fingerPos.y, 14, startAngle, endAngle);
@@ -1026,11 +908,6 @@ export class TabletopUI {
       this.btnContinue = null;
       this.onContinue?.();
     }
-    // [REMOVED: Done button hit test]
-    // } else if (this.btnDone && hitTest(mx, my, this.btnDone)) {
-    //   this.btnDone = null;
-    //   this.onDone?.();
-    // }
   }
 }
 

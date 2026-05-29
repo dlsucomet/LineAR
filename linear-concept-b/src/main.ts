@@ -1,5 +1,5 @@
 // src/main.ts
-// ── Static imports: lightweight only (no TensorFlow, p5, OpenCV dep chains) ──
+// ── Wizard-of-oz demo: keyboard-driven (W) + hand tracking for basis vectors ──
 import {
   createInitialState,
   transition,
@@ -7,592 +7,57 @@ import {
   type AppAction,
 } from "./core/appstatemachine.ts";
 import { TabletopUI } from "./components/tabletopui.ts";
-import { generateId } from "./utils/helpers.ts";
-import { CoordinateMapper } from "./utils/coordinatemapper.ts";
-import {
-  detectMarkers,
-  computeHomography,
-  saveCalibration,
-  loadCalibration,
-  type DetectionResult,
-} from "./core/calibration.ts";
 import {
   VIRTUAL_OBJECT,
-  PRESET_MATRIX,
   GHOST_ARROWS,
   PHASE_TIMINGS,
   HOVER_DWELL_MS,
-  GRAB_RADIUS_PX,
   ARROW_GRAB_RADIUS_PX,
   ARROW_SNAP_PX,
+  ARROW_DWELL_PLACE_MS,
   ARROW_PLACED_LOCK_MS,
   ARROW_LOCK_COOLDOWN_MS,
-  ARROW_DWELL_PLACE_MS,
-  DEMO_INSTRUCTIONS,
-  PRESET_CORNERS_PAYLOAD,
 } from "./core/demoplayer.ts";
-import type { DetectedHand, DetectedObject, HandLandmark, Matrix2x2, Point2D } from "./types/index.ts";
+import type { DetectedHand, HandLandmark, Matrix2x2, Point2D } from "./types/index.ts";
 
 const CAM_W = 640;
 const CAM_H = 360;
-const CAM_FPS = 30;
-const BOARD_HALF = 10;
-const STABLE_THRESHOLD = 10;
-const ABSENT_THRESHOLD = 25;
-const OPENCV_TIMEOUT = 10_000;
-const FINGER_GUIDED_DEMO = false;
-const EPSILON = 0.001;
+const TEXT_STRIP_H = 40;
 const GRID_BOUNDS = 15;
+const EPSILON = 0.001;
+const HAND_TIMEOUT_MS = 400;
 
-// ── Coordinate Mapper (calibrated camera→grid transform) ─────────────────
-let coordMapper: CoordinateMapper;
+// ── Hand Tracking State ──────────────────────────────────────────────────────
+let latestHandPosition: Point2D | null = null;
+let lastHandSeenTime = 0;
+let handEmptyCount = 0;
 
-// ── Hand Tracking Mirror Config ────────────────────────────────────────────
-// Reads public/mirror-config.txt (0 = true view, 1 = mirrored selfie mode).
-// Defaults to true view (0) if file is missing.
-let mirrorHandTracking = false;
+// ── Hand Tracking Mirror Config ──────────────────────────────────────────────
+let flipH = false, flipV = false;
 
 async function loadMirrorConfig() {
   try {
-    const res = await fetch('/mirror-config.txt');
-    mirrorHandTracking = (await res.text()).trim() === '1';
+    const res = await fetch("/mirror-config.txt");
+    const lines = (await res.text()).split("\n").filter(l => l.trim() && !l.trim().startsWith("#"));
+    const parts = lines[0]?.trim().split(",") || [];
+    flipH = parts[0] === "1";
+    flipV = parts[1] === "1";
   } catch {
-    mirrorHandTracking = false;
+    flipH = false; flipV = false;
   }
 }
 loadMirrorConfig();
 
-// ── Corner Auto-Release & Cooldown Configuration ───────────────────────────────
-// Auto-release: 3 seconds of stable position after snapping to lock corner
-// Cooldown: 4 seconds before same corner can be grabbed again after snap/lock
-// Move threshold: finger must stay within 10px of snap position to keep timer running
-const CORNER_LOCK_DELAY_MS = 3000;
-const CORNER_COOLDOWN_MS = 4000;
-const CORNER_MOVE_THRESHOLD_PX = 10;
-
-// Future consideration: Frame boundary - 50px buffer from canvas edges to prevent
-// accidental grabbing when reaching near screen boundaries (not currently implemented)
-
-// ── Centralised Input Streams for Unified Loop ─────────────────────────────
-let latestHandPosition: Point2D | null = null;
-let lastHandSeenTime = 0;
-let handEmptyCount = 0;
-const HAND_TIMEOUT_MS = 400; // Hand tracking grace period before falling back to mouse
-
-// Current app phase (updated in dispatch, used by hand tracker callback)
-let currentPhase: string = "WAITING_FOR_OBJECT";
-let currentStableCount = 0;
-let cameraTrackerRef: import("./core/cameratracker.ts").CameraTracker | null = null;
-
-window.addEventListener("load", () => {
-  console.log("[LineAR] Starting UI…");
-
-  const canvas = document.getElementById("main-canvas") as HTMLCanvasElement;
-  const video = document.getElementById("video-input") as HTMLVideoElement;
-
-  let state: AppState = createInitialState();
-
-  function dispatch(action: AppAction): void {
-    const next = transition(state, action);
-    if (next === state) return;
-    console.debug("[LineAR] Phase:", next.phase);
-    state = next;
-    currentPhase = state.phase;
-    currentStableCount = state.stableFrameCount;
-    ui.setAppliedMatrix(state.appliedMatrix);
-    ui.setCorners(state.objectCorners);
-
-    if (FINGER_GUIDED_DEMO) {
-      if (state.phase === "OBJECT_DETECTED") {
-        setTimeout(() => dispatch({ type: "CORNERS_LOCKED", payload: PRESET_CORNERS_PAYLOAD }), PHASE_TIMINGS.OBJECT_DETECTED);
-      }
-      if (state.phase === "SHOW_CORNERS") {
-        setTimeout(() => dispatch({ type: "PHASE_ADVANCE" }), PHASE_TIMINGS.SHOW_CORNERS);
-      }
-    } else {
-      // if (state.phase === "TRANSFORMED") {
-      //   setTimeout(() => dispatch({ type: "TRANSFORMATION_DONE" }), 1800);
-      // }
-      // Auto-advance from POINTS_CALCULATED → SHOW_BASIS_VECTORS (skip corner adjustment)
-      if (state.phase === "POINTS_CALCULATED") {
-        setTimeout(() => dispatch({ type: "PHASE_ADVANCE" }), 1500);
-      }
-    }
-
-  }
-
-  // ── Canvas UI Setup ───────────────────────────────────────────────────
-  const ui = new TabletopUI(canvas);
-  ui.resize(window.innerWidth, window.innerHeight);
-  ui.onYes = () => dispatch({ type: "CONFIRM_YES" });
-  ui.onNo = () => dispatch({ type: "CONFIRM_NO" });
-  window.addEventListener("resize", () => ui.resize(window.innerWidth, window.innerHeight));
-
-  const ds = createDemoState();
-
-  ui.setGhostArrows(GHOST_ARROWS.e1, GHOST_ARROWS.e2);
-  if (FINGER_GUIDED_DEMO) {
-    ui.setDemoInstructions(DEMO_INSTRUCTIONS);
-    ui.setCorners(VIRTUAL_OBJECT.corners);
-    // ui.onDone = () => {  // [REMOVED: Done button prompt]
-    //   ds.cornerCPlaced = false;
-    //   ds.cornerDPlaced = false;
-    //   ui.showDoneButton = false;
-    //   dispatch({ type: "OBJECTS_CLEARED" });
-    // };
-    ui.onContinue = () => dispatch({ type: "TRANSFORMATION_DONE" });
-  }
-
-  // ── Unified 60FPS Render & Interaction Loop ───────────────────────────
-  (function renderLoop() {
-    ui.draw(state);
-
-    // 1. Track local state wipes on phase transitions
-    if (state.phase !== ds.previousPhase) {
-      ds.previousPhase = state.phase;
-      if (state.phase === "POINTS_CALCULATED") {
-        ds.isDraggingCornerA = false;
-        ds.isDraggingCornerB = false;
-        ds.isDraggingCornerC = false;
-        ds.isDraggingCornerD = false;
-        ds.cornerASnapped = false;
-        ds.cornerBSnapped = false;
-        ds.cornerCSnapped = false;
-        ds.cornerDSnapped = false;
-        ds.cornerALocked = false;
-        ds.cornerBLocked = false;
-        ds.cornerCLocked = false;
-        ds.cornerDLocked = false;
-        ds.cornerCPlaced = false;
-        ds.cornerDPlaced = false;
-        // ds.showDonePrompt = false;  // [REMOVED: Done button prompt]
-        ds.hasAdjustedCorner = false;
-        ds.cornerASnapTime = 0;
-        ds.cornerBSnapTime = 0;
-        ds.cornerCSnapTime = 0;
-        ds.cornerDSnapTime = 0;
-        ds.cornerASnapPos = null;
-        ds.cornerBSnapPos = null;
-        ds.cornerCSnapPos = null;
-        ds.cornerDSnapPos = null;
-        ds.cornerAReleaseTime = 0;
-        ds.cornerBReleaseTime = 0;
-        ds.cornerCReleaseTime = 0;
-        ds.cornerDReleaseTime = 0;
-        ds.globalCooldownUntil = 0;
-        ui.setCornerLockedStates([false, false, false, false]);
-        for (let i = 0; i < 4; i++) ui.setCornerDrag(i, null, false);
-        ui.setPanOffset(0, 0); // Reset pan on new detection
-        // Store initial corner positions to detect adjustments
-        if (state.objectCorners) {
-          ds.initialCornerPositions = [...state.objectCorners];
-        }
-      }
-      if (state.phase === "SHOW_BASIS_VECTORS") {
-        ds.e1Snapped = false;
-        ds.e2Snapped = false;
-        ds.isDraggingE1 = false;
-        ds.isDraggingE2 = false;
-        ds.arrowTransitionFired = false;
-        ds.e1Locked = false;
-        ds.e2Locked = false;
-        // Restore previous adjustment from pendingMatrix on re-entry after "No"
-        ds.arrowMatrix = [...state.pendingMatrix];
-        ds.e1Placed = false;
-        ds.e2Placed = false;
-        ds.e1PlaceTime = 0;
-        ds.e2PlaceTime = 0;
-        ds.e1LockTime = 0;
-        ds.e2LockTime = 0;
-        ds.e1DwellStart = 0;
-        ds.e2DwellStart = 0;
-        ds.e1DwellIntersection = null;
-        ds.e2DwellIntersection = null;
-        ds.e1ReGrabCooldown = 0;
-        ds.handsAbsentSince = 0;
-        ds.e2ReGrabCooldown = 0;
-        ds.showBasisProceed = false;
-        ui.setArrowSnapped(false, false);
-        ui.setArrowLocked(false, false);
-        ui.setMatrix([...state.pendingMatrix]);
-      }
-      if (state.phase === "TRANSFORMED") {
-        ds.isPanning = false;
-        ds.panStartX = 0;
-        ds.panStartY = 0;
-        if (state.objectCorners && state.appliedMatrix) {
-          const grid = ui.getLastGridRect();
-          if (grid) {
-            ui.autoFrameTransformed(state.objectCorners, state.appliedMatrix, grid);
-          }
-        }
-      }
-      if (state.phase === "CONFIRM_RESET") {
-        ds.isPanning = false;
-        ds.panStartX = 0;
-        ds.panStartY = 0;
-      }
-      if (state.phase === "WAITING_FOR_OBJECT") {
-        ui.setPanBounds(null);
-        ui.setPanOffset(0, 0);
-      }
-    }
-
-    // 2. Resolve Pointer Hierarchy: Hand tracking wins, Mouse acts as a smart hover fallback
-    let activePointer: Point2D | null = null;
-    const isHandActive = !!(latestHandPosition && (Date.now() - lastHandSeenTime < HAND_TIMEOUT_MS));
-
-    if (isHandActive) {
-      activePointer = latestHandPosition;
-    } else {
-      activePointer = ui.getMouseCanvasPos();
-    }
-
-    // 3. Process pointer metrics globally
-    processInteractionFrame(activePointer, state, dispatch, ui, canvas, ds, isHandActive);
-
-    requestAnimationFrame(renderLoop);
-  })();
-
-  // ── Bootstrap Camera Streams ──────────────────────────────────────────
-  if (FINGER_GUIDED_DEMO) {
-    startCamera(video, CAM_W, CAM_H).then(() => {
-      setupDemoTracker(canvas, video, ui, ds);
-    }).catch((err) =>
-      console.warn("[LineAR] Demo camera unavailable:", err),
-    );
-  } else {
-    waitForOpenCV(OPENCV_TIMEOUT).then(() => {
-      bootstrap(state, dispatch, ui, canvas, video).catch((err) =>
-        console.warn("[LineAR] Camera/vision unavailable:", err),
-      );
-    });
-  }
-});
-
-function waitForOpenCV(maxMs: number): Promise<void> {
-  return new Promise((resolve) => {
-    if (window.cv?.Mat) return resolve();
-    const done = (): void => {
-      clearInterval(poll);
-      resolve();
-    };
-    if (window.cv && typeof window.cv.onRuntimeInitialized === "function") {
-      const orig = window.cv.onRuntimeInitialized;
-      window.cv.onRuntimeInitialized = () => {
-        try { orig(); } catch { /* ignore */ }
-        done();
-      };
-    }
-    const poll = setInterval(() => {
-      if (window.cv?.Mat) done();
-    }, 200);
-    setTimeout(done, maxMs);
-  });
-}
-
-async function bootstrap(
-  state: AppState,
-  dispatch: (action: AppAction) => void,
-  ui: TabletopUI,
-  canvas: HTMLCanvasElement,
-  video: HTMLVideoElement,
-): Promise<void> {
-  const { CameraTracker } = await safeImport<typeof import("./core/cameratracker.ts")>(() => import("./core/cameratracker.ts"));
-  const { HandTracker } = await safeImport<typeof import("./core/handtracker.ts")>(() => import("./core/handtracker.ts"));
-
-  // ColorOverlay disabled - using contour-based detection, no colored overlays needed
-
-  if (CameraTracker) {
-    try {
-      const processCanvas = document.createElement("canvas");
-      const cameraTracker = new CameraTracker(video, processCanvas);
-      cameraTrackerRef = cameraTracker;
-      await cameraTracker.start({ width: CAM_W, height: CAM_H, fps: CAM_FPS });
-      console.log("[CameraTracker] Camera started successfully with resolution:", cameraTracker.resolution);
-
-      // Create calibrated coordinate mapper
-      const res = cameraTracker.resolution;
-      coordMapper = new CoordinateMapper(res.width, res.height, BOARD_HALF);
-
-      // Check for saved calibration
-      const savedMatrix = loadCalibration();
-      if (savedMatrix) {
-        coordMapper.setTransform({ type: "homography", matrix: savedMatrix });
-        console.log("[LineAR] Loaded saved calibration");
-      } else {
-        console.log("[LineAR] No calibration found — entering calibration mode");
-        dispatch({ type: "CALIBRATE" });
-        const calibrated = await runCalibrationSequence(
-          cameraTracker, coordMapper, 3,
-          (msg) => ui.setDemoInstructions({ CALIBRATING: msg }),
-        );
-        ui.setDemoInstructions(null);
-        dispatch({ type: "CALIBRATION_DONE" });
-        if (calibrated) {
-          console.log("[LineAR] Calibration complete");
-        } else {
-          console.warn("[LineAR] Continuing without calibration");
-        }
-      }
-
-      let absentFrames = 0;
-      const DETECTION_WINDOW_SIZE = 10;
-      const DETECTION_WINDOW_THRESHOLD = 4;
-      let detectionHistory: boolean[] = [];
-      let windowObjects: DetectedObject[] = [];
-      cameraTracker.onFrame((objects) => {
-        // Only process object detection during phases that need it
-        if (!["WAITING_FOR_OBJECT", "OBJECT_DETECTED", "POINTS_CALCULATED"].includes(currentPhase)) return;
-
-        const rawDetected = objects.length > 0;
-        detectionHistory.push(rawDetected);
-        if (detectionHistory.length > DETECTION_WINDOW_SIZE) {
-          detectionHistory.shift();
-        }
-        if (rawDetected) {
-          windowObjects.push(objects[0]!);
-          if (windowObjects.length > DETECTION_WINDOW_SIZE) {
-            windowObjects.shift();
-          }
-        }
-        const trueCount = detectionHistory.filter(Boolean).length;
-        const objectPresent = trueCount >= DETECTION_WINDOW_THRESHOLD;
-        if (!objectPresent) {
-          if (absentFrames >= ABSENT_THRESHOLD) {
-            console.log("[LineAR] Objects cleared after", absentFrames, "absent frames");
-            dispatch({ type: "OBJECTS_CLEARED" });
-            ui.setDetectionOutline(null);
-            absentFrames = 0;
-          } else {
-            absentFrames++;
-          }
-          return;
-        }
-        absentFrames = 0;
-        const lastObj = windowObjects[windowObjects.length - 1]!;
-        const avgObj: DetectedObject = {
-          ...lastObj,
-          id: generateId(),
-          boundingBox: {
-            x: Math.round(windowObjects.reduce((s, o) => s + o.boundingBox.x, 0) / windowObjects.length),
-            y: Math.round(windowObjects.reduce((s, o) => s + o.boundingBox.y, 0) / windowObjects.length),
-            width: Math.round(windowObjects.reduce((s, o) => s + o.boundingBox.width, 0) / windowObjects.length),
-            height: Math.round(windowObjects.reduce((s, o) => s + o.boundingBox.height, 0) / windowObjects.length),
-          },
-          center: {
-            x: Math.round(windowObjects.reduce((s, o) => s + o.center.x, 0) / windowObjects.length),
-            y: Math.round(windowObjects.reduce((s, o) => s + o.center.y, 0) / windowObjects.length),
-          },
-        };
-        const smoothedObjects: DetectedObject[] = [avgObj];
-        console.log("[LineAR] Smoothed detection (window {trueCount}/{" + DETECTION_WINDOW_SIZE + "}):", smoothedObjects.length, "object(s)");
-        dispatch({ type: "OBJECTS_DETECTED", payload: smoothedObjects });
-
-        const { x, y, width, height } = avgObj.boundingBox;
-        const tb = (p: Point2D) => coordMapper.cameraToGrid(p);
-        const outline: Point2D[] = [
-          tb({ x, y }),
-          tb({ x: x + width, y }),
-          tb({ x: x + width, y: y + height }),
-          tb({ x, y: y + height }),
-        ];
-        ui.setDetectionOutline(outline);
-
-        if (currentPhase === "OBJECT_DETECTED" && currentStableCount >= STABLE_THRESHOLD) {
-          console.log("[LineAR] Stability threshold reached, locking corners...");
-          ui.setDetectionOutline(null);
-          console.log("[LineAR] Stable object, locking corners:", avgObj.boundingBox);
-          const rawCorners: [Point2D, Point2D, Point2D, Point2D] = [
-            tb({ x, y }),
-            tb({ x: x + width, y }),
-            tb({ x: x + width, y: y + height }),
-            tb({ x, y: y + height }),
-          ];
-          const snapToGrid = (p: Point2D): Point2D => ({
-            x: Math.round(p.x),
-            y: Math.round(p.y),
-          });
-          const corners: [Point2D, Point2D, Point2D, Point2D] = rawCorners.map(c => snapToGrid(c)) as [Point2D, Point2D, Point2D, Point2D];
-          dispatch({ type: "CORNERS_LOCKED", payload: { corners, center: tb(avgObj.center) } });
-        }
-      });
-    } catch (err) {
-      console.warn("[LineAR] Camera not available:", err);
-    }
-  }
-
-  if (HandTracker) {
-    try {
-      const handTracker = new HandTracker({ lite: true, maxHands: 1 });
-      await handTracker.init();
-      handTracker.start(video);
-      handTracker.onFrame((hands) => {
-        // Only process hand tracking after object detection is complete
-        // This prevents hand from interfering with object detection
-        if (currentPhase !== "POINTS_CALCULATED" &&
-            currentPhase !== "SHOW_CORNERS" &&
-            currentPhase !== "SHOW_BASIS_VECTORS" &&
-            currentPhase !== "CONFIRM_TRANSFORM" &&
-            currentPhase !== "TRANSFORMED" &&
-            currentPhase !== "CONFIRM_RESET") {
-          // During detection phases, clear hand state
-          latestHandPosition = null;
-          ui.setRawHands(null);
-          return;
-        }
-
-        const vw = video.videoWidth || CAM_W;
-        const vh = video.videoHeight || CAM_H;
-        if (!vw || !vh) return;
-
-        const scaleX = canvas.width / vw;
-        const scaleY = canvas.height / vh;
-        const uniformScale = Math.min(scaleX, scaleY);
-        const offsetX = (canvas.width - vw * uniformScale) / 2;
-        const offsetY = (canvas.height - vh * uniformScale) / 2;
-
-        const toMirroredCanvas = (lm: HandLandmark): Point2D => ({
-          x: (mirrorHandTracking ? vw - lm.x : lm.x) * uniformScale + offsetX,
-          y: lm.y * uniformScale + offsetY,
-        });
-
-        if (hands.length > 0) {
-          const hand = hands[0]!;
-          if (hand.score >= 0.1 && hand.landmarks[8]) {
-        const rawPoint = toMirroredCanvas(hand.landmarks[8]);
-        const SMOOTH_ALPHA = 0.7;
-        const DEADZONE_PX = 3;
-            if (latestHandPosition === null) {
-              latestHandPosition = { ...rawPoint };
-            } else {
-              const dx = rawPoint.x - latestHandPosition.x;
-              const dy = rawPoint.y - latestHandPosition.y;
-              if (dx * dx + dy * dy > DEADZONE_PX * DEADZONE_PX) {
-                latestHandPosition.x += SMOOTH_ALPHA * dx;
-                latestHandPosition.y += SMOOTH_ALPHA * dy;
-              }
-            }
-            lastHandSeenTime = Date.now();
-          }
-
-          const mirroredHands: DetectedHand[] = hands.map((h) => ({
-            handedness: h.handedness,
-            score: h.score,
-            gesture: h.gesture,
-            landmarks: h.landmarks.map((lm) => ({ ...lm, ...toMirroredCanvas(lm) })),
-          }));
-          ui.setRawHands(mirroredHands);
-          handEmptyCount = 0;
-        } else {
-          handEmptyCount++;
-          if (handEmptyCount >= 5) {
-            latestHandPosition = null;
-            ui.setRawHands(null);
-          }
-        }
-      });
-    } catch (err) {
-      console.warn("[LineAR] Hand tracker not available:", err);
-    }
-  }
-}
-
-async function safeImport<T>(factory: () => Promise<T>): Promise<Partial<T>> {
-  try { return await factory(); } catch (err) {
-    return {};
-  }
-}
-
-function sleep(ms: number): Promise<void> {
-  return new Promise((resolve) => setTimeout(resolve, ms));
-}
-
-/**
- * Run the projector-camera calibration sequence.
- * Captures a camera frame, detects markers, computes homography, saves.
- * Retries up to `retries` times on failure.
- * Returns true if calibration succeeded, false otherwise.
- */
-async function runCalibrationSequence(
-  cameraTracker: import("./core/cameratracker.ts").CameraTracker,
-  mapper: CoordinateMapper,
-  retries: number,
-  onStatus?: (msg: string) => void,
-): Promise<boolean> {
-  for (let attempt = 0; attempt < retries; attempt++) {
-    if (attempt > 0) {
-      onStatus?.(`Calibration attempt ${attempt + 1} of ${retries}…`);
-      await sleep(2000);
-    } else {
-      onStatus?.("Capturing calibration markers…");
-      await sleep(1500);
-    }
-
-    const canvas = cameraTracker.processCanvas;
-    const ctx = canvas.getContext("2d");
-    if (!ctx) continue;
-
-    const imageData = ctx.getImageData(0, 0, canvas.width, canvas.height);
-    const result: DetectionResult | null = detectMarkers(imageData, canvas.width, canvas.height);
-
-    if (result && result.cameraPoints.length >= 4) {
-      const homography = computeHomography(result.cameraPoints, result.gridPoints);
-      if (homography) {
-        mapper.setTransform({ type: "homography", matrix: homography });
-        saveCalibration(homography);
-        console.log(`[LineAR] Calibration succeeded (${result.method}, ${result.cameraPoints.length} points)`);
-        return true;
-      }
-    }
-
-    console.warn(`[LineAR] Calibration attempt ${attempt + 1} failed`);
-  }
-
-  console.warn("[LineAR] Calibration failed after all retries — using direct mapping");
-  return false;
-}
-
-// ============================================================================
-// Core Interaction Engine Processing Architecture
-// ============================================================================
+// ── Interaction State ────────────────────────────────────────────────────────
 
 interface DemoInteractionState {
   dwellStart: number;
-  isDraggingCornerA: boolean;
-  isDraggingCornerB: boolean;
-  isDraggingCornerC: boolean;
-  isDraggingCornerD: boolean;
-  cornerASnapped: boolean;
-  cornerBSnapped: boolean;
-  cornerCSnapped: boolean;
-  cornerDSnapped: boolean;
-  // Track which corners are locked (after 3 seconds of stable snap)
-  cornerALocked: boolean;
-  cornerBLocked: boolean;
-  cornerCLocked: boolean;
-  cornerDLocked: boolean;
-  cornerCPlaced: boolean;
-  cornerDPlaced: boolean;
   isDraggingE1: boolean;
   isDraggingE2: boolean;
   e1Snapped: boolean;
   e2Snapped: boolean;
   e1Locked: boolean;
   e2Locked: boolean;
-  e1SnapTime: number;
-  e2SnapTime: number;
-  e1SnapPos: Point2D | null;
-  e2SnapPos: Point2D | null;
-  e1CooldownUntil: number;
-  e2CooldownUntil: number;
-  arrowTransitionFired: boolean;
-  // Timestamp when hand was last detected (for auto-prompt after 5 min absence)
-  handsAbsentSince: number;
-  previousPhase: string | null;
-  arrowMatrix: Matrix2x2;
-  fingerHistory: Point2D[];
-  // Arrow placement state (new drag→place→lock model)
   e1Placed: boolean;
   e2Placed: boolean;
   e1PlaceTime: number;
@@ -605,68 +70,25 @@ interface DemoInteractionState {
   e2DwellIntersection: Point2D | null;
   e1ReGrabCooldown: number;
   e2ReGrabCooldown: number;
-  showBasisProceed: boolean;
-
-  // Auto-release: timestamp when corner first snapped while being dragged
-  cornerASnapTime: number;
-  cornerBSnapTime: number;
-  cornerCSnapTime: number;
-  cornerDSnapTime: number;
-  // Position where corner first snapped (to detect finger movement)
-  cornerASnapPos: Point2D | null;
-  cornerBSnapPos: Point2D | null;
-  cornerCSnapPos: Point2D | null;
-  cornerDSnapPos: Point2D | null;
-  // Release time for cooldown - set when corner auto-releases after snap (kept for reference, not used for global cooldown)
-  cornerAReleaseTime: number;
-  cornerBReleaseTime: number;
-  cornerCReleaseTime: number;
-  cornerDReleaseTime: number;
-  // Global cooldown - after any corner locks, NO corners can be grabbed for 4 seconds
-  globalCooldownUntil: number;
-  // Track initial corner positions to detect when corners are adjusted
-  initialCornerPositions: [Point2D, Point2D, Point2D, Point2D] | null;
-  hasAdjustedCorner: boolean;
-  // showDonePrompt: boolean;  // [REMOVED: Done button prompt]
-
-  // Viewport pan state
+  arrowTransitionFired: boolean;
+  previousPhase: string | null;
+  arrowMatrix: Matrix2x2;
   isPanning: boolean;
   panStartX: number;
   panStartY: number;
   panOffsetStartX: number;
   panOffsetStartY: number;
-
 }
 
 function createDemoState(): DemoInteractionState {
   return {
     dwellStart: 0,
-    isDraggingCornerA: false,
-    isDraggingCornerB: false,
-    isDraggingCornerC: false,
-    isDraggingCornerD: false,
-    cornerASnapped: false,
-    cornerBSnapped: false,
-    cornerCSnapped: false,
-    cornerDSnapped: false,
-    cornerALocked: false,
-    cornerBLocked: false,
-    cornerCLocked: false,
-    cornerDLocked: false,
-    cornerCPlaced: false,
-    cornerDPlaced: false,
     isDraggingE1: false,
     isDraggingE2: false,
     e1Snapped: false,
     e2Snapped: false,
     e1Locked: false,
     e2Locked: false,
-    e1SnapTime: 0,
-    e2SnapTime: 0,
-    e1SnapPos: null,
-    e2SnapPos: null,
-    e1CooldownUntil: 0,
-    e2CooldownUntil: 0,
     e1Placed: false,
     e2Placed: false,
     e1PlaceTime: 0,
@@ -679,28 +101,9 @@ function createDemoState(): DemoInteractionState {
     e2DwellIntersection: null,
     e1ReGrabCooldown: 0,
     e2ReGrabCooldown: 0,
-    showBasisProceed: false,
     arrowTransitionFired: false,
-    handsAbsentSince: 0,
     previousPhase: null,
     arrowMatrix: [1, 0, 0, 1],
-    fingerHistory: [],
-    cornerASnapTime: 0,
-    cornerBSnapTime: 0,
-    cornerCSnapTime: 0,
-    cornerDSnapTime: 0,
-    cornerASnapPos: null,
-    cornerBSnapPos: null,
-    cornerCSnapPos: null,
-    cornerDSnapPos: null,
-    cornerAReleaseTime: 0,
-    cornerBReleaseTime: 0,
-    cornerCReleaseTime: 0,
-    cornerDReleaseTime: 0,
-    globalCooldownUntil: 0,
-    initialCornerPositions: null,
-    hasAdjustedCorner: false,
-    // showDonePrompt: false,  // [REMOVED: Done button prompt]
     isPanning: false,
     panStartX: 0,
     panStartY: 0,
@@ -709,77 +112,150 @@ function createDemoState(): DemoInteractionState {
   };
 }
 
-async function startCamera(video: HTMLVideoElement, width: number, height: number): Promise<void> {
-  const stream = await navigator.mediaDevices.getUserMedia({
-    video: { width, height, frameRate: CAM_FPS },
-  });
-  video.srcObject = stream;
-  await new Promise<void>((resolve) => { video.onloadedmetadata = () => resolve(); });
-  await video.play();
-}
+// ============================================================================
 
-async function setupDemoTracker(canvas: HTMLCanvasElement, video: HTMLVideoElement, ui: TabletopUI, ds: DemoInteractionState): Promise<void> {
-  const { HandTracker } = await safeImport<typeof import("./core/handtracker.ts")>(() => import("./core/handtracker.ts"));
-  if (!HandTracker) return;
+window.addEventListener("load", () => {
+  const canvas = document.getElementById("main-canvas") as HTMLCanvasElement;
+  const video = document.getElementById("video-input") as HTMLVideoElement;
 
-  const handTracker = new HandTracker({ lite: true, maxHands: 1 });
-  await handTracker.init();
-  handTracker.start(video);
+  let state: AppState = createInitialState();
+  state.objectCorners = VIRTUAL_OBJECT.corners;
+  state.objectCenter = VIRTUAL_OBJECT.center;
 
-  handTracker.onFrame((hands) => {
-    const vw = video.videoWidth || CAM_W;
-    const vh = video.videoHeight || CAM_H;
-    if (!vw || !vh) return;
+  function dispatch(action: AppAction): void {
+    const next = transition(state, action);
+    if (next === state) return;
+    state = next;
+    ui.setAppliedMatrix(state.appliedMatrix);
+    ui.setCorners(state.objectCorners);
 
-    const scaleX = canvas.width / vw;
-    const scaleY = canvas.height / vh;
-    const uniformScale = Math.min(scaleX, scaleY);
-    const offsetX = (canvas.width - vw * uniformScale) / 2;
-    const offsetY = (canvas.height - vh * uniformScale) / 2;
+    if (state.phase === "SHOW_CORNERS") {
+      setTimeout(() => dispatch({ type: "PHASE_ADVANCE" }), PHASE_TIMINGS.SHOW_CORNERS);
+    }
+  }
 
-    const toMirroredCanvas = (lm: HandLandmark): Point2D => ({
-      x: (mirrorHandTracking ? vw - lm.x : lm.x) * uniformScale + offsetX,
-      y: lm.y * uniformScale + offsetY,
-    });
+  // ── Canvas UI Setup ────────────────────────────────────────────────────
+  const ui = new TabletopUI(canvas);
+  ui.resize(window.innerWidth, window.innerHeight);
+  ui.onYes = () => dispatch({ type: "CONFIRM_YES" });
+  ui.onNo = () => dispatch({ type: "CONFIRM_NO" });
+  ui.onContinue = () => dispatch({ type: "TRANSFORMATION_DONE" });
+  window.addEventListener("resize", () => ui.resize(window.innerWidth, window.innerHeight));
 
-    if (hands.length > 0) {
-      const hand = hands[0]!;
-      if (hand.score >= 0.1 && hand.landmarks[8]) {
-            const rawPoint = toMirroredCanvas(hand.landmarks[8]);
-            const SMOOTH_ALPHA = 0.7;
-            const DEADZONE_PX = 3;
-            if (latestHandPosition === null) {
-              latestHandPosition = { ...rawPoint };
-            } else {
-              const dx = rawPoint.x - latestHandPosition.x;
-              const dy = rawPoint.y - latestHandPosition.y;
-              if (dx * dx + dy * dy > DEADZONE_PX * DEADZONE_PX) {
-                latestHandPosition.x += SMOOTH_ALPHA * dx;
-                latestHandPosition.y += SMOOTH_ALPHA * dy;
-              }
-            }
-            lastHandSeenTime = Date.now();
+  ui.setGhostArrows(GHOST_ARROWS.e1, GHOST_ARROWS.e2);
+  ui.setCorners(VIRTUAL_OBJECT.corners);
+  ui.setVideoSource(video);
+  ui.setFlipFlags(flipH, flipV);
+
+  const ds = createDemoState();
+
+  // ── W Key Fallback ─────────────────────────────────────────────────────
+  window.addEventListener("keydown", (e) => {
+    // F / V: toggle horizontal/vertical flip at runtime
+    if (e.key === "f" || e.key === "F") {
+      flipH = !flipH;
+      ui.setFlipFlags(flipH, flipV);
+      console.log("[LineAR] flipH =", flipH);
+      return;
+    }
+    if (e.key === "v" || e.key === "V") {
+      flipV = !flipV;
+      ui.setFlipFlags(flipH, flipV);
+      console.log("[LineAR] flipV =", flipV);
+      return;
+    }
+
+    if (e.key !== "w" && e.key !== "W") return;
+
+    if (state.phase === "SHOW_CORNERS") {
+      dispatch({ type: "PHASE_ADVANCE" });
+    } else if (state.phase === "SHOW_BASIS_VECTORS") {
+      if (state.basisStep === 0) {
+        ds.arrowMatrix[0] = GHOST_ARROWS.e1.x;
+        ds.arrowMatrix[2] = GHOST_ARROWS.e1.y;
+        ds.e1Placed = true;
+        ds.e1Locked = true;
+        ds.e1PlaceTime = 0;
+        ds.e1LockTime = Date.now();
+        dispatch({ type: "BASIS_STEP", payload: 1 });
+        ui.setMatrix([...ds.arrowMatrix]);
+        ui.setArrowSnapped(true, ds.e2Placed || ds.e2Locked);
+        ui.setArrowLocked(true, ds.e2Locked);
+      } else if (state.basisStep === 1) {
+        ds.arrowMatrix[1] = GHOST_ARROWS.e2.x;
+        ds.arrowMatrix[3] = GHOST_ARROWS.e2.y;
+        ds.e2Placed = true;
+        ds.e2Locked = true;
+        ds.e2PlaceTime = 0;
+        ds.e2LockTime = Date.now();
+        dispatch({ type: "BASIS_STEP", payload: 2 });
+        ui.setMatrix([...ds.arrowMatrix]);
+        ui.setArrowSnapped(true, true);
+        ui.setArrowLocked(true, true);
+        ds.arrowTransitionFired = true;
+        dispatch({ type: "BASIS_ADJUSTED", payload: [...ds.arrowMatrix] });
       }
-
-      const mirroredHands: DetectedHand[] = hands.map((h) => ({
-        handedness: h.handedness,
-        score: h.score,
-        gesture: h.gesture,
-        landmarks: h.landmarks.map((lm) => ({ ...lm, ...toMirroredCanvas(lm) })),
-      }));
-      ui.setRawHands(mirroredHands);
-      handEmptyCount = 0;
-    } else {
-      handEmptyCount++;
-      if (handEmptyCount >= 5) {
-        latestHandPosition = null;
-        ui.setRawHands(null);
-      }
+    } else if (state.phase === "CONFIRM_TRANSFORM" || state.phase === "CONFIRM_RESET") {
+      dispatch({ type: "CONFIRM_YES" });
+    } else if (state.phase === "TRANSFORMED") {
+      dispatch({ type: "TRANSFORMATION_DONE" });
     }
   });
-}
 
-// ── Unified interaction runner ───────────────────────────────────────────────
+  // ── Render Loop ────────────────────────────────────────────────────────
+  (function renderLoop() {
+    // Sync flip flags (may have been set asynchronously by loadMirrorConfig)
+    ui.setFlipFlags(flipH, flipV);
+    ui.draw(state);
+
+    if (state.phase !== ds.previousPhase) {
+      ds.previousPhase = state.phase;
+      if (state.phase === "SHOW_BASIS_VECTORS") {
+        ds.arrowMatrix = [...state.pendingMatrix];
+        ui.setMatrix([...state.pendingMatrix]);
+      }
+      if (state.phase === "TRANSFORMED") {
+        ds.isPanning = false;
+        if (state.objectCorners && state.appliedMatrix) {
+          const grid = ui.getLastGridRect();
+          if (grid) {
+            ui.autoFrameTransformed(state.objectCorners, state.appliedMatrix, grid);
+          }
+        }
+      }
+      if (state.phase === "CONFIRM_RESET") {
+        ds.isPanning = false;
+      }
+      if (state.phase === "SHOW_CORNERS") {
+        ui.setPanBounds(null);
+        ui.setPanOffset(0, 0);
+      }
+    }
+
+    // Resolve pointer: hand wins, mouse is fallback
+    let activePointer: Point2D | null = null;
+    const isHandActive = !!(latestHandPosition && (Date.now() - lastHandSeenTime < HAND_TIMEOUT_MS));
+    if (isHandActive) {
+      activePointer = latestHandPosition;
+    } else {
+      activePointer = ui.getMouseCanvasPos();
+    }
+
+    processInteractionFrame(activePointer, state, dispatch, ui, canvas, ds, isHandActive);
+
+    requestAnimationFrame(renderLoop);
+  })();
+
+  // ── Start Camera + Hand Tracker ────────────────────────────────────────
+  startCamera(video, CAM_W, CAM_H)
+    .then(() => setupHandTracker(canvas, video, ui))
+    .catch((err) => console.warn("[LineAR] Camera unavailable:", err));
+});
+
+// ============================================================================
+// Interaction Engine
+// ============================================================================
+
 function processInteractionFrame(
   pointerCanvas: Point2D | null,
   state: AppState,
@@ -791,285 +267,20 @@ function processInteractionFrame(
 ): void {
   ui.setFingerPosition(pointerCanvas);
 
-  // If no finger or mouse coordinate is active, drop grabs and bail
   if (!pointerCanvas) {
-    ds.isDraggingCornerA = false;
-    ds.isDraggingCornerB = false;
-    ds.isDraggingCornerC = false;
-    ds.isDraggingCornerD = false;
     ds.isDraggingE1 = false;
     ds.isDraggingE2 = false;
     return;
   }
 
-  const gridLayout = ui.getLayoutProperties();
-  const TEXT_STRIP_H = 40;
   const GRID_RANGE = 10;
-
-  // Grid center in canvas pixels, accounting for viewport pan
   const pan = ui.getPanOffset();
   const gridHeight = canvas.height - TEXT_STRIP_H;
   const gridCenterX = canvas.width / 2 + pan.x;
   const gridCenterY = TEXT_STRIP_H + gridHeight / 2 + pan.y;
   const scale = Math.min(canvas.width, gridHeight) / (GRID_RANGE * 2);
 
-  // ── PHASE: WAITING FOR OBJECT ──────────────────────────────────────────────
-  if (state.phase === "WAITING_FOR_OBJECT") {
-    const gridY = TEXT_STRIP_H;
-    if (gridLayout) {
-      const bx = (canvas.width - 180) / 2;
-      const by = gridY + gridHeight / 2 - 24;
-      if (
-        pointerCanvas.x >= bx &&
-        pointerCanvas.x <= bx + 180 &&
-        pointerCanvas.y >= by &&
-        pointerCanvas.y <= by + 48
-      ) {
-        if (ds.dwellStart === 0) ds.dwellStart = Date.now();
-        if (Date.now() - ds.dwellStart > HOVER_DWELL_MS) {
-          ds.dwellStart = 0;
-          dispatch({ type: "OBJECTS_DETECTED", payload: [] });
-        }
-      } else {
-        ds.dwellStart = 0;
-      }
-    }
-    return;
-  }
-
-  // ── Arrow Auto-Lock removed — handled in SHOW_BASIS_VECTORS section ──────────
-
-  // ── PHASE: POINTS CALCULATED (CORNER TRACKING W/ GLOBAL OMNIPRESENT SNAPPING) ──
-  if (state.phase === "POINTS_CALCULATED") {
-    const corners = state.objectCorners;
-    if (!corners) return;
-
-    // Helper to check if corner can be grabbed (respects global cooldown after any corner locks)
-    const canGrabCorner = (): boolean => {
-      // No corners can be grabbed during global cooldown
-      return Date.now() > ds.globalCooldownUntil;
-    };
-
-    const isValidCorner = (c: Point2D): boolean => isFinite(c.x) && isFinite(c.y) && Math.abs(c.x) < GRID_BOUNDS * 2 && Math.abs(c.y) < GRID_BOUNDS * 2;
-
-    const getCanvasCorner = (idx: number) => {
-      const corner = corners[idx]!;
-      if (!isValidCorner(corner)) return { x: gridCenterX, y: gridCenterY };
-      return { x: gridCenterX + corner.x * scale, y: gridCenterY - corner.y * scale };
-    };
-
-    const dist = (p1: Point2D, p2: Point2D): number => {
-      if (!isFinite(p1.x) || !isFinite(p1.y) || !isFinite(p2.x) || !isFinite(p2.y)) return Infinity;
-      return Math.sqrt((p1.x - p2.x) ** 2 + (p1.y - p2.y) ** 2);
-    };
-
-    // Get current snap state for each corner
-    const getCornerSnapped = (idx: number): boolean => {
-      switch (idx) {
-        case 0: return ds.cornerASnapped;
-        case 1: return ds.cornerBSnapped;
-        case 2: return ds.cornerCSnapped;
-        case 3: return ds.cornerDSnapped;
-        default: return false;
-      }
-    };
-
-    // Check for auto-release on currently dragged corners
-    // Auto-release: 3 seconds after corner first snapped while dragging
-    const handleAutoRelease = (cornerIdx: number, isDragging: boolean, snapTime: number, snapPos: Point2D | null) => {
-      if (!isDragging || snapTime === 0) return false;
-      
-      const elapsed = Date.now() - snapTime;
-      if (elapsed > CORNER_LOCK_DELAY_MS) {
-        // 3 seconds have passed - auto-release the corner
-        switch (cornerIdx) {
-          case 0:
-            ds.isDraggingCornerA = false;
-            ds.cornerALocked = true;
-            ds.cornerAReleaseTime = Date.now();
-            ds.cornerASnapTime = 0;
-            ds.cornerASnapPos = null;
-            ui.setCornerDrag(0, null, false);
-            break;
-          case 1:
-            ds.isDraggingCornerB = false;
-            ds.cornerBLocked = true;
-            ds.cornerBReleaseTime = Date.now();
-            ds.cornerBSnapTime = 0;
-            ds.cornerBSnapPos = null;
-            ui.setCornerDrag(1, null, false);
-            break;
-          case 2:
-            ds.isDraggingCornerC = false;
-            ds.cornerCLocked = true;
-            ds.cornerCReleaseTime = Date.now();
-            ds.cornerCSnapTime = 0;
-            ds.cornerCSnapPos = null;
-            ui.setCornerDrag(2, null, false);
-            break;
-          case 3:
-            ds.isDraggingCornerD = false;
-            ds.cornerDLocked = true;
-            ds.cornerDReleaseTime = Date.now();
-            ds.cornerDSnapTime = 0;
-            ds.cornerDSnapPos = null;
-            ui.setCornerDrag(3, null, false);
-            break;
-        }
-        // Set global cooldown - no corners can be grabbed for 4 seconds
-        ds.globalCooldownUntil = Date.now() + CORNER_COOLDOWN_MS;
-        return true;
-      }
-      return false;
-    };
-
-    // Check for timer reset when finger moves while snapped
-    const handleTimerReset = (cornerIdx: number, isDragging: boolean, snapTime: number, snapPos: Point2D | null) => {
-      if (!isDragging || snapTime === 0 || !snapPos) return;
-      
-      const moveDist = Math.sqrt((pointerCanvas.x - snapPos.x) ** 2 + (pointerCanvas.y - snapPos.y) ** 2);
-      if (moveDist > CORNER_MOVE_THRESHOLD_PX) {
-        // Finger moved - reset timer
-        switch (cornerIdx) {
-          case 0: ds.cornerASnapTime = 0; ds.cornerASnapPos = null; break;
-          case 1: ds.cornerBSnapTime = 0; ds.cornerBSnapPos = null; break;
-          case 2: ds.cornerCSnapTime = 0; ds.cornerCSnapPos = null; break;
-          case 3: ds.cornerDSnapTime = 0; ds.cornerDSnapPos = null; break;
-        }
-      }
-    };
-
-    // Process auto-release and timer reset for each corner
-    handleAutoRelease(0, ds.isDraggingCornerA, ds.cornerASnapTime, ds.cornerASnapPos);
-    handleTimerReset(0, ds.isDraggingCornerA, ds.cornerASnapTime, ds.cornerASnapPos);
-    
-    handleAutoRelease(1, ds.isDraggingCornerB, ds.cornerBSnapTime, ds.cornerBSnapPos);
-    handleTimerReset(1, ds.isDraggingCornerB, ds.cornerBSnapTime, ds.cornerBSnapPos);
-    
-    handleAutoRelease(2, ds.isDraggingCornerC, ds.cornerCSnapTime, ds.cornerCSnapPos);
-    handleTimerReset(2, ds.isDraggingCornerC, ds.cornerCSnapTime, ds.cornerCSnapPos);
-    
-    handleAutoRelease(3, ds.isDraggingCornerD, ds.cornerDSnapTime, ds.cornerDSnapPos);
-    handleTimerReset(3, ds.isDraggingCornerD, ds.cornerDSnapTime, ds.cornerDSnapPos);
-
-    // Update UI with locked states
-    ui.setCornerLockedStates([ds.cornerALocked, ds.cornerBLocked, ds.cornerCLocked, ds.cornerDLocked]);
-
-    if (!ds.isDraggingCornerA && !ds.isDraggingCornerB && !ds.isDraggingCornerC && !ds.isDraggingCornerD) {
-      // [REMOVED: hasAdjustedCorner / showDonePrompt check — Done prompt removed]
-    
-      if (dist(pointerCanvas, getCanvasCorner(0)) < GRAB_RADIUS_PX && canGrabCorner()) {
-        ds.isDraggingCornerA = true;
-        ds.cornerALocked = false; // Reset locked state when grabbing
-      } else if (dist(pointerCanvas, getCanvasCorner(1)) < GRAB_RADIUS_PX && canGrabCorner()) {
-        ds.isDraggingCornerB = true;
-        ds.cornerBLocked = false;
-      } else if (dist(pointerCanvas, getCanvasCorner(2)) < GRAB_RADIUS_PX && canGrabCorner()) {
-        ds.isDraggingCornerC = true;
-        ds.cornerCLocked = false;
-      } else if (dist(pointerCanvas, getCanvasCorner(3)) < GRAB_RADIUS_PX && canGrabCorner()) {
-        ds.isDraggingCornerD = true;
-        ds.cornerDLocked = false;
-      }
-    }
-
-    const currentDrag = ds.isDraggingCornerA ? 0 : ds.isDraggingCornerB ? 1 : ds.isDraggingCornerC ? 2 : ds.isDraggingCornerD ? 3 : -1;
-
-    if (currentDrag !== -1) {
-      const currentCorner = corners[currentDrag]!;
-      if (!isValidCorner(currentCorner)) {
-        return;
-      }
-
-      let rawGridX = (pointerCanvas.x - gridCenterX) / scale;
-      let rawGridY = -(pointerCanvas.y - gridCenterY) / scale;
-
-      if (!isFinite(rawGridX) || !isFinite(rawGridY)) {
-        rawGridX = currentCorner.x;
-        rawGridY = currentCorner.y;
-      }
-
-      const clampedGridX = Math.max(-GRID_BOUNDS, Math.min(GRID_BOUNDS, rawGridX));
-      const clampedGridY = Math.max(-GRID_BOUNDS, Math.min(GRID_BOUNDS, rawGridY));
-
-      const safeRawX = Math.abs(clampedGridX) < EPSILON ? (clampedGridX >= 0 ? EPSILON : -EPSILON) : clampedGridX;
-      const safeRawY = Math.abs(clampedGridY) < EPSILON ? (clampedGridY >= 0 ? EPSILON : -EPSILON) : clampedGridY;
-
-      const nearestGridX = Math.round(safeRawX);
-      const nearestGridY = Math.round(safeRawY);
-
-      const clampedNearestX = Math.max(-GRID_BOUNDS, Math.min(GRID_BOUNDS, nearestGridX));
-      const clampedNearestY = Math.max(-GRID_BOUNDS, Math.min(GRID_BOUNDS, nearestGridY));
-
-      const snapCanvasX = gridCenterX + clampedNearestX * scale;
-      const snapCanvasY = gridCenterY - clampedNearestY * scale;
-      const distToIntersection = Math.sqrt((pointerCanvas.x - snapCanvasX) ** 2 + (pointerCanvas.y - snapCanvasY) ** 2);
-
-      const isNowSnapped = distToIntersection < ARROW_SNAP_PX;
-
-      // Record snap time and position when corner first snaps while dragging
-      const getSnapTimeDirect = (idx: number): number => {
-        switch (idx) {
-          case 0: return ds.cornerASnapTime;
-          case 1: return ds.cornerBSnapTime;
-          case 2: return ds.cornerCSnapTime;
-          case 3: return ds.cornerDSnapTime;
-          default: return 0;
-        }
-      };
-
-      if (isNowSnapped) {
-        const currentSnapTime = getSnapTimeDirect(currentDrag);
-        if (currentSnapTime === 0) {
-          // First time snapping - start the timer
-          switch (currentDrag) {
-            case 0: ds.cornerASnapTime = Date.now(); ds.cornerASnapPos = { x: pointerCanvas.x, y: pointerCanvas.y }; break;
-            case 1: ds.cornerBSnapTime = Date.now(); ds.cornerBSnapPos = { x: pointerCanvas.x, y: pointerCanvas.y }; break;
-            case 2: ds.cornerCSnapTime = Date.now(); ds.cornerCSnapPos = { x: pointerCanvas.x, y: pointerCanvas.y }; break;
-            case 3: ds.cornerDSnapTime = Date.now(); ds.cornerDSnapPos = { x: pointerCanvas.x, y: pointerCanvas.y }; break;
-          }
-        }
-      } else {
-        // Not snapped - reset snap timer (but only if not already locked)
-        const isLocked = currentDrag === 0 ? ds.cornerALocked : currentDrag === 1 ? ds.cornerBLocked : currentDrag === 2 ? ds.cornerCLocked : ds.cornerDLocked;
-        if (!isLocked) {
-          switch (currentDrag) {
-            case 0: ds.cornerASnapTime = 0; ds.cornerASnapPos = null; break;
-            case 1: ds.cornerBSnapTime = 0; ds.cornerBSnapPos = null; break;
-            case 2: ds.cornerCSnapTime = 0; ds.cornerCSnapPos = null; break;
-            case 3: ds.cornerDSnapTime = 0; ds.cornerDSnapPos = null; break;
-          }
-        }
-      }
-
-      if (isNowSnapped) {
-        corners[currentDrag] = { x: clampedNearestX, y: clampedNearestY };
-        if (currentDrag === 0) ds.cornerASnapped = true;
-        if (currentDrag === 1) ds.cornerBSnapped = true;
-        if (currentDrag === 2) ds.cornerCSnapped = true;
-        if (currentDrag === 3) ds.cornerDSnapped = true;
-      } else {
-        corners[currentDrag] = { x: clampedGridX, y: clampedGridY };
-        if (currentDrag === 0) ds.cornerASnapped = false;
-        if (currentDrag === 1) ds.cornerBSnapped = false;
-        if (currentDrag === 2) ds.cornerCSnapped = false;
-        if (currentDrag === 3) ds.cornerDSnapped = false;
-      }
-
-      const cornerGridPos = { 
-        x: isNowSnapped ? clampedNearestX : clampedGridX, 
-        y: isNowSnapped ? clampedNearestY : clampedGridY 
-      };
-      ui.setCornerDrag(currentDrag, cornerGridPos, currentDrag === 2 ? ds.cornerCSnapped : currentDrag === 3 ? ds.cornerDSnapped : false);
-      dispatch({ type: "CORNERS_LOCKED", payload: { corners: [...corners], center: state.objectCenter ?? { x: 0, y: 0 } } });
-    }
-
-    if (ds.cornerCSnapped && !ds.isDraggingCornerC) ds.cornerCPlaced = true;
-    if (ds.cornerDSnapped && !ds.isDraggingCornerD) ds.cornerDPlaced = true;
-    return;
-  }
-
-  // ── PHASE: SHOW BASIS VECTORS (DRAG → PLACE → LOCK) ──────────────────────
+  // ── PHASE: SHOW BASIS VECTORS (DRAG → PLACE → LOCK) ─────────────────────
   if (state.phase === "SHOW_BASIS_VECTORS") {
     const mat = ds.arrowMatrix;
 
@@ -1084,7 +295,7 @@ function processInteractionFrame(
       ds.e1PlaceTime = 0;
       ui.setArrowLocked(true, ds.e2Locked);
       ui.setArrowSnapped(true, ds.e2Placed || ds.e2Locked);
-      console.log("[LineAR] e1 locked after placement");
+      if (state.basisStep === 0) dispatch({ type: "BASIS_STEP", payload: 1 });
     }
     if (ds.e2Placed && !ds.e2Locked && ds.e2PlaceTime > 0 &&
         Date.now() - ds.e2PlaceTime >= ARROW_PLACED_LOCK_MS) {
@@ -1093,7 +304,7 @@ function processInteractionFrame(
       ds.e2PlaceTime = 0;
       ui.setArrowLocked(ds.e1Locked, true);
       ui.setArrowSnapped(ds.e1Placed || ds.e1Locked, true);
-      console.log("[LineAR] e2 locked after placement");
+      if (state.basisStep === 1) dispatch({ type: "BASIS_STEP", payload: 2 });
     }
 
     // ── Cooldown: locked arrow → grabbable after ARROW_LOCK_COOLDOWN_MS ─────
@@ -1106,7 +317,6 @@ function processInteractionFrame(
       ds.e1ReGrabCooldown = Date.now() + 800;
       ui.setArrowLocked(false, ds.e2Locked);
       ui.setArrowSnapped(true, ds.e2Placed || ds.e2Locked);
-      console.log("[LineAR] e1 cooldown expired, grabbable again");
     }
     if (ds.e2Locked && ds.e2LockTime > 0 &&
         Date.now() - ds.e2LockTime >= ARROW_LOCK_COOLDOWN_MS) {
@@ -1117,10 +327,9 @@ function processInteractionFrame(
       ds.e2ReGrabCooldown = Date.now() + 800;
       ui.setArrowLocked(ds.e1Locked, false);
       ui.setArrowSnapped(ds.e1Placed || ds.e1Locked, true);
-      console.log("[LineAR] e2 cooldown expired, grabbable again");
     }
 
-    // ── 2. Handle E1 dragging (dwell-on-snap) ────────────────────────────────
+    // ── 2. Handle E1 dragging (dwell-on-snap) ─────────────────────────────
     if (ds.isDraggingE1) {
       let rawX = (pointerCanvas.x - gridCenterX) / scale;
       let rawY = -(pointerCanvas.y - gridCenterY) / scale;
@@ -1153,7 +362,6 @@ function processInteractionFrame(
           ds.e1ReGrabCooldown = Date.now() + 800;
           ds.e1DwellStart = 0;
           ds.e1DwellIntersection = null;
-          console.log("[LineAR] e1 placed at", mat[0], mat[2]);
         }
       } else {
         mat[0] = safeX;
@@ -1164,7 +372,7 @@ function processInteractionFrame(
       ui.setMatrix([...mat]);
     }
 
-    // ── 3. Handle E2 dragging (dwell-on-snap) ────────────────────────────────
+    // ── 3. Handle E2 dragging (dwell-on-snap) ─────────────────────────────
     if (ds.isDraggingE2) {
       let rawX = (pointerCanvas.x - gridCenterX) / scale;
       let rawY = -(pointerCanvas.y - gridCenterY) / scale;
@@ -1197,7 +405,6 @@ function processInteractionFrame(
           ds.e2ReGrabCooldown = Date.now() + 800;
           ds.e2DwellStart = 0;
           ds.e2DwellIntersection = null;
-          console.log("[LineAR] e2 placed at", mat[1], mat[3]);
         }
       } else {
         mat[1] = safeX;
@@ -1208,42 +415,33 @@ function processInteractionFrame(
       ui.setMatrix([...mat]);
     }
 
-    // ── 4. Grab / re-grab detection (only when not dragging) ─────────────────
+    // ── 4. Grab / re-grab detection (only when not dragging) ──────────────
     if (!ds.isDraggingE1 && !ds.isDraggingE2) {
       const e1Tip = { x: gridCenterX + mat[0] * scale, y: gridCenterY - mat[2] * scale };
       const e2Tip = { x: gridCenterX + mat[1] * scale, y: gridCenterY - mat[3] * scale };
 
-      // Grab e1 if free (not placed, not locked) AND e2 also not grabbed
       if (!ds.e1Placed && !ds.e1Locked) {
         if (dist(pointerCanvas, e1Tip) < ARROW_GRAB_RADIUS_PX) {
           ds.isDraggingE1 = true;
-          console.log("[LineAR] e1 grabbed");
         }
       }
-      // Re-grab e1 if placed but not locked (with cooldown)
       if (ds.e1Placed && !ds.e1Locked && Date.now() > ds.e1ReGrabCooldown) {
         if (dist(pointerCanvas, e1Tip) < ARROW_GRAB_RADIUS_PX) {
           ds.isDraggingE1 = true;
           ds.e1Placed = false;
           ds.e1PlaceTime = 0;
-          console.log("[LineAR] e1 re-grabbed");
         }
       }
-
-      // Grab e2 if free (not placed, not locked), only if e1 wasn't already grabbed
       if (!ds.isDraggingE1 && !ds.e2Placed && !ds.e2Locked) {
         if (dist(pointerCanvas, e2Tip) < ARROW_GRAB_RADIUS_PX) {
           ds.isDraggingE2 = true;
-          console.log("[LineAR] e2 grabbed");
         }
       }
-      // Re-grab e2 if placed but not locked (with cooldown)
       if (!ds.isDraggingE1 && ds.e2Placed && !ds.e2Locked && Date.now() > ds.e2ReGrabCooldown) {
         if (dist(pointerCanvas, e2Tip) < ARROW_GRAB_RADIUS_PX) {
           ds.isDraggingE2 = true;
           ds.e2Placed = false;
           ds.e2PlaceTime = 0;
-          console.log("[LineAR] e2 re-grabbed");
         }
       }
     }
@@ -1255,28 +453,18 @@ function processInteractionFrame(
     ui.setDwellProgress(
       ds.isDraggingE1 && ds.e1DwellIntersection !== null
         ? Math.min(1, (Date.now() - ds.e1DwellStart) / ARROW_DWELL_PLACE_MS)
+        : ds.isDraggingE2 && ds.e2DwellIntersection !== null
+        ? Math.min(1, (Date.now() - ds.e2DwellStart) / ARROW_DWELL_PLACE_MS)
         : 0,
       ds.isDraggingE2 && ds.e2DwellIntersection !== null
         ? Math.min(1, (Date.now() - ds.e2DwellStart) / ARROW_DWELL_PLACE_MS)
+        : ds.isDraggingE1 && ds.e1DwellIntersection !== null
+        ? Math.min(1, (Date.now() - ds.e1DwellStart) / ARROW_DWELL_PLACE_MS)
         : 0,
     );
 
-    // ── 5a. Auto-prompt: arrows adjusted + no hands for 5 minutes ──────────
-    const arrowsAdjusted = mat[0] !== 1 || mat[1] !== 0 || mat[2] !== 0 || mat[3] !== 1;
-    if (arrowsAdjusted && !isHandActive && !ds.arrowTransitionFired) {
-      if (ds.handsAbsentSince === 0) {
-        ds.handsAbsentSince = Date.now();
-      } else if (Date.now() - ds.handsAbsentSince >= 300_000) {
-        ds.arrowTransitionFired = true;
-        ds.handsAbsentSince = 0;
-        dispatch({ type: "BASIS_ADJUSTED", payload: [...ds.arrowMatrix] });
-      }
-    } else {
-      ds.handsAbsentSince = 0;
-    }
-
-    // ── 5. Any locked → proceed ───────────────────────────────
-    if ((ds.e1Locked || ds.e2Locked) && !ds.arrowTransitionFired) {
+    // ── 5. Both locked → proceed ─────────────────────────────────────────
+    if (ds.e1Locked && ds.e2Locked && !ds.arrowTransitionFired) {
       ds.arrowTransitionFired = true;
       dispatch({ type: "BASIS_ADJUSTED", payload: [...ds.arrowMatrix] });
     }
@@ -1284,7 +472,7 @@ function processInteractionFrame(
     return;
   }
 
-  // ── PHASE: DIALOG CONFIRMATIONS (canvas buttons only) ─────────────────────
+  // ── PHASE: DIALOG CONFIRMATIONS (canvas buttons) ────────────────────────
   if (state.phase === "CONFIRM_TRANSFORM" || state.phase === "CONFIRM_RESET") {
     const buttons = ui.getButtonRects();
     const btnYes = buttons.yes;
@@ -1296,38 +484,41 @@ function processInteractionFrame(
 
     if (insideBox(pointerCanvas, btnYes)) {
       if (ds.dwellStart === 0) ds.dwellStart = Date.now();
+      ui.setCursorDwellProgress(Math.min(1, (Date.now() - ds.dwellStart) / HOVER_DWELL_MS));
       if (Date.now() - ds.dwellStart > HOVER_DWELL_MS) {
         ds.dwellStart = 0;
         ui.onYes?.();
       }
     } else if (insideBox(pointerCanvas, btnNo)) {
       if (ds.dwellStart === 0) ds.dwellStart = Date.now();
+      ui.setCursorDwellProgress(Math.min(1, (Date.now() - ds.dwellStart) / HOVER_DWELL_MS));
       if (Date.now() - ds.dwellStart > HOVER_DWELL_MS) {
         ds.dwellStart = 0;
         ui.onNo?.();
       }
     } else {
       ds.dwellStart = 0;
+      ui.setCursorDwellProgress(0);
     }
     return;
   }
 
-  // ── PHASE: TRANSFORMED (canvas Continue button + pan) ─────────────────────
+  // ── PHASE: TRANSFORMED (Continue button + pan) ──────────────────────────
   if (state.phase === "TRANSFORMED") {
-    const continueBtn = { x: gridCenterX + 200, y: gridCenterY + 130, w: 150, h: 50 };
-    if (
-      pointerCanvas.x >= continueBtn.x &&
-      pointerCanvas.x <= continueBtn.x + continueBtn.w &&
-      pointerCanvas.y >= continueBtn.y &&
-      pointerCanvas.y <= continueBtn.y + continueBtn.h
-    ) {
+    const buttons = ui.getButtonRects();
+    const btnContinue = buttons.continue;
+
+    if (btnContinue && pointerCanvas.x >= btnContinue.x && pointerCanvas.x <= btnContinue.x + btnContinue.width &&
+        pointerCanvas.y >= btnContinue.y && pointerCanvas.y <= btnContinue.y + btnContinue.height) {
       if (ds.dwellStart === 0) ds.dwellStart = Date.now();
+      ui.setCursorDwellProgress(Math.min(1, (Date.now() - ds.dwellStart) / HOVER_DWELL_MS));
       if (Date.now() - ds.dwellStart > HOVER_DWELL_MS) {
         ds.dwellStart = 0;
         ui.onContinue?.();
       }
     } else {
       ds.dwellStart = 0;
+      ui.setCursorDwellProgress(0);
       const isPointerDown = ui.isMouseDown() || isHandActive;
       if (isPointerDown) {
         if (!ds.isPanning) {
@@ -1349,5 +540,82 @@ function processInteractionFrame(
     }
     return;
   }
+}
 
+// ============================================================================
+// Camera + Hand Tracker
+// ============================================================================
+
+async function startCamera(video: HTMLVideoElement, width: number, height: number): Promise<void> {
+  const stream = await navigator.mediaDevices.getUserMedia({
+    video: { width, height, frameRate: 30 },
+  });
+  video.srcObject = stream;
+  await new Promise<void>((resolve) => { video.onloadedmetadata = () => resolve(); });
+  await video.play();
+}
+
+async function setupHandTracker(canvas: HTMLCanvasElement, video: HTMLVideoElement, ui: TabletopUI): Promise<void> {
+  const { HandTracker } = await safeImport<typeof import("./core/handtracker.ts")>(() => import("./core/handtracker.ts"));
+  if (!HandTracker) return;
+
+  const handTracker = new HandTracker({ lite: true, maxHands: 1 });
+  await handTracker.init();
+  handTracker.start(video);
+
+  handTracker.onFrame((hands) => {
+    const vw = video.videoWidth || CAM_W;
+    const vh = video.videoHeight || CAM_H;
+    if (!vw || !vh) return;
+
+    const scaleX = canvas.width / vw;
+    const scaleY = canvas.height / vh;
+    const uniformScale = Math.min(scaleX, scaleY);
+    const offsetX = (canvas.width - vw * uniformScale) / 2;
+    const offsetY = (canvas.height - vh * uniformScale) / 2;
+
+    const toMirroredCanvas = (lm: HandLandmark): Point2D => ({
+      x: (flipH ? vw - lm.x : lm.x) * uniformScale + offsetX,
+      y: (flipV ? vh - lm.y : lm.y) * uniformScale + offsetY,
+    });
+
+    if (hands.length > 0) {
+      const hand = hands[0]!;
+      if (hand.score >= 0.1 && hand.landmarks[8]) {
+        const rawPoint = toMirroredCanvas(hand.landmarks[8]);
+        const SMOOTH_ALPHA = 0.7;
+        const DEADZONE_PX = 3;
+        if (latestHandPosition === null) {
+          latestHandPosition = { ...rawPoint };
+        } else {
+          const dx = rawPoint.x - latestHandPosition.x;
+          const dy = rawPoint.y - latestHandPosition.y;
+          if (dx * dx + dy * dy > DEADZONE_PX * DEADZONE_PX) {
+            latestHandPosition.x += SMOOTH_ALPHA * dx;
+            latestHandPosition.y += SMOOTH_ALPHA * dy;
+          }
+        }
+        lastHandSeenTime = Date.now();
+      }
+
+      const mirroredHands: DetectedHand[] = hands.map((h) => ({
+        handedness: h.handedness,
+        score: h.score,
+        gesture: h.gesture,
+        landmarks: h.landmarks.map((lm) => ({ ...lm, ...toMirroredCanvas(lm) })),
+      }));
+      ui.setRawHands(mirroredHands);
+      handEmptyCount = 0;
+    } else {
+      handEmptyCount++;
+      if (handEmptyCount >= 5) {
+        latestHandPosition = null;
+        ui.setRawHands(null);
+      }
+    }
+  });
+}
+
+async function safeImport<T>(factory: () => Promise<T>): Promise<Partial<T>> {
+  try { return await factory(); } catch { return {}; }
 }
