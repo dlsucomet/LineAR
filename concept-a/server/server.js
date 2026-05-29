@@ -16,17 +16,24 @@ app.use(express.json({
 const cropRegions = {
   firstStepLeft: {
     one: {
-      top: 200,
-      left: 200,
-      width: 300,
-      height: 300
+      top: 400,
+      left: 840,
+      width: 70,
+      height: 70
     },
 
     two: {
-      top: 200,
-      left: 550,
-      width: 300,
-      height: 300
+      top: 400,
+      left: 910,
+      width: 70,
+      height: 70
+    },
+
+    three: {
+      top: 400,
+      left: 910,
+      width: 70,
+      height: 70
     }
   },
 
@@ -40,9 +47,16 @@ const cropRegions = {
 
     two: {
       top: 200,
-      left: 1250,
+      left: 200,
       width: 300,
       height: 300
+    },
+
+    three: {
+      top: 400,
+      left: 910,
+      width: 70,
+      height: 70
     }
   },
 
@@ -84,7 +98,7 @@ const cropRegions = {
 
   fourthStep: {
     one: {
-      top: 1250,
+      top: 200,
       left: 550,
       width: 300,
       height: 300
@@ -92,75 +106,81 @@ const cropRegions = {
   }
 };
 
+let currentStep = "firstStepLeft";
+
 /* Hardcoded answers for prototype */
 const expectedAnswers = {
-  firstStep: {
-    leftMatrix: [
-      "3",
-      "1",
-      "2"
-    ],
-    rightMatrix: [
-      "4",
-      "-1"
-    ]
+  firstStepLeft: {
+    one: ["3"],
+    two: ["1"],
+    three: ["2"]
   },
 
-  secondStep: {
-    left: [
-      "3",
-      "1",
-      "2"
-    ],
-    right: [
-      "4",
-      "-1"
-    ]
+  firstStepRight: {
+    one: ["2"],
+    two: ["0"],
+    three: ["1"]
   },
 
-  thirdStep: {
-    left: [
-      "3",
-      "1",
-      "2"
-    ],
-    right: [
-      "4",
-      "-1"
-    ]
+  secondStepLeft: {
+    one: ["4"],
+    two: ["-1"]
+  },
+
+  secondStepRight: {
+    one: ["-2"],
+    two: ["-1"]
+  },
+
+  thirdStepLeft: {
+    one: ["12"],
+    two: ["-3"]
+  },
+
+  thirdStepRight: {
+    one: ["-2"],
+    two: ["4"]
   },
 
   fourthStep: {
-    left: [
-      "3",
-      "1",
-      "2"
-    ],
+    one: ["10"],
+    two: ["1"]
   }
+
 };
+
+const stepOrder = [
+  "firstStepLeft",
+  "firstStepRight",
+  "secondStepLeft",
+  "secondStepRight",
+  "thirdStepLeft",
+  "thirdStepRight",
+  "fourthStep"
+];
 
 
 app.post("/frame", async (req, res) => {
     try {
-      const image = req.body.image;
-      const base64 = image.replace(/^data:image\/png;base64,/, "");
-      const filename = `frame-${Date.now()}.png`;
-      const filepath =path.join(__dirname, "../captures", filename);
+        const image = req.body.image;
+        const base64 = image.replace(/^data:image\/png;base64,/,"");
+        const filename = `frame-${Date.now()}.png`;
+        const filepath = path.join(__dirname, "../captures", filename);
 
-      const imageBuffer =Buffer.from(base64, "base64");
-      fs.writeFileSync(filepath, imageBuffer);
-      console.log("Saved:", filename);
+        const imageBuffer = Buffer.from(base64,"base64");
 
-      const recognizedResults = {};
+        fs.writeFileSync(filepath,imageBuffer);
 
-      for (const stepName in cropRegions) {
-        recognizedResults[stepName] = {};
-        const stepRegions =cropRegions[stepName];
+        console.log("Saved:", filename);
 
 
-        for (const regionName in stepRegions) {
-          const region = stepRegions[regionName];
-          const croppedPath = path.join(__dirname, "../captures", `${stepName}-${regionName}-${filename}`);
+        const currentRegions = cropRegions[currentStep];
+        const recognizedResults = {};
+        recognizedResults[currentStep] = {};
+
+        for (const regionName in currentRegions) {
+          const region = currentRegions[regionName];
+          const croppedPath = path.join(__dirname, "../captures", `${currentStep}-${regionName}-${filename}`);
 
           await sharp(imageBuffer)
             .extract({
@@ -169,15 +189,14 @@ app.post("/frame", async (req, res) => {
               width: region.width,
               height: region.height
             })
-            .greyscale()
-            .normalize()
-            .sharpen()
-            .threshold(170)
+            .resize(800, 800)
             .toFile(croppedPath);
 
           console.log("Cropped:", croppedPath);
 
-          const result = await Tesseract.recognize(croppedPath, "eng",
+          const result = await Tesseract.recognize(
+              croppedPath,
+              "eng",
               {
                 config: {
                   tessedit_char_whitelist: "0123456789-",
@@ -190,49 +209,57 @@ app.post("/frame", async (req, res) => {
           const recognizedValues =
             rawText
               .split(/\s+/)
-              .map(value => value.replace(/[^0-9-]/g, ""))
-              .filter(value => value !== "");
+              .map(
+                value =>
+                  value.replace(
+                    /[^0-9-]/g,
+                    ""
+                  )
+              )
+              .filter(
+                value =>
+                  value !== ""
+              );
 
-          console.log(`${stepName} ${regionName}`);
-          console.log("OCR:", rawText);
+          console.log(`${currentStep} ${regionName}`);
+          console.log("OCR:",rawText);
           console.log("Recognized:", recognizedValues);
-          recognizedResults[stepName][regionName] = recognizedValues;
+
+          recognizedResults[currentStep][regionName] = recognizedValues;
         }
 
-      }
+        let state = "correct";
 
-      let state = "correct";
-
-      console.log("Comparing values");
-      for (const stepName in expectedAnswers) {
-        const expectedStep = expectedAnswers[stepName];
-        const recognizedStep = recognizedResults[stepName];
+        const expectedStep = expectedAnswers[currentStep];
+        const recognizedStep = recognizedResults[currentStep];
 
         for (const regionName in expectedStep) {
           const expectedValues = expectedStep[regionName];
           const recognizedValues = recognizedStep[regionName];
+
+          if (recognizedValues.length < expectedValues.length) {
+            state = "incomplete";
+            console.log(`${regionName} incomplete`);
+            break;
+          }
+
           const matches = JSON.stringify(expectedValues) === JSON.stringify(recognizedValues);
 
           if (!matches) {
             state = "wrong";
-            console.log(`${stepName} ${regionName} incorrect`);
+            console.log(`${regionName} incorrect`);
+            break;
           }
-
-          else {
-            console.log(`${stepName} ${regionName} correct`);
-          }
+          console.log(`${regionName} correct`);
         }
-      }
 
-  
-      res.json({success: true, filename, recognizedResults, state});
-    }
+        res.json({success: true, filename, currentStep, recognizedResults, state});
 
-    catch(error) {
-      console.error(error);
-      res.status(500).json({success: false});
+        } catch(error) {
+            console.error(error);
+            res.status(500).json({success: false});
+        }
     }
-  }
 );
 
 app.listen(3000, () => {

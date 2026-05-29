@@ -1,6 +1,3 @@
-const APP_KEY = "0c186186-7ebb-4b0d-a824-69da658edbd6";
-const HMAC_KEY = "e37026dc-f77f-4103-a401-16a85f5a7b59";
-
 const emptyInstruction = "";
 
 const topInstructionText = [
@@ -17,8 +14,38 @@ const topInstructionText = [
 const sideInstructionText = [
   "Copy the blue element and blue vector on the empty highlighted area",
   "Copy the highlighted vector on the empty highlighted area",
-  "Scalar multiplication is done this way:",
-  "Vector addition is done this way:"
+  `Scalar multiplication is done this way:
+  \\[
+  a
+  \\begin{bmatrix}
+  b \\\\
+  c
+  \\end{bmatrix}
+  =
+  \\begin{bmatrix}
+  a \\cdot b \\\\
+  a \\cdot c
+  \\end{bmatrix}
+  \\]
+  `,
+  `Vector addition is done this way:
+  \\[
+  \\begin{bmatrix}
+  a \\\\
+  b
+  \\end{bmatrix}
+  +
+  \\begin{bmatrix}
+  c \\\\
+  d
+  \\end{bmatrix}
+  =
+  \\begin{bmatrix}
+  a + c \\\\
+  b + d
+  \\end{bmatrix}
+  \\]
+  `
 ];
 
 /*
@@ -27,7 +54,7 @@ const sideInstructionText = [
   0. Empty (Transitioning and whatever)
   1. Initialization
   2. First step (1)
-  3. First step (1 correct)
+  3. First step (1 correct) 
   4. First step (1 wrong)
   5. First step (2)
   6. First step (2 correct)
@@ -669,10 +696,13 @@ function setTopInstruction(text) {
 }
 
 function setSideInstruction(text) {
-  document.getElementById("side-instruction").textContent = text;
+  const element = document.getElementById("side-instruction");
+  element.innerHTML = text;
+
+  MathJax.typesetPromise([element]);
 }
 
-let currentStep = 0;
+let currentStep = 1;
 
 function renderStep(stepIndex) {
 
@@ -704,190 +734,228 @@ function renderStep(stepIndex) {
 /*
                                                                     Webcam stuff                                            
 */
-const video =
-  document.createElement("video");
+const video = document.createElement("video");
 
 video.autoplay = true;
 video.playsInline = true;
 
-const canvas =
-  document.createElement("canvas");
+const canvas = document.createElement("canvas");
 
-const ctx =
-  canvas.getContext("2d");
+const ctx = canvas.getContext("2d");
 
 async function initializeCamera() {
-
   const stream =
     await navigator.mediaDevices.getUserMedia({
-
       video: {
         width: 1920,
         height: 1080
       }
-
     });
-
   video.srcObject = stream;
-
-  console.log(
-    "Camera initialized"
-  );
-
+  console.log("Camera initialized");
 }
 
 /*
                                                                        Main Loop
 */
 let previousFrame = null;
+let isProcessing = false;
+
+const delays = {
+  correct: 3000,
+  wrong: 5000,
+  transition: 7000,
+  initialization: 5000,
+  final: 200000
+};
+
+function goToStep(step) {
+  currentStep = step;
+  console.log("Current Step:", currentStep);
+  renderStep(currentStep);
+}
+
+function delayedStep(step, delay) {
+  setTimeout(() => {
+    goToStep(step);
+    isProcessing = false;
+  }, delay);
+}
+
+function handleValidation(result, correctStep, wrongStep, retryStep) {
+  if (result.state === "incomplete") {
+    console.log("Still writing...");
+    setTimeout(() => {
+      isProcessing = false;
+    }, delays.scanCooldown);
+    return;
+  }
+
+  if (result.state === "correct") {
+    goToStep(correctStep);
+    delayedStep(correctStep + 2, delays.correct);
+    return;
+  }
+
+  if (result.state === "wrong") {
+    goToStep(wrongStep);
+    delayedStep(retryStep, delays.wrong);
+    return;
+  }
+
+  isProcessing = false;
+}
 
 async function recognitionLoop() {
 
-  if (video.videoWidth === 0 || video.videoHeight === 0) {
-    setTimeout(recognitionLoop, 1000);
+  requestAnimationFrame(recognitionLoop);
+  
+  if (isProcessing) {
     return;
   }
-  
+
+  if (video.videoWidth === 0 || video.videoHeight === 0) {
+    return;
+  }
+
   canvas.width = video.videoWidth;
   canvas.height = video.videoHeight;
-
-  ctx.drawImage(
-    video,
-    0,
-    0
-  );
+  ctx.drawImage(video, 0, 0);
 
   const currentFrame = canvas.toDataURL("image/png");
 
-  if (currentFrame !== previousFrame) {
-    previousFrame = currentFrame;
-    console.log("Paper changed");
+  if (currentFrame === previousFrame) {
+    return;
+  }
 
-    await fetch("http://localhost:3000/frame", {
-        method: "POST",
-        headers: {
-          "Content-Type": "application/json"
-        },
-        body: JSON.stringify({
-          image: currentFrame
-        })
-      }
-    );
+  previousFrame = currentFrame;
+  console.log("Paper changed");
 
+
+  isProcessing = true;
+
+  try {
     console.log("Processing image");
 
-    const response = await fetch("http://localhost:3000/frame", {
-        method: "POST",
-
-        headers: {
-          "Content-Type":
-          "application/json"
+    const response = await fetch("http://localhost:3000/frame",
+        {
+          method: "POST",
+          headers: {
+            "Content-Type":
+              "application/json"
           },
           body: JSON.stringify({
-            image: currentFrame
+            image:
+              currentFrame
           })
         }
       );
 
     const result = await response.json();
-
     console.log(result);
 
-    if(currentStep == 1) {
-      currentStep += 1;
-      renderStep(currentStep);
-    } else if(currentStep == 23 || currentStep == 24) {
-      currentStep += 1;
-      renderStep(currentStep);
-      setTimeout(recognitionLoop, 8000);
-    } else if(currentStep == 25) {
-      setTimeout(recognitionLoop, 200000);
-    } else if (result.state === "correct") {
-      switch(currentStep) {
-        case 2:
-          currentStep = 3;
-          renderStep(currentStep);
-          break;
-        case 5:
-          currentStep = 6;
-          renderStep(currentStep);
-          break;
-        case 8:
-          currentStep = 9;
-          renderStep(currentStep);
-          break;
-        case 11:
-          currentStep = 12;
-          renderStep(currentStep);
-          break;
-        case 14:
-          currentStep = 15;
-          renderStep(currentStep);
-          break;
-        case 17:
-          currentStep = 18;
-          renderStep(currentStep);
-          break;
-        case 20:
-          currentStep = 21;
-          renderStep(currentStep);
-          break;
-      } 
-
-      setTimeout(recognitionLoop, 8000);
-
-    } else if(result.state === "wrong") {
-      switch(currentStep) {
-        case 2:
-          currentStep = 4;
-          renderStep(currentStep);
-          break;
-        case 5:
-          currentStep = 7;
-          renderStep(currentStep);
-          break;
-        case 8:
-          currentStep = 10;
-          renderStep(currentStep);
-          break;
-        case 11:
-          currentStep = 13;
-          renderStep(currentStep);
-          break;
-        case 14:
-          currentStep = 16;
-          renderStep(currentStep);
-          break;
-        case 17:
-          currentStep = 19;
-          renderStep(currentStep);
-          break;
-        case 20:
-          currentStep = 22;
-          renderStep(currentStep);
-          break;
-      } 
-
-      setTimeout(recognitionLoop, 8000);
+    switch(currentStep) {
+      case 1:
+        delayedStep(2, delays.initialization);
+        break;
+      case 2:
+        handleValidation(result, 3, 4, 2);
+        break;
+      case 5:
+        handleValidation(result, 6, 7, 5);
+        break;
+      case 8:
+        handleValidation(result, 9, 10, 8);
+        break;
+      case 11:
+        handleValidation(result, 12, 13, 11);
+        break;
+      case 14:
+        handleValidation(result, 15, 16, 14);
+        break;
+      case 17:
+        handleValidation(result, 18, 19, 17);
+        break;
+      case 20:
+        handleValidation(result, 21, 22, 20);
+        break;
+      case 23:
+        goToStep(24);
+        delayedStep(25, delays.transition);
+        break;
+      case 25:
+        delayedStep(1, delays.final);
+        break;
+      default:
+        isProcessing = false;
+        break;
     }
+  } catch(error) {
+    console.error(error);
+    isProcessing = false;
   }
+
 }
 
 async function initializeSystem() {
+  let override = 1;
 
-  await initializeCamera();
+  if(override == 0) {
+    await initializeCamera();
 
-  await new Promise(resolve => setTimeout(resolve, 2000));
+    await new Promise(resolve => setTimeout(resolve, 2000));
 
-  renderStep(0);
+    renderStep(currentStep);
 
-  recognitionLoop();
-
+    recognitionLoop();
+  }
 };
 
 initializeSystem();
 
+const buttonStepMap = {
+  init: 1,
+  L1: 2,
+  L1c: 3,
+  L1w: 4,
+  R1: 5,
+  R1c: 6,
+  R1w: 7,
+  L2: 8,
+  L2c: 9,
+  L2w: 10,
+  R2: 11,
+  R2c: 12,
+  R2w: 13,
+  L3: 14,
+  L3c: 15,
+  L3w: 16,
+  R3: 17,
+  R3c: 18,
+  R3w: 19,
+  b4: 20,
+  b4c: 21,
+  b4w: 22,
+  b5: 23,
+  b6: 24,
+  b7: 25
+};
 
+window.addEventListener("DOMContentLoaded",() => {
+    Object.keys(buttonStepMap).forEach(id => {
+      const button = document.getElementById(id);
 
+      if (!button) {
+        console.log("Missing button:", id);
+        return;
+      }
 
+      button.addEventListener("click",() => {
+          const step = buttonStepMap[id];
+          goToStep(step);
+        }
+      );
+    });
+  }
+);
 
