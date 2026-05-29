@@ -19,8 +19,8 @@ body {
 }
 
 .paper {
-  max-width: 500px;
-  height: 600px;
+  max-width: 515px;
+  height: 650px;
   width: 100%;
   background-color: #e5e5e5;
   box-sizing: border-box;
@@ -43,7 +43,7 @@ body {
 }
 
 .biggest-box {
-  /* border: 1px solid black; */          
+  /* border: 1px solid black; */         
   display: grid;
   grid-template-columns: repeat(3, 1fr);
   grid-template-rows: repeat(3, 1fr);
@@ -56,7 +56,7 @@ body {
 }
 
 .box {
-  /* border: 1px solid black; */          
+  /* border: 1px solid black; */     
   display: grid;
   grid-template-columns: repeat(3, 1fr);
   grid-template-rows: repeat(3, 1fr);
