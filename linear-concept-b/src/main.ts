@@ -33,8 +33,8 @@ import {
 } from "./core/demoplayer.ts";
 import type { DetectedHand, DetectedObject, HandLandmark, Matrix2x2, Point2D } from "./types/index.ts";
 
-const CAM_W = 640;
-const CAM_H = 360;
+const CAM_W = 1920;
+const CAM_H = 1080;
 const CAM_FPS = 30;
 const BOARD_HALF = 10;
 const STABLE_THRESHOLD = 10;
@@ -1311,12 +1311,14 @@ function processInteractionFrame(
 
   // ── PHASE: TRANSFORMED (canvas Continue button + pan) ─────────────────────
   if (state.phase === "TRANSFORMED") {
-    const continueBtn = { x: gridCenterX + 200, y: gridCenterY + 130, w: 150, h: 50 };
+    const buttons = ui.getButtonRects();
+    const btnContinue = buttons.continue;
     if (
-      pointerCanvas.x >= continueBtn.x &&
-      pointerCanvas.x <= continueBtn.x + continueBtn.w &&
-      pointerCanvas.y >= continueBtn.y &&
-      pointerCanvas.y <= continueBtn.y + continueBtn.h
+      btnContinue &&
+      pointerCanvas.x >= btnContinue.x &&
+      pointerCanvas.x <= btnContinue.x + btnContinue.width &&
+      pointerCanvas.y >= btnContinue.y &&
+      pointerCanvas.y <= btnContinue.y + btnContinue.height
     ) {
       if (ds.dwellStart === 0) ds.dwellStart = Date.now();
       if (Date.now() - ds.dwellStart > HOVER_DWELL_MS) {

@@ -55,13 +55,22 @@
 </head>
 
 <body>
-  <video id="video-input" width="1280" height="720" playsinline autoplay muted></video>
+  <video id="video-input" width="1920" height="1080" playsinline autoplay muted></video>
   <canvas id="main-canvas"></canvas>
   <div id="p5-container"></div>
 
   <script async src="https://docs.opencv.org/4.x/opencv.js"
     onload="console.log('[LineAR] OpenCV.js ready.')"
     onerror="console.error('[LineAR] Failed to load OpenCV.js from CDN.'); window.__opencvFailed = true"></script>
+
+  <!-- Pure-JS ArUco: marker generation -->
+  <script async src="https://cdn.jsdelivr.net/npm/aruco-marker@3.0.1/dist/aruco-marker.umd.js"
+    onload="console.log('[LineAR] aruco-marker ready.')"
+    onerror="console.error('[LineAR] Failed to load aruco-marker.'); window.__arucoMarkerFailed = true"></script>
+
+  <!-- Pure-JS ArUco: detection (jcmellado/js-aruco, MIT) -->
+  <script src="/src/../public/js-aruco/cv.js"></script>
+  <script src="/src/../public/js-aruco/aruco.js"></script>
 
   <script>console.log("[LineAR] HTML loaded, about to fetch module…");</script>
   <script type="module" src="/src/main.ts"></script>

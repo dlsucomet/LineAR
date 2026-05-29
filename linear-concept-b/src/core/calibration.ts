@@ -1,39 +1,34 @@
 import type { Point2D } from "../types/index.ts";
 
+declare const CV: {
+  Image: new (width?: number, height?: number, data?: any) => any;
+};
+declare const AR: {
+  Detector: new () => { detect(image: any): { id: number; corners: { x: number; y: number }[] }[] };
+};
+
 // ── Marker Definitions ────────────────────────────────────────────────────
 
-/** ArUco markers (DICT_4X4_50) projected at these grid positions. 4×3 grid. */
+/** ArUco markers projected at these grid positions. 3×3 grid. */
 export const ARUCO_MARKERS: { id: number; gridX: number; gridY: number }[] = [
-  { id: 0,  gridX: -7, gridY:  7 },
-  { id: 1,  gridX: -3, gridY:  7 },
-  { id: 2,  gridX:  3, gridY:  7 },
-  { id: 3,  gridX:  7, gridY:  7 },
-  { id: 4,  gridX: -7, gridY:  2 },
-  { id: 5,  gridX: -3, gridY:  2 },
-  { id: 6,  gridX:  3, gridY:  2 },
-  { id: 7,  gridX:  7, gridY:  2 },
-  { id: 8,  gridX: -7, gridY: -3 },
-  { id: 9,  gridX: -3, gridY: -3 },
-  { id: 10, gridX:  3, gridY: -3 },
-  { id: 11, gridX:  7, gridY: -3 },
+  { id: 0, gridX: -7, gridY:  7 },
+  { id: 1, gridX:  0, gridY:  7 },
+  { id: 2, gridX:  7, gridY:  7 },
+  { id: 3, gridX: -7, gridY:  0 },
+  { id: 4, gridX:  0, gridY:  0 },
+  { id: 5, gridX:  7, gridY:  0 },
+  { id: 6, gridX: -7, gridY: -7 },
+  { id: 7, gridX:  0, gridY: -7 },
+  { id: 8, gridX:  7, gridY: -7 },
 ];
 
-/** Fallback corner circles at 4 corners (simpler detection). */
-export const CIRCLE_MARKERS: Point2D[] = [
-  { x: -7.5, y:  7.5 },
-  { x:  7.5, y:  7.5 },
-  { x:  7.5, y: -7.5 },
-  { x: -7.5, y: -7.5 },
-];
-
-const ARUCO_MARKER_PX = 48;
+const ARUCO_MARKER_PX = 120;
 const STORAGE_KEY = "linear_calibration_homography";
 
 // ── ArUco Support Check ────────────────────────────────────────────────────
 
 export function hasAruco(): boolean {
-  const cv = window.cv;
-  return !!(cv?.aruco?.detectMarkers && cv?.aruco?.drawMarker);
+  return !!(typeof AR !== "undefined" && AR?.Detector && (window as any).arucoMarker?.arucoMarkerMatrix);
 }
 
 // ── Marker Image Cache (ArUco) ──────────────────────────────────────────────
@@ -46,21 +41,38 @@ function getArucoCanvas(id: number): HTMLCanvasElement | null {
 }
 
 function buildArucoCache(): void {
-  const cv = window.cv;
-  if (!cv?.aruco?.drawMarker) { arucoCache = []; return; }
-
   try {
-    const dict = cv.aruco.getPredefinedDictionary(cv.aruco.DICT_4X4_50);
     arucoCache = [];
     for (const m of ARUCO_MARKERS) {
-      const markerMat = new cv.Mat();
-      cv.aruco.drawMarker(dict, m.id, ARUCO_MARKER_PX, markerMat, 1);
-      const temp = document.createElement("canvas");
-      temp.width = ARUCO_MARKER_PX;
-      temp.height = ARUCO_MARKER_PX;
-      cv.imshow(temp, markerMat);
-      markerMat.delete();
-      arucoCache.push(temp);
+      const matrix: number[][] = (window as any).arucoMarker.arucoMarkerMatrix(m.id);
+      if (!matrix) continue;
+      const canvas = document.createElement("canvas");
+      canvas.width = ARUCO_MARKER_PX;
+      canvas.height = ARUCO_MARKER_PX;
+      const ctx = canvas.getContext("2d")!;
+
+      // Black background (border)
+      ctx.fillStyle = "#000";
+      ctx.fillRect(0, 0, ARUCO_MARKER_PX, ARUCO_MARKER_PX);
+
+      // Draw white data cells
+      ctx.fillStyle = "#fff";
+      const cellSize = ARUCO_MARKER_PX / 7;
+      for (let row = 0; row < 5; row++) {
+        for (let col = 0; col < 5; col++) {
+          const cell = matrix[col];
+          if (cell?.[row]) {
+            ctx.fillRect(
+              (col + 1) * cellSize,
+              (row + 1) * cellSize,
+              cellSize,
+              cellSize,
+            );
+          }
+        }
+      }
+
+      arucoCache.push(canvas);
     }
   } catch (e) {
     console.warn("[Calibration] Failed to build ArUco cache:", e);
@@ -71,171 +83,51 @@ function buildArucoCache(): void {
 // ── Detection ───────────────────────────────────────────────────────────────
 
 export interface DetectionResult {
-  cameraPoints: Point2D[];  // detected positions in camera pixel space
-  gridPoints: Point2D[];    // corresponding known grid positions
-  method: "aruco" | "circles";
+  cameraPoints: Point2D[];
+  gridPoints: Point2D[];
+  method: "aruco";
 }
 
 /**
- * Attempt to detect calibration markers in a camera frame.
- * Tries ArUco first, falls back to circle blob detection.
+ * Detect calibration markers in a camera frame using pure-JS ArUco.
  */
 export function detectMarkers(
   imageData: ImageData,
-  camW: number,
-  camH: number,
+  _camW: number,
+  _camH: number,
 ): DetectionResult | null {
-  const cv = window.cv;
-  if (!cv) return null;
+  if (!hasAruco()) return null;
 
-  const src = cv.matFromImageData(imageData);
-  const gray = new cv.Mat();
-  cv.cvtColor(src, gray, cv.COLOR_RGBA2GRAY, 0);
-
-  let result: DetectionResult | null = null;
-
-  // Try ArUco
-  if (hasAruco()) {
-    result = detectAruco(gray, cv);
-  }
-
-  // Fallback: corner circles
-  if (!result) {
-    result = detectCircles(gray, cv, camW, camH);
-  }
-
-  src.delete();
-  gray.delete();
-  return result;
+  const cvImage = new CV.Image(imageData.width, imageData.height, imageData.data);
+  return detectAruco(cvImage);
 }
 
-function detectAruco(gray: any, cv: any): DetectionResult | null {
+function detectAruco(cvImage: any): DetectionResult | null {
   try {
-    const dict = cv.aruco.getPredefinedDictionary(cv.aruco.DICT_4X4_50);
-    const corners = new cv.MatVector();
-    const ids = new cv.Mat();
-    cv.aruco.detectMarkers(gray, dict, corners, ids);
+    const detector = new AR.Detector();
+    const markers = detector.detect(cvImage);
 
-    if (ids.rows === 0) {
-      corners.delete();
-      ids.delete();
-      return null;
-    }
+    if (!markers || markers.length === 0) return null;
 
     const cameraPoints: Point2D[] = [];
     const gridPoints: Point2D[] = [];
 
-    for (let i = 0; i < ids.rows; i++) {
-      const id = ids.data32S[i];
-      const marker = ARUCO_MARKERS.find((m) => m.id === id);
-      if (!marker) continue;
+    for (const marker of markers) {
+      const markerDef = ARUCO_MARKERS.find((m) => m.id === marker.id);
+      if (!markerDef) continue;
 
-      const cornerMat = corners.get(i);
-      // cornerMat is 4×1 CV_32FC2 (or 1×4 CV_32FC2 — varies by OpenCV.js version)
-      let cx = 0, cy = 0;
-      const data = cornerMat.data32S ?? cornerMat.data32F;
-      if (!data) continue;
-
-      // Handle both possible layouts
-      const rows = cornerMat.rows;
-      const cols = cornerMat.cols;
-      const step = cornerMat.channels();
-
-      if (rows === 4 && cols === 1 && step >= 2) {
-        // Layout: 4 rows × 1 col, each element is (x, y)
-        for (let j = 0; j < 4; j++) {
-          cx += data[j * step];
-          cy += data[j * step + 1];
-        }
-      } else if (rows === 1 && cols >= 4 && step >= 2) {
-        // Layout: 1 row × N cols
-        for (let j = 0; j < Math.min(cols, 4); j++) {
-          cx += data[j * step];
-          cy += data[j * step + 1];
-        }
-      }
-
-      cx /= 4;
-      cy /= 4;
+      const cx = marker.corners.reduce((s: number, c: { x: number; y: number }) => s + c.x, 0) / 4;
+      const cy = marker.corners.reduce((s: number, c: { x: number; y: number }) => s + c.y, 0) / 4;
 
       cameraPoints.push({ x: cx, y: cy });
-      gridPoints.push({ x: marker.gridX, y: marker.gridY });
+      gridPoints.push({ x: markerDef.gridX, y: markerDef.gridY });
     }
-
-    corners.delete();
-    ids.delete();
 
     if (cameraPoints.length < 4) return null;
 
     return { cameraPoints, gridPoints, method: "aruco" };
   } catch (e) {
     console.warn("[Calibration] ArUco detection failed:", e);
-    return null;
-  }
-}
-
-function detectCircles(gray: any, cv: any, camW: number, camH: number): DetectionResult | null {
-  try {
-    // Threshold to find bright blobs (projected circles are bright on white cartolina)
-    const thresholded = new cv.Mat();
-    cv.threshold(gray, thresholded, 200, 255, cv.THRESH_BINARY);
-
-    const contours = new cv.MatVector();
-    const hierarchy = new cv.Mat();
-    cv.findContours(thresholded, contours, hierarchy, cv.RETR_EXTERNAL, cv.CHAIN_APPROX_SIMPLE);
-
-    const blobs: { x: number; y: number; area: number }[] = [];
-
-    for (let i = 0; i < contours.size(); i++) {
-      const contour = contours.get(i);
-      const area = cv.contourArea(contour);
-      if (area < 100 || area > camW * camH * 0.1) { contour.delete(); continue; }
-
-      const perimeter = cv.arcLength(contour, true);
-      if (perimeter <= 0) { contour.delete(); continue; }
-      const circularity = 4 * Math.PI * area / (perimeter * perimeter);
-      if (circularity < 0.5) { contour.delete(); continue; }
-
-      const M = cv.moments(contour);
-      if (M.m00 === 0) { contour.delete(); continue; }
-      const cx = M.m10 / M.m00;
-      const cy = M.m01 / M.m00;
-
-      blobs.push({ x: cx, y: cy, area });
-      contour.delete();
-    }
-
-    thresholded.delete();
-    hierarchy.delete();
-    contours.delete();
-
-    if (blobs.length < 4) return null;
-
-    // Sort by area descending, take top 4
-    blobs.sort((a, b) => b.area - a.area);
-    const top4 = blobs.slice(0, 4);
-
-    // Sort by position: top-left, top-right, bottom-right, bottom-left
-    // (matching CIRCLE_MARKERS order)
-    const cx = top4.reduce((s, b) => s + b.x, 0) / top4.length;
-    const cy = top4.reduce((s, b) => s + b.y, 0) / top4.length;
-
-    const quadrant = (b: { x: number; y: number }): number => {
-      if (b.x <= cx && b.y <= cy) return 0; // top-left
-      if (b.x > cx && b.y <= cy) return 1;  // top-right
-      if (b.x > cx && b.y > cy) return 2;   // bottom-right
-      return 3;                               // bottom-left
-    };
-
-    const sorted = [...top4].sort((a, b) => quadrant(a) - quadrant(b));
-
-    return {
-      cameraPoints: sorted.map((b) => ({ x: b.x, y: b.y })),
-      gridPoints: [...CIRCLE_MARKERS],
-      method: "circles",
-    };
-  } catch (e) {
-    console.warn("[Calibration] Circle detection failed:", e);
     return null;
   }
 }
@@ -257,12 +149,10 @@ export function computeHomography(
     const srcMat = cv.matFromArray(srcPoints.length, 1, cv.CV_32FC2);
     const dstMat = cv.matFromArray(dstPoints.length, 1, cv.CV_32FC2);
 
-    // Fill source points
     for (let i = 0; i < srcPoints.length; i++) {
       srcMat.data32F[i * 2] = srcPoints[i]!.x;
       srcMat.data32F[i * 2 + 1] = srcPoints[i]!.y;
     }
-    // Fill destination points
     for (let i = 0; i < dstPoints.length; i++) {
       dstMat.data32F[i * 2] = dstPoints[i]!.x;
       dstMat.data32F[i * 2 + 1] = dstPoints[i]!.y;
@@ -271,8 +161,6 @@ export function computeHomography(
     const mask = new cv.Mat();
     const H = cv.findHomography(srcMat, dstMat, cv.RANSAC, 3, mask);
 
-    // Extract 3×3 matrix as row-major array
-    // H is CV_64F (double) → H.data64F
     const matrix: number[] = [];
     for (let i = 0; i < 9; i++) {
       matrix.push(H.data64F[i]);

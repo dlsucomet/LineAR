@@ -12,7 +12,6 @@ import {
 } from "../core/appstatemachine.ts";
 import {
   ARUCO_MARKERS,
-  CIRCLE_MARKERS,
   getMarkerCanvas,
   ARUCO_MARKER_PX,
 } from "../core/calibration.ts";
@@ -22,7 +21,7 @@ import type { DetectedHand, Matrix2x2, Point2D } from "../types/index.ts";
 // Colours
 // ---------------------------------------------------------------------------
 const C = {
-  gridLine: "rgba(100, 160, 220, 0.55)",
+  gridLine: "rgba(40, 80, 140, 0.7)",
   gridBg: "#eef4fb",
   instrBlue: "#1a3a6b",
   instrCyan: "#1a7a9a",
@@ -140,7 +139,14 @@ export class TabletopUI {
 
   // Demo setters
   setFingerPosition(pos: Point2D | null): void { this.fingerPos = pos; }
-  setDwellProgress(v: number): void { this.dwellProgress = v; }
+  setDwellProgress(e1: number, e2?: number): void {
+    if (e2 === undefined) {
+      this.dwellProgress = e1;
+    } else {
+      this.e1DwellProgress = e1;
+      this.e2DwellProgress = e2;
+    }
+  }
   setDemoInstructions(overrides: Record<string, string> | null): void { this.demoInstructions = overrides; }
 
   setCornerDrag(index: number, pos: Point2D | null, snapped: boolean): void {
@@ -157,7 +163,6 @@ export class TabletopUI {
   setGhostArrows(e1: Point2D, e2: Point2D): void { this.ghostArrows = { e1, e2 }; }
   setArrowSnapped(e1: boolean, e2: boolean): void { this.e1Snapped = e1; this.e2Snapped = e2; }
   setArrowLocked(e1: boolean, e2: boolean): void { this.e1Locked = e1; this.e2Locked = e2; }
-  setDwellProgress(e1: number, e2: number): void { this.e1DwellProgress = e1; this.e2DwellProgress = e2; }
   setRawHands(hands: DetectedHand[] | null): void { this.rawHands = hands; }
 
   getButtonRects(): { yes: DOMRect | null; no: DOMRect | null; continue: DOMRect | null } {
@@ -306,8 +311,8 @@ export class TabletopUI {
     ctx.restore();
 
     // Grid border (fixed)
-    ctx.strokeStyle = "rgba(100,160,220,0.8)";
-    ctx.lineWidth = 1.2;
+    ctx.strokeStyle = "rgba(40,80,140,0.85)";
+    ctx.lineWidth = 2;
     ctx.strokeRect(grid.x, grid.y, grid.width, grid.height);
 
     // Fixed position elements
@@ -339,27 +344,11 @@ export class TabletopUI {
 
     const { ctx } = this;
 
-    // Try ArUco markers first
-    const firstMarker = getMarkerCanvas(ARUCO_MARKERS[0]!.id);
-    if (firstMarker) {
-      for (const m of ARUCO_MARKERS) {
-        const canvas = getMarkerCanvas(m.id);
-        if (!canvas) continue;
-        const p = this.gridToCanvas({ x: m.gridX, y: m.gridY }, grid);
-        ctx.drawImage(canvas, p.x - ARUCO_MARKER_PX / 2, p.y - ARUCO_MARKER_PX / 2);
-      }
-    } else {
-      // Fallback: 4 bright corner circles
-      for (const m of CIRCLE_MARKERS) {
-        const p = this.gridToCanvas(m, grid);
-        ctx.beginPath();
-        ctx.arc(p.x, p.y, 16, 0, Math.PI * 2);
-        ctx.fillStyle = "#ffffff";
-        ctx.fill();
-        ctx.strokeStyle = "#000000";
-        ctx.lineWidth = 2.5;
-        ctx.stroke();
-      }
+    for (const m of ARUCO_MARKERS) {
+      const canvas = getMarkerCanvas(m.id);
+      if (!canvas) continue;
+      const p = this.gridToCanvas({ x: m.gridX, y: m.gridY }, grid);
+      ctx.drawImage(canvas, p.x - ARUCO_MARKER_PX / 2, p.y - ARUCO_MARKER_PX / 2);
     }
   }
 
@@ -373,7 +362,7 @@ export class TabletopUI {
     const firstCol = Math.ceil((0 - cx) / scale);
     const lastCol = Math.floor((W - cx) / scale);
     ctx.strokeStyle = C.gridLine;
-    ctx.lineWidth = 0.8;
+    ctx.lineWidth = 1.5;
     for (let i = firstCol; i <= lastCol; i++) {
       const x = cx + i * scale;
       ctx.beginPath();
