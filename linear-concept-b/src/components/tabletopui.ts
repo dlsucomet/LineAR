@@ -52,6 +52,12 @@ const GRID_SNAP_RADIUS = 2.0;
 const TEXT_STRIP_H = 40;
 const PAN_PADDING = 4;
 
+/** Basis vector target positions (grid coords, within ±3 of origin).
+ *  Red arrow (e1) locks at TARGET_E1 {3,0}, green arrow (e2) locks at TARGET_E2 {-1,2}.
+ *  Dwell 1.5 s on the matching coloured circle to lock. */
+const TARGET_E1 = { x: 3, y: 0 };
+const TARGET_E2 = { x: -1, y: 2 };
+
 // ---------------------------------------------------------------------------
 // TabletopUI
 // ---------------------------------------------------------------------------
@@ -108,6 +114,15 @@ export class TabletopUI {
 
   // Raw hand data for skeleton visualization
   private rawHands: DetectedHand[] | null = null;
+
+  // Camera background
+  private videoEl: HTMLVideoElement | null = null;
+  private flipH = false;
+  private flipV = false;
+
+  setVideoElement(el: HTMLVideoElement | null): void { this.videoEl = el; }
+  setFlipH(h: boolean): void { this.flipH = h; }
+  setFlipV(v: boolean): void { this.flipV = v; }
 
   onYes: (() => void) | null = null;
   onNo: (() => void) | null = null;
@@ -276,8 +291,8 @@ export class TabletopUI {
 
     const grid = this.computeGridRect();
 
-    // Grid background
-    ctx.fillStyle = C.gridBg;
+    // Grid background — flash yellow during CALIBRATING for visibility
+    ctx.fillStyle = state.phase === "CALIBRATING" ? "#fff1a0" : C.gridBg;
     ctx.fillRect(grid.x, grid.y, grid.width, grid.height);
 
     // ── Pannable content (clipped to grid) ──
@@ -286,6 +301,7 @@ export class TabletopUI {
     ctx.rect(grid.x, grid.y, grid.width, grid.height);
     ctx.clip();
 
+    this.drawCameraBackground(grid);
     this.drawGrid(grid);
     this.drawCalibrationMarkers(grid, state.phase);
     this.drawDetectionOutline(grid, state.phase);
@@ -298,6 +314,7 @@ export class TabletopUI {
     }
     if (state.phase === "SHOW_BASIS_VECTORS" && this.ghostArrows) {
       this.drawGhostArrows(grid, state.phase);
+      this.drawTargetCircles(grid);
       this.drawArrowDragFeedback(grid);
     }
     if (showCorners(state.phase) && this.corners) this.drawCorners(grid, state.phase, state.appliedMatrix, anim);
@@ -338,17 +355,63 @@ export class TabletopUI {
   /** Get the most recently computed grid rect (for external coordinate conversions). */
   getLastGridRect(): DOMRect | null { return this.lastGridRect; }
 
+  /** Draw the live camera feed as the grid background. */
+  private drawCameraBackground(grid: DOMRect): void {
+    const el = this.videoEl;
+    if (!el) return;
+    const vw = el.videoWidth;
+    const vh = el.videoHeight;
+    if (!vw || !vh) return;
+    const { ctx } = this;
+    const scaleX = grid.width / vw;
+    const scaleY = grid.height / vh;
+    const uniformScale = Math.min(scaleX, scaleY);
+    const dx = grid.x + (grid.width - vw * uniformScale) / 2;
+    const dy = grid.y + (grid.height - vh * uniformScale) / 2;
+    ctx.save();
+    ctx.translate(dx, dy);
+    if (this.flipH) { ctx.translate(vw * uniformScale, 0); ctx.scale(-1, 1); }
+    if (this.flipV) { ctx.translate(0, vh * uniformScale); ctx.scale(1, -1); }
+    ctx.drawImage(el, 0, 0, vw * uniformScale, vh * uniformScale);
+    ctx.restore();
+  }
+
   /** Draw calibration markers during CALIBRATING phase. */
   private drawCalibrationMarkers(grid: DOMRect, phase: AppPhase): void {
     if (phase !== "CALIBRATING") return;
 
     const { ctx } = this;
+    console.log("[TabletopUI] drawCalibrationMarkers — phase is CALIBRATING");
 
     for (const m of ARUCO_MARKERS) {
       const canvas = getMarkerCanvas(m.id);
-      if (!canvas) continue;
       const p = this.gridToCanvas({ x: m.gridX, y: m.gridY }, grid);
-      ctx.drawImage(canvas, p.x - ARUCO_MARKER_PX / 2, p.y - ARUCO_MARKER_PX / 2);
+      if (canvas) {
+        console.log("[TabletopUI] Drawing marker", m.id, "at", p.x, p.y, "canvas size:", canvas.width, "x", canvas.height);
+        const half = ARUCO_MARKER_PX / 2;
+        // Draw marker canvas
+        ctx.drawImage(canvas, p.x - half, p.y - half);
+        // Bright cyan border for visibility
+        ctx.strokeStyle = "#00ffff";
+        ctx.lineWidth = 3;
+        ctx.strokeRect(p.x - half, p.y - half, ARUCO_MARKER_PX, ARUCO_MARKER_PX);
+        // White ID label
+        ctx.fillStyle = "#fff";
+        ctx.font = "bold 14px sans-serif";
+        ctx.strokeStyle = "#000";
+        ctx.lineWidth = 3;
+        ctx.strokeText(`${m.id}`, p.x - 10, p.y - half - 4);
+        ctx.fillStyle = "#fff";
+        ctx.fillText(`${m.id}`, p.x - 10, p.y - half - 4);
+      } else {
+        // Diagnostic fallback: visible red square if marker canvas missing
+        console.warn("[TabletopUI] Marker canvas null for id", m.id, "- drawing red fallback");
+        ctx.fillStyle = "rgba(255, 0, 0, 0.8)";
+        ctx.fillRect(p.x - 15, p.y - 15, 30, 30);
+        ctx.fillStyle = "#fff";
+        ctx.font = "bold 12px sans-serif";
+        ctx.fillText(`${m.id}`, p.x - 6, p.y + 5);
+      }
     }
   }
 
@@ -782,7 +845,32 @@ export class TabletopUI {
     ctx.restore();
   }
 
-  /** Draw snap/lock indicators on basis arrows. */
+  /** Draw semi-transparent target circles at TARGET_E1 (red) and TARGET_E2 (green).
+   *  These are the only positions where each basis arrow can lock after 1.5 s dwell. */
+  private drawTargetCircles(grid: DOMRect): void {
+    const { ctx } = this;
+    const cx = grid.x + grid.width * 0.5 + this.panX;
+    const cy = grid.y + grid.height * 0.5 + this.panY;
+    const scale = Math.min(grid.width, grid.height) / 20;
+
+    const drawCircle = (gx: number, gy: number, color: string) => {
+      const px = cx + gx * scale;
+      const py = cy - gy * scale;
+      ctx.beginPath();
+      ctx.arc(px, py, 12, 0, Math.PI * 2);
+      ctx.fillStyle = color;
+      ctx.fill();
+      ctx.strokeStyle = "rgba(0,0,0,0.4)";
+      ctx.lineWidth = 2;
+      ctx.stroke();
+    };
+
+    drawCircle(TARGET_E1.x, TARGET_E1.y, "rgba(213, 58, 58, 0.5)");
+    drawCircle(TARGET_E2.x, TARGET_E2.y, "rgba(58, 213, 107, 0.5)");
+  }
+
+  /** Draw snap/lock indicators on basis arrows.
+   *  Snapped arrows show a highlight ring; locked arrows show a blue (#3a7bd5) outline. */
   private drawArrowDragFeedback(grid: DOMRect): void {
     const ctx = this.ctx;
     const cx = grid.x + grid.width * 0.5 + this.panX;
@@ -793,10 +881,11 @@ export class TabletopUI {
 
     const drawTip = (tx: number, ty: number, snapped: boolean, locked: boolean, snapColor: string, snapBg: string) => {
       if (locked) {
+        // Blue outline ring indicates the arrow is permanently locked at its target
         ctx.beginPath();
-        ctx.arc(tx, ty, 10, 0, Math.PI * 2);
-        ctx.strokeStyle = "#fff";
-        ctx.lineWidth = 3;
+        ctx.arc(tx, ty, 12, 0, Math.PI * 2);
+        ctx.strokeStyle = "#3a7bd5";
+        ctx.lineWidth = 4;
         ctx.stroke();
       } else if (snapped) {
         ctx.beginPath();

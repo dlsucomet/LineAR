@@ -49,15 +49,19 @@ AR.Detector.prototype.detect = function(image){
   
   this.contours = CV.findContours(this.thres, this.binary);
 
-  this.candidates = this.findCandidates(this.contours, image.width * 0.20, 0.05, 10);
+  this.candidates = this.findCandidates(this.contours, image.width * 0.02, 0.08, 5);
   this.candidates = this.clockwiseCorners(this.candidates);
   this.candidates = this.notTooNear(this.candidates, 10);
 
-  return this.findMarkers(this.grey, this.candidates, 49);
+  var markers = this.findMarkers(this.grey, this.candidates, 49);
+  console.log("[aruco.js] " + image.width + "x" + image.height + " contours=" + this.contours.length + " candidates=" + this.candidates.length + " markers=" + markers.length);
+  return markers;
 };
 
 AR.Detector.prototype.findCandidates = function(contours, minSize, epsilon, minLength){
   var candidates = [], len = contours.length, contour, poly, i;
+
+  var gate1 = 0, gate2_vert = 0, gate2_not4 = 0, gate3 = 0;
 
   this.polys = [];
   
@@ -65,19 +69,24 @@ AR.Detector.prototype.findCandidates = function(contours, minSize, epsilon, minL
     contour = contours[i];
 
     if (contour.length >= minSize){
+      gate1++;
       poly = CV.approxPolyDP(contour, contour.length * epsilon);
 
       this.polys.push(poly);
 
-      if ( (4 === poly.length) && ( CV.isContourConvex(poly) ) ){
-
+      if (4 === poly.length){
+        gate2_vert++;
         if ( CV.minEdgeLength(poly) >= minLength){
+          gate3++;
           candidates.push(poly);
         }
+      } else {
+        gate2_not4++;
       }
     }
   }
 
+  console.log("[aruco.js] findCandidates: total=" + len + " passMinSize=" + gate1 + " poly4vert=" + gate2_vert + " polyNot4=" + gate2_not4 + " passMinEdge=" + gate3 + " finalCandidates=" + candidates.length);
   return candidates;
 };
 
@@ -142,7 +151,7 @@ AR.Detector.prototype.findMarkers = function(imageSrc, candidates, warpSize){
     candidate = candidates[i];
 
     CV.warp(imageSrc, this.homography, candidate, warpSize);
-  
+
     CV.threshold(this.homography, this.homography, CV.otsu(this.homography) );
 
     marker = this.getMarker(this.homography, candidate);
@@ -150,26 +159,32 @@ AR.Detector.prototype.findMarkers = function(imageSrc, candidates, warpSize){
       markers.push(marker);
     }
   }
-  
+
+  console.log("[aruco.js] findMarkers: candidates=" + len + " markerOk=" + markers.length + " ids=[" + markers.map(function(m){ return m.id + "(" + m.distance + ")"; }).join(",") + "]");
   return markers;
+};
+
+AR.Detector.prototype.checkBorder = function(imageSrc){
+  var width = (imageSrc.width / 7) >>> 0,
+      minZero = (width * width) >> 1,
+      square, i, j, inc;
+  for (i = 0; i < 7; ++ i){
+    inc = (0 === i || 6 === i)? 1: 6;
+    for (j = 0; j < 7; j += inc){
+      square = {x: j * width, y: i * width, width: width, height: width};
+      if ( CV.countNonZero(imageSrc, square) > minZero){
+        return false;
+      }
+    }
+  }
+  return true;
 };
 
 AR.Detector.prototype.getMarker = function(imageSrc, candidate){
   var width = (imageSrc.width / 7) >>> 0,
       minZero = (width * width) >> 1,
       bits = [], rotations = [], distances = [],
-      square, pair, inc, i, j;
-
-  for (i = 0; i < 7; ++ i){
-    inc = (0 === i || 6 === i)? 1: 6;
-    
-    for (j = 0; j < 7; j += inc){
-      square = {x: j * width, y: i * width, width: width, height: width};
-      if ( CV.countNonZero(imageSrc, square) > minZero){
-        return null;
-      }
-    }
-  }
+      square, pair, i, j;
 
   for (i = 0; i < 5; ++ i){
     bits[i] = [];
@@ -196,13 +211,15 @@ AR.Detector.prototype.getMarker = function(imageSrc, candidate){
     }
   }
 
-  if (0 !== pair.first){
+  if (pair.first > 6){
     return null;
   }
 
-  return new AR.Marker(
+  var marker = new AR.Marker(
     this.mat2id( rotations[pair.second] ), 
     this.rotate2(candidate, 4 - pair.second) );
+  marker.distance = pair.first;
+  return marker;
 };
 
 AR.Detector.prototype.hammingDistance = function(bits){

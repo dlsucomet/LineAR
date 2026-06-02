@@ -47,17 +47,21 @@ const GRID_BOUNDS = 15;
 // ── Coordinate Mapper (calibrated camera→grid transform) ─────────────────
 let coordMapper: CoordinateMapper;
 
-// ── Hand Tracking Mirror Config ────────────────────────────────────────────
-// Reads public/mirror-config.txt (0 = true view, 1 = mirrored selfie mode).
-// Defaults to true view (0) if file is missing.
-let mirrorHandTracking = false;
+// ── Camera Flip Config ─────────────────────────────────────────────────────
+// Reads public/mirror-config.txt (comma-separated: flipH,flipV).
+// 0 = no flip, 1 = flip. Defaults to "0,0" if file is missing.
+let flipH = true;
+let flipV = true;
 
 async function loadMirrorConfig() {
   try {
     const res = await fetch('/mirror-config.txt');
-    mirrorHandTracking = (await res.text()).trim() === '1';
+    const parts = (await res.text()).trim().split(',');
+    flipH = parts[0] === '1';
+    flipV = parts[1] === '1';
   } catch {
-    mirrorHandTracking = false;
+    flipH = true;
+    flipV = true;
   }
 }
 loadMirrorConfig();
@@ -113,10 +117,6 @@ window.addEventListener("load", () => {
       // if (state.phase === "TRANSFORMED") {
       //   setTimeout(() => dispatch({ type: "TRANSFORMATION_DONE" }), 1800);
       // }
-      // Auto-advance from POINTS_CALCULATED → SHOW_BASIS_VECTORS (skip corner adjustment)
-      if (state.phase === "POINTS_CALCULATED") {
-        setTimeout(() => dispatch({ type: "PHASE_ADVANCE" }), 1500);
-      }
     }
 
   }
@@ -124,9 +124,15 @@ window.addEventListener("load", () => {
   // ── Canvas UI Setup ───────────────────────────────────────────────────
   const ui = new TabletopUI(canvas);
   ui.resize(window.innerWidth, window.innerHeight);
+  ui.setVideoElement(video);
   ui.onYes = () => dispatch({ type: "CONFIRM_YES" });
   ui.onNo = () => dispatch({ type: "CONFIRM_NO" });
+  ui.onContinue = () => dispatch({ type: "TRANSFORMATION_DONE" });
   window.addEventListener("resize", () => ui.resize(window.innerWidth, window.innerHeight));
+  window.addEventListener("keydown", (e) => {
+    if (e.key === 'h' || e.key === 'H') { flipH = !flipH; console.log("[LineAR] flipH =", flipH); }
+    if (e.key === 'v' || e.key === 'V') { flipV = !flipV; console.log("[LineAR] flipV =", flipV); }
+  });
 
   const ds = createDemoState();
 
@@ -140,15 +146,17 @@ window.addEventListener("load", () => {
     //   ui.showDoneButton = false;
     //   dispatch({ type: "OBJECTS_CLEARED" });
     // };
-    ui.onContinue = () => dispatch({ type: "TRANSFORMATION_DONE" });
   }
 
   // ── Unified 60FPS Render & Interaction Loop ───────────────────────────
   (function renderLoop() {
+    ui.setFlipH(flipH);
+    ui.setFlipV(flipV);
     ui.draw(state);
 
     // 1. Track local state wipes on phase transitions
     if (state.phase !== ds.previousPhase) {
+      console.log("[LineAR] Phase transition ->", state.phase);
       ds.previousPhase = state.phase;
       if (state.phase === "POINTS_CALCULATED") {
         ds.isDraggingCornerA = false;
@@ -232,6 +240,10 @@ window.addEventListener("load", () => {
       if (state.phase === "WAITING_FOR_OBJECT") {
         ui.setPanBounds(null);
         ui.setPanOffset(0, 0);
+      }
+      // Auto-advance from SHOW_CORNERS → SHOW_BASIS_VECTORS after brief pause
+      if (state.phase === "SHOW_CORNERS") {
+        setTimeout(() => dispatch({ type: "PHASE_ADVANCE" }), 1200);
       }
     }
 
@@ -317,9 +329,9 @@ async function bootstrap(
       if (savedMatrix) {
         coordMapper.setTransform({ type: "homography", matrix: savedMatrix });
         console.log("[LineAR] Loaded saved calibration");
+        console.warn("[LineAR] Run localStorage.clear() in DevTools console and reload to re-calibrate");
       } else {
         console.log("[LineAR] No calibration found — entering calibration mode");
-        dispatch({ type: "CALIBRATE" });
         const calibrated = await runCalibrationSequence(
           cameraTracker, coordMapper, 3,
           (msg) => ui.setDemoInstructions({ CALIBRATING: msg }),
@@ -450,8 +462,8 @@ async function bootstrap(
         const offsetY = (canvas.height - vh * uniformScale) / 2;
 
         const toMirroredCanvas = (lm: HandLandmark): Point2D => ({
-          x: (mirrorHandTracking ? vw - lm.x : lm.x) * uniformScale + offsetX,
-          y: lm.y * uniformScale + offsetY,
+          x: (flipH ? vw - lm.x : lm.x) * uniformScale + offsetX,
+          y: (flipV ? vh - lm.y : lm.y) * uniformScale + offsetY,
         });
 
         if (hands.length > 0) {
@@ -735,8 +747,8 @@ async function setupDemoTracker(canvas: HTMLCanvasElement, video: HTMLVideoEleme
     const offsetY = (canvas.height - vh * uniformScale) / 2;
 
     const toMirroredCanvas = (lm: HandLandmark): Point2D => ({
-      x: (mirrorHandTracking ? vw - lm.x : lm.x) * uniformScale + offsetX,
-      y: lm.y * uniformScale + offsetY,
+      x: (flipH ? vw - lm.x : lm.x) * uniformScale + offsetX,
+      y: (flipV ? vh - lm.y : lm.y) * uniformScale + offsetY,
     });
 
     if (hands.length > 0) {
@@ -1073,51 +1085,13 @@ function processInteractionFrame(
     const dist = (a: Point2D, b: Point2D) =>
       Math.sqrt((a.x - b.x) ** 2 + (a.y - b.y) ** 2);
 
-    // ── 1. Auto-lock: placed arrow → locked after ARROW_PLACED_LOCK_MS ─────
-    if (ds.e1Placed && !ds.e1Locked && ds.e1PlaceTime > 0 &&
-        Date.now() - ds.e1PlaceTime >= ARROW_PLACED_LOCK_MS) {
-      ds.e1Locked = true;
-      ds.e1LockTime = Date.now();
-      ds.e1PlaceTime = 0;
-      ui.setArrowLocked(true, ds.e2Locked);
-      ui.setArrowSnapped(true, ds.e2Placed || ds.e2Locked);
-      console.log("[LineAR] e1 locked after placement");
-    }
-    if (ds.e2Placed && !ds.e2Locked && ds.e2PlaceTime > 0 &&
-        Date.now() - ds.e2PlaceTime >= ARROW_PLACED_LOCK_MS) {
-      ds.e2Locked = true;
-      ds.e2LockTime = Date.now();
-      ds.e2PlaceTime = 0;
-      ui.setArrowLocked(ds.e1Locked, true);
-      ui.setArrowSnapped(ds.e1Placed || ds.e1Locked, true);
-      console.log("[LineAR] e2 locked after placement");
-    }
+    const TARGET_E1 = { x: 3, y: 0 };
+    const TARGET_E2 = { x: -1, y: 2 };
 
-    // ── Cooldown: locked arrow → grabbable after ARROW_LOCK_COOLDOWN_MS ─────
-    if (ds.e1Locked && ds.e1LockTime > 0 &&
-        Date.now() - ds.e1LockTime >= ARROW_LOCK_COOLDOWN_MS) {
-      ds.e1Locked = false;
-      ds.e1LockTime = 0;
-      ds.e1Placed = true;
-      ds.e1PlaceTime = Date.now();
-      ds.e1ReGrabCooldown = Date.now() + 800;
-      ui.setArrowLocked(false, ds.e2Locked);
-      ui.setArrowSnapped(true, ds.e2Placed || ds.e2Locked);
-      console.log("[LineAR] e1 cooldown expired, grabbable again");
-    }
-    if (ds.e2Locked && ds.e2LockTime > 0 &&
-        Date.now() - ds.e2LockTime >= ARROW_LOCK_COOLDOWN_MS) {
-      ds.e2Locked = false;
-      ds.e2LockTime = 0;
-      ds.e2Placed = true;
-      ds.e2PlaceTime = Date.now();
-      ds.e2ReGrabCooldown = Date.now() + 800;
-      ui.setArrowLocked(ds.e1Locked, false);
-      ui.setArrowSnapped(ds.e1Placed || ds.e1Locked, true);
-      console.log("[LineAR] e2 cooldown expired, grabbable again");
-    }
+    const isOnTarget = (nx: number, ny: number, target: Point2D) =>
+      nx === target.x && ny === target.y;
 
-    // ── 2. Handle E1 dragging (dwell-on-snap) ────────────────────────────────
+    // ── 1. Handle E1 dragging (dwell at target to lock) ─────────────────────
     if (ds.isDraggingE1) {
       let rawX = (pointerCanvas.x - gridCenterX) / scale;
       let rawY = -(pointerCanvas.y - gridCenterY) / scale;
@@ -1138,19 +1112,20 @@ function processInteractionFrame(
         mat[0] = nearestX;
         mat[2] = nearestY;
 
+        const onTarget = isOnTarget(nearestX, nearestY, TARGET_E1);
         const sameInt = ds.e1DwellIntersection &&
           ds.e1DwellIntersection.x === nearestX && ds.e1DwellIntersection.y === nearestY;
         if (!sameInt) {
-          ds.e1DwellStart = Date.now();
+          ds.e1DwellStart = onTarget ? Date.now() : 0;
           ds.e1DwellIntersection = { x: nearestX, y: nearestY };
-        } else if (Date.now() - ds.e1DwellStart >= ARROW_DWELL_PLACE_MS) {
+        } else if (onTarget && Date.now() - ds.e1DwellStart >= ARROW_DWELL_PLACE_MS) {
           ds.isDraggingE1 = false;
-          ds.e1Placed = true;
-          ds.e1PlaceTime = Date.now();
-          ds.e1ReGrabCooldown = Date.now() + 800;
+          ds.e1Locked = true;
           ds.e1DwellStart = 0;
           ds.e1DwellIntersection = null;
-          console.log("[LineAR] e1 placed at", mat[0], mat[2]);
+          ui.setArrowLocked(true, ds.e2Locked);
+          ui.setArrowSnapped(true, false);
+          console.log("[LineAR] e1 locked at TARGET_E1", mat[0], mat[2]);
         }
       } else {
         mat[0] = safeX;
@@ -1161,7 +1136,7 @@ function processInteractionFrame(
       ui.setMatrix([...mat]);
     }
 
-    // ── 3. Handle E2 dragging (dwell-on-snap) ────────────────────────────────
+    // ── 2. Handle E2 dragging (dwell at target to lock) ─────────────────────
     if (ds.isDraggingE2) {
       let rawX = (pointerCanvas.x - gridCenterX) / scale;
       let rawY = -(pointerCanvas.y - gridCenterY) / scale;
@@ -1182,19 +1157,20 @@ function processInteractionFrame(
         mat[1] = nearestX;
         mat[3] = nearestY;
 
+        const onTarget = isOnTarget(nearestX, nearestY, TARGET_E2);
         const sameInt = ds.e2DwellIntersection &&
           ds.e2DwellIntersection.x === nearestX && ds.e2DwellIntersection.y === nearestY;
         if (!sameInt) {
-          ds.e2DwellStart = Date.now();
+          ds.e2DwellStart = onTarget ? Date.now() : 0;
           ds.e2DwellIntersection = { x: nearestX, y: nearestY };
-        } else if (Date.now() - ds.e2DwellStart >= ARROW_DWELL_PLACE_MS) {
+        } else if (onTarget && Date.now() - ds.e2DwellStart >= ARROW_DWELL_PLACE_MS) {
           ds.isDraggingE2 = false;
-          ds.e2Placed = true;
-          ds.e2PlaceTime = Date.now();
-          ds.e2ReGrabCooldown = Date.now() + 800;
+          ds.e2Locked = true;
           ds.e2DwellStart = 0;
           ds.e2DwellIntersection = null;
-          console.log("[LineAR] e2 placed at", mat[1], mat[3]);
+          ui.setArrowLocked(ds.e1Locked, true);
+          ui.setArrowSnapped(true, true);
+          console.log("[LineAR] e2 locked at TARGET_E2", mat[1], mat[3]);
         }
       } else {
         mat[1] = safeX;
@@ -1205,49 +1181,28 @@ function processInteractionFrame(
       ui.setMatrix([...mat]);
     }
 
-    // ── 4. Grab / re-grab detection (only when not dragging) ─────────────────
+    // ── 3. Grab detection — e1 first, then e2 only after e1 locked ──────────
     if (!ds.isDraggingE1 && !ds.isDraggingE2) {
       const e1Tip = { x: gridCenterX + mat[0] * scale, y: gridCenterY - mat[2] * scale };
       const e2Tip = { x: gridCenterX + mat[1] * scale, y: gridCenterY - mat[3] * scale };
 
-      // Grab e1 if free (not placed, not locked) AND e2 also not grabbed
-      if (!ds.e1Placed && !ds.e1Locked) {
+      if (!ds.e1Locked) {
         if (dist(pointerCanvas, e1Tip) < ARROW_GRAB_RADIUS_PX) {
           ds.isDraggingE1 = true;
           console.log("[LineAR] e1 grabbed");
         }
       }
-      // Re-grab e1 if placed but not locked (with cooldown)
-      if (ds.e1Placed && !ds.e1Locked && Date.now() > ds.e1ReGrabCooldown) {
-        if (dist(pointerCanvas, e1Tip) < ARROW_GRAB_RADIUS_PX) {
-          ds.isDraggingE1 = true;
-          ds.e1Placed = false;
-          ds.e1PlaceTime = 0;
-          console.log("[LineAR] e1 re-grabbed");
-        }
-      }
-
-      // Grab e2 if free (not placed, not locked), only if e1 wasn't already grabbed
-      if (!ds.isDraggingE1 && !ds.e2Placed && !ds.e2Locked) {
+      if (ds.e1Locked && !ds.e2Locked) {
         if (dist(pointerCanvas, e2Tip) < ARROW_GRAB_RADIUS_PX) {
           ds.isDraggingE2 = true;
           console.log("[LineAR] e2 grabbed");
         }
       }
-      // Re-grab e2 if placed but not locked (with cooldown)
-      if (!ds.isDraggingE1 && ds.e2Placed && !ds.e2Locked && Date.now() > ds.e2ReGrabCooldown) {
-        if (dist(pointerCanvas, e2Tip) < ARROW_GRAB_RADIUS_PX) {
-          ds.isDraggingE2 = true;
-          ds.e2Placed = false;
-          ds.e2PlaceTime = 0;
-          console.log("[LineAR] e2 re-grabbed");
-        }
-      }
     }
 
-    // Update UI with placed/locked/dwelling state
-    const e1UISnapped = ds.e1Placed || ds.e1Locked || (ds.isDraggingE1 && ds.e1DwellIntersection !== null);
-    const e2UISnapped = ds.e2Placed || ds.e2Locked || (ds.isDraggingE2 && ds.e2DwellIntersection !== null);
+    // ── 4. Update UI state ──────────────────────────────────────────────────
+    const e1UISnapped = ds.e1Locked || (ds.isDraggingE1 && ds.e1DwellIntersection !== null);
+    const e2UISnapped = ds.e2Locked || (ds.isDraggingE2 && ds.e2DwellIntersection !== null);
     ui.setArrowSnapped(e1UISnapped, e2UISnapped);
     ui.setDwellProgress(
       ds.isDraggingE1 && ds.e1DwellIntersection !== null
@@ -1258,22 +1213,8 @@ function processInteractionFrame(
         : 0,
     );
 
-    // ── 5a. Auto-prompt: arrows adjusted + no hands for 5 minutes ──────────
-    const arrowsAdjusted = mat[0] !== 1 || mat[1] !== 0 || mat[2] !== 0 || mat[3] !== 1;
-    if (arrowsAdjusted && !isHandActive && !ds.arrowTransitionFired) {
-      if (ds.handsAbsentSince === 0) {
-        ds.handsAbsentSince = Date.now();
-      } else if (Date.now() - ds.handsAbsentSince >= 300_000) {
-        ds.arrowTransitionFired = true;
-        ds.handsAbsentSince = 0;
-        dispatch({ type: "BASIS_ADJUSTED", payload: [...ds.arrowMatrix] });
-      }
-    } else {
-      ds.handsAbsentSince = 0;
-    }
-
-    // ── 5. Any locked → proceed ───────────────────────────────
-    if ((ds.e1Locked || ds.e2Locked) && !ds.arrowTransitionFired) {
+    // ── 5. Both locked → proceed ────────────────────────────────────────────
+    if (ds.e1Locked && ds.e2Locked && !ds.arrowTransitionFired) {
       ds.arrowTransitionFired = true;
       dispatch({ type: "BASIS_ADJUSTED", payload: [...ds.arrowMatrix] });
     }

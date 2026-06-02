@@ -9,17 +9,24 @@ declare const AR: {
 
 // ── Marker Definitions ────────────────────────────────────────────────────
 
-/** ArUco markers projected at these grid positions. 3×3 grid. */
+/** ArUco markers projected at these grid positions. 4×4 grid. */
 export const ARUCO_MARKERS: { id: number; gridX: number; gridY: number }[] = [
-  { id: 0, gridX: -7, gridY:  7 },
-  { id: 1, gridX:  0, gridY:  7 },
-  { id: 2, gridX:  7, gridY:  7 },
-  { id: 3, gridX: -7, gridY:  0 },
-  { id: 4, gridX:  0, gridY:  0 },
-  { id: 5, gridX:  7, gridY:  0 },
-  { id: 6, gridX: -7, gridY: -7 },
-  { id: 7, gridX:  0, gridY: -7 },
-  { id: 8, gridX:  7, gridY: -7 },
+  { id: 0,  gridX: -9, gridY:  9 },
+  { id: 1,  gridX: -3, gridY:  9 },
+  { id: 2,  gridX:  3, gridY:  9 },
+  { id: 3,  gridX:  9, gridY:  9 },
+  { id: 4,  gridX: -9, gridY:  3 },
+  { id: 5,  gridX: -3, gridY:  3 },
+  { id: 6,  gridX:  3, gridY:  3 },
+  { id: 7,  gridX:  9, gridY:  3 },
+  { id: 8,  gridX: -9, gridY: -3 },
+  { id: 9,  gridX: -3, gridY: -3 },
+  { id: 10, gridX:  3, gridY: -3 },
+  { id: 11, gridX:  9, gridY: -3 },
+  { id: 12, gridX: -9, gridY: -9 },
+  { id: 13, gridX: -3, gridY: -9 },
+  { id: 14, gridX:  3, gridY: -9 },
+  { id: 15, gridX:  9, gridY: -9 },
 ];
 
 const ARUCO_MARKER_PX = 120;
@@ -28,7 +35,25 @@ const STORAGE_KEY = "linear_calibration_homography";
 // ── ArUco Support Check ────────────────────────────────────────────────────
 
 export function hasAruco(): boolean {
-  return !!(typeof AR !== "undefined" && AR?.Detector && (window as any).arucoMarker?.arucoMarkerMatrix);
+  return !!(typeof AR !== "undefined" && AR?.Detector);
+}
+
+// ── ArUco 5x5 Marker Generator (reverses mat2id from aruco.js) ────────────────
+
+const ROW_PATTERNS: number[][] = [
+  [1, 0, 0, 0, 0],
+  [1, 0, 1, 1, 1],
+  [0, 1, 0, 0, 1],
+  [0, 1, 1, 1, 0],
+];
+
+function id2mat(id: number): number[][] {
+  const mat: number[][] = [];
+  for (let row = 0; row < 5; row++) {
+    const bits = (id >> (2 * (4 - row))) & 3;
+    mat.push([...ROW_PATTERNS[bits]!]);
+  }
+  return mat;
 }
 
 // ── Marker Image Cache (ArUco) ──────────────────────────────────────────────
@@ -41,43 +66,39 @@ function getArucoCanvas(id: number): HTMLCanvasElement | null {
 }
 
 function buildArucoCache(): void {
-  try {
-    arucoCache = [];
-    for (const m of ARUCO_MARKERS) {
-      const matrix: number[][] = (window as any).arucoMarker.arucoMarkerMatrix(m.id);
-      if (!matrix) continue;
-      const canvas = document.createElement("canvas");
-      canvas.width = ARUCO_MARKER_PX;
-      canvas.height = ARUCO_MARKER_PX;
-      const ctx = canvas.getContext("2d")!;
+  arucoCache = [];
+  console.log("[Calibration] Building ArUco marker cache...");
+  for (const m of ARUCO_MARKERS) {
+    const matrix = id2mat(m.id);
+    const canvas = document.createElement("canvas");
+    canvas.width = ARUCO_MARKER_PX;
+    canvas.height = ARUCO_MARKER_PX;
+    const ctx = canvas.getContext("2d")!;
+    if (!ctx) { console.warn("[Calibration] Failed to get 2D context for marker", m.id); continue; }
 
-      // Black background (border)
-      ctx.fillStyle = "#000";
-      ctx.fillRect(0, 0, ARUCO_MARKER_PX, ARUCO_MARKER_PX);
+    // Black background (border)
+    ctx.fillStyle = "#000";
+    ctx.fillRect(0, 0, ARUCO_MARKER_PX, ARUCO_MARKER_PX);
 
-      // Draw white data cells
-      ctx.fillStyle = "#fff";
-      const cellSize = ARUCO_MARKER_PX / 7;
-      for (let row = 0; row < 5; row++) {
-        for (let col = 0; col < 5; col++) {
-          const cell = matrix[col];
-          if (cell?.[row]) {
-            ctx.fillRect(
-              (col + 1) * cellSize,
-              (row + 1) * cellSize,
-              cellSize,
-              cellSize,
-            );
-          }
+    // Draw white data cells
+    ctx.fillStyle = "#fff";
+    const cellSize = ARUCO_MARKER_PX / 7;
+    for (let row = 0; row < 5; row++) {
+      for (let col = 0; col < 5; col++) {
+        if (matrix[row]![col]) {
+          ctx.fillRect(
+            (col + 1) * cellSize,
+            (row + 1) * cellSize,
+            cellSize,
+            cellSize,
+          );
         }
       }
-
-      arucoCache.push(canvas);
     }
-  } catch (e) {
-    console.warn("[Calibration] Failed to build ArUco cache:", e);
-    arucoCache = [];
+
+    arucoCache.push(canvas);
   }
+  console.log("[Calibration] ArUco cache built:", arucoCache.length, "markers");
 }
 
 // ── Detection ───────────────────────────────────────────────────────────────
@@ -146,17 +167,12 @@ export function computeHomography(
   if (!cv || srcPoints.length < 4 || dstPoints.length < 4) return null;
 
   try {
-    const srcMat = cv.matFromArray(srcPoints.length, 1, cv.CV_32FC2);
-    const dstMat = cv.matFromArray(dstPoints.length, 1, cv.CV_32FC2);
-
-    for (let i = 0; i < srcPoints.length; i++) {
-      srcMat.data32F[i * 2] = srcPoints[i]!.x;
-      srcMat.data32F[i * 2 + 1] = srcPoints[i]!.y;
-    }
-    for (let i = 0; i < dstPoints.length; i++) {
-      dstMat.data32F[i * 2] = dstPoints[i]!.x;
-      dstMat.data32F[i * 2 + 1] = dstPoints[i]!.y;
-    }
+    const srcData: number[] = [];
+    for (const p of srcPoints) srcData.push(p.x, p.y);
+    const dstData: number[] = [];
+    for (const p of dstPoints) dstData.push(p.x, p.y);
+    const srcMat = cv.matFromArray(srcPoints.length, 1, cv.CV_32FC2, srcData);
+    const dstMat = cv.matFromArray(dstPoints.length, 1, cv.CV_32FC2, dstData);
 
     const mask = new cv.Mat();
     const H = cv.findHomography(srcMat, dstMat, cv.RANSAC, 3, mask);
@@ -195,6 +211,11 @@ export function loadCalibration(): number[] | null {
     if (!raw) return null;
     const matrix = JSON.parse(raw);
     if (!Array.isArray(matrix) || matrix.length !== 9) return null;
+    if (matrix.some(v => typeof v !== 'number' || !isFinite(v))) {
+      console.warn("[Calibration] Stale/invalid homography found — clearing");
+      clearCalibration();
+      return null;
+    }
     console.log("[Calibration] Homography loaded from localStorage");
     return matrix;
   } catch {
