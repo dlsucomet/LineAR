@@ -238,7 +238,7 @@ export function getInstructionText(phase: AppPhase): string {
     case "CONFIRM_TRANSFORM": return "Basis vectors adjusted. Start linear transformation?";
     case "TRANSFORMED": return "Object has been linearly transformed";
     case "CONFIRM_RESET": return "Reset the Grid?";
-    case "CALIBRATING": return "Calibrating projector alignment. Please wait…";
+    case "CALIBRATING": return "Calibrating — projected markers visible on screen";
   }
 }
 

@@ -1,44 +1,15 @@
 import type { Point2D } from "../types/index.ts";
 
-declare const CV: {
-  Image: new (width?: number, height?: number, data?: any) => any;
-};
-declare const AR: {
-  Detector: new () => { detect(image: any): { id: number; corners: { x: number; y: number }[] }[] };
-};
+// ── ArUco marker definitions (physical printed markers, camera-detected) ──
 
-// ── Marker Definitions ────────────────────────────────────────────────────
+export const ARUCO_MARKER_PX = 100;
 
-/** ArUco markers projected at these grid positions. 4×4 grid. */
 export const ARUCO_MARKERS: { id: number; gridX: number; gridY: number }[] = [
-  { id: 0,  gridX: -9, gridY:  9 },
-  { id: 1,  gridX: -3, gridY:  9 },
-  { id: 2,  gridX:  3, gridY:  9 },
-  { id: 3,  gridX:  9, gridY:  9 },
-  { id: 4,  gridX: -9, gridY:  3 },
-  { id: 5,  gridX: -3, gridY:  3 },
-  { id: 6,  gridX:  3, gridY:  3 },
-  { id: 7,  gridX:  9, gridY:  3 },
-  { id: 8,  gridX: -9, gridY: -3 },
-  { id: 9,  gridX: -3, gridY: -3 },
-  { id: 10, gridX:  3, gridY: -3 },
-  { id: 11, gridX:  9, gridY: -3 },
-  { id: 12, gridX: -9, gridY: -9 },
-  { id: 13, gridX: -3, gridY: -9 },
-  { id: 14, gridX:  3, gridY: -9 },
-  { id: 15, gridX:  9, gridY: -9 },
+  { id: 1, gridX: -9, gridY:  9 },
+  { id: 2, gridX:  9, gridY:  9 },
+  { id: 3, gridX: -9, gridY: -9 },
+  { id: 4, gridX:  9, gridY: -9 },
 ];
-
-const ARUCO_MARKER_PX = 120;
-const STORAGE_KEY = "linear_calibration_homography";
-
-// ── ArUco Support Check ────────────────────────────────────────────────────
-
-export function hasAruco(): boolean {
-  return !!(typeof AR !== "undefined" && AR?.Detector);
-}
-
-// ── ArUco 5x5 Marker Generator (reverses mat2id from aruco.js) ────────────────
 
 const ROW_PATTERNS: number[][] = [
   [1, 0, 0, 0, 0],
@@ -56,102 +27,169 @@ function id2mat(id: number): number[][] {
   return mat;
 }
 
-// ── Marker Image Cache (ArUco) ──────────────────────────────────────────────
+let markerCanvasCache: HTMLCanvasElement[] | null = null;
 
-let arucoCache: HTMLCanvasElement[] | null = null;
-
-function getArucoCanvas(id: number): HTMLCanvasElement | null {
-  if (!arucoCache) buildArucoCache();
-  return arucoCache?.[id] ?? null;
-}
-
-function buildArucoCache(): void {
-  arucoCache = [];
-  console.log("[Calibration] Building ArUco marker cache...");
+function buildMarkerCanvasCache(): void {
+  markerCanvasCache = [];
   for (const m of ARUCO_MARKERS) {
     const matrix = id2mat(m.id);
     const canvas = document.createElement("canvas");
     canvas.width = ARUCO_MARKER_PX;
     canvas.height = ARUCO_MARKER_PX;
     const ctx = canvas.getContext("2d")!;
-    if (!ctx) { console.warn("[Calibration] Failed to get 2D context for marker", m.id); continue; }
-
-    // Black background (border)
     ctx.fillStyle = "#000";
     ctx.fillRect(0, 0, ARUCO_MARKER_PX, ARUCO_MARKER_PX);
-
-    // Draw white data cells
     ctx.fillStyle = "#fff";
-    const cellSize = ARUCO_MARKER_PX / 7;
-    for (let row = 0; row < 5; row++) {
-      for (let col = 0; col < 5; col++) {
-        if (matrix[row]![col]) {
-          ctx.fillRect(
-            (col + 1) * cellSize,
-            (row + 1) * cellSize,
-            cellSize,
-            cellSize,
-          );
-        }
-      }
-    }
-
-    arucoCache.push(canvas);
+    const cs = ARUCO_MARKER_PX / 7;
+    for (let row = 0; row < 5; row++)
+      for (let col = 0; col < 5; col++)
+        if (matrix[row]![col]) ctx.fillRect((col + 1) * cs, (row + 1) * cs, cs, cs);
+    markerCanvasCache.push(canvas);
   }
-  console.log("[Calibration] ArUco cache built:", arucoCache.length, "markers");
 }
 
-// ── Detection ───────────────────────────────────────────────────────────────
+export function getMarkerCanvas(id: number): HTMLCanvasElement | null {
+  if (!markerCanvasCache) buildMarkerCanvasCache();
+  const idx = ARUCO_MARKERS.findIndex(m => m.id === id);
+  if (idx < 0 || !markerCanvasCache) return null;
+  return markerCanvasCache[idx] ?? null;
+}
 
-export interface DetectionResult {
-  cameraPoints: Point2D[];
-  gridPoints: Point2D[];
-  method: "aruco";
+const STORAGE_KEY = "linear_calibration_homography";
+
+// ── Marker Detection (OpenCV.js ArUco 4×4) ──────────────────────────────
+// [2024-06-03] Switched from js-aruco (5×5) to OpenCV built-in ArUco (4×4).
+// Revert: restore the js-aruco detectProjectedMarkers and AR/CV declarations.
+
+export interface PhysicalMarker {
+  id: number;
+  corners: Point2D[];
+  center: Point2D;
+  /** Grid position assigned by spatial sorting (populated after detection). */
+  gridPos: Point2D;
+}
+
+/** 4×4 dictionary IDs to try (in order of preference). */
+const DICT_4X4_VALUES = [0, 1, 2, 3]; // 50, 100, 250, 1000
+
+const markerIds = new Set(ARUCO_MARKERS.map(m => m.id));
+
+function cornersFromMat(cornersMat: any): Point2D[] {
+  const pts: Point2D[] = [];
+  for (let j = 0; j < 4; j++) {
+    pts.push({ x: cornersMat.data32F[j * 2], y: cornersMat.data32F[j * 2 + 1] });
+  }
+  return pts;
 }
 
 /**
- * Detect calibration markers in a camera frame using pure-JS ArUco.
+ * Detect physical 4×4 ArUco markers (IDs 1-4) using OpenCV.js.
+ * Tries DICT_4X4_50 → 100 → 250 → 1000, returns first that finds ≥4 markers.
  */
-export function detectMarkers(
-  imageData: ImageData,
-  _camW: number,
-  _camH: number,
-): DetectionResult | null {
-  if (!hasAruco()) return null;
+export function detectProjectedMarkers(imageData: ImageData): PhysicalMarker[] | null {
+  const cv = window.cv;
+  if (!cv) { console.warn("[Calibration] cv not loaded"); return null; }
 
-  const cvImage = new CV.Image(imageData.width, imageData.height, imageData.data);
-  return detectAruco(cvImage);
-}
+  if (!cv.aruco_ArucoDetector) return null;
 
-function detectAruco(cvImage: any): DetectionResult | null {
   try {
-    const detector = new AR.Detector();
-    const markers = detector.detect(cvImage);
+    const img = cv.matFromImageData(imageData);
+    const gray = new cv.Mat();
+    cv.cvtColor(img, gray, cv.COLOR_RGBA2GRAY, 0);
 
-    if (!markers || markers.length === 0) return null;
+    let results: PhysicalMarker[] = [];
 
-    const cameraPoints: Point2D[] = [];
-    const gridPoints: Point2D[] = [];
+    for (const dictId of DICT_4X4_VALUES) {
+      const dict = cv.getPredefinedDictionary(dictId);
+      const params = new cv.aruco_DetectorParameters();
+      const detector = new cv.aruco_ArucoDetector(dict, params, new cv.aruco_RefineParameters(10, 3, true));
+      const corners = new cv.MatVector();
+      const ids = new cv.Mat();
+      detector.detectMarkers(gray, corners, ids);
 
-    for (const marker of markers) {
-      const markerDef = ARUCO_MARKERS.find((m) => m.id === marker.id);
-      if (!markerDef) continue;
+      const candidates: PhysicalMarker[] = [];
+      for (let i = 0; i < ids.rows; i++) {
+        const id = ids.intAt(i);
+        if (!markerIds.has(id)) continue;
+        const cm = corners.get(i);
+        const pts = cornersFromMat(cm);
+        cm.delete();
+        const cx = pts.reduce((s, p) => s + p.x, 0) / 4;
+        const cy = pts.reduce((s, p) => s + p.y, 0) / 4;
+        candidates.push({ id, corners: pts, center: { x: cx, y: cy }, gridPos: { x: 0, y: 0 } });
+      }
+      corners.delete();
+      ids.delete();
 
-      const cx = marker.corners.reduce((s: number, c: { x: number; y: number }) => s + c.x, 0) / 4;
-      const cy = marker.corners.reduce((s: number, c: { x: number; y: number }) => s + c.y, 0) / 4;
-
-      cameraPoints.push({ x: cx, y: cy });
-      gridPoints.push({ x: markerDef.gridX, y: markerDef.gridY });
+      if (candidates.length >= 4) {
+        assignGridPositions(candidates);
+        results = candidates;
+        break;
+      }
     }
 
-    if (cameraPoints.length < 4) return null;
+    img.delete();
+    gray.delete();
 
-    return { cameraPoints, gridPoints, method: "aruco" };
+    if (results.length < 4) return null;
+    return results;
   } catch (e) {
-    console.warn("[Calibration] ArUco detection failed:", e);
+    console.warn("[Calibration] OpenCV ArUco detection failed:", e);
     return null;
   }
 }
+
+/**
+ * Assign grid positions to 4 markers by sorting them in camera space.
+ * Top Y → back row (gridY = 9), left X within row → gridX = -9.
+ * Removes dependency on hardcoded ID→grid mappings.
+ */
+function assignGridPositions(markers: PhysicalMarker[]): void {
+  const sorted = [...markers].sort((a, b) => a.center.y - b.center.y);
+  const top = [sorted[0]!, sorted[1]!].sort((a, b) => a.center.x - b.center.x);
+  const bot = [sorted[2]!, sorted[3]!].sort((a, b) => a.center.x - b.center.x);
+  top[0]!.gridPos = { x: -9, y: 9 };
+  top[1]!.gridPos = { x: 9, y: 9 };
+  bot[0]!.gridPos = { x: -9, y: -9 };
+  bot[1]!.gridPos = { x: 9, y: -9 };
+}
+
+/**
+ * Compute homography from detected markers using spatial-sorted grid positions.
+ * Requires exactly 4 markers with gridPos populated (by detectProjectedMarkers).
+ */
+export function computeCalibrationFromMarkers(
+  markers: PhysicalMarker[],
+  camW?: number,
+  camH?: number,
+  flipH?: boolean,
+  flipV?: boolean,
+): { matrix: number[]; cameraPoints: Point2D[]; gridPoints: Point2D[] } | null {
+  if (markers.length < 4) return null;
+
+  const cameraPoints: Point2D[] = [];
+  const gridPoints: Point2D[] = [];
+
+  for (const m of markers) {
+    let cx = m.center.x;
+    let cy = m.center.y;
+    if (camW && flipH) cx = camW - cx;
+    if (camH && flipV) cy = camH - cy;
+    cameraPoints.push({ x: cx, y: cy });
+    gridPoints.push(m.gridPos);
+  }
+
+  const matrix = computeHomography(cameraPoints, gridPoints);
+  if (!matrix) return null;
+
+  return { matrix, cameraPoints, gridPoints };
+}
+
+// ── [DEPRECATED] Pure-JS ArUco detection ──────────────────────────────────
+/*
+export function hasAruco(): boolean { ... }
+export function detectMarkers(...): DetectionResult | null { ... }
+*/
 
 // ── Homography ──────────────────────────────────────────────────────────────
 
@@ -230,11 +268,4 @@ export function clearCalibration(): void {
   } catch { /* ignore */ }
 }
 
-// ── Rendering helpers (used by tabletopui) ──────────────────────────────────
-
-/** Returns the ArUco marker canvas for a given ID, or null. */
-export function getMarkerCanvas(id: number): HTMLCanvasElement | null {
-  return getArucoCanvas(id);
-}
-
-export { ARUCO_MARKER_PX };
+// Note: getMarkerCanvas(id) is defined above in the Projected section.

@@ -9,6 +9,8 @@ export class CoordinateMapper {
   private boardHalf: number;
   private camW: number;
   private camH: number;
+  private flipH = false;
+  private flipV = false;
 
   constructor(camW: number, camH: number, boardHalf: number = 10) {
     this.camW = camW;
@@ -19,6 +21,11 @@ export class CoordinateMapper {
   setCameraResolution(w: number, h: number): void {
     this.camW = w;
     this.camH = h;
+  }
+
+  setFlips(h: boolean, v: boolean): void {
+    this.flipH = h;
+    this.flipV = v;
   }
 
   setTransform(t: CameraTransform): void {
@@ -35,19 +42,21 @@ export class CoordinateMapper {
 
   /** Convert a camera-space pixel to grid coordinates. */
   cameraToGrid(pixel: Point2D): Point2D {
+    const fx = this.flipH ? this.camW - pixel.x : pixel.x;
+    const fy = this.flipV ? this.camH - pixel.y : pixel.y;
     const t = this.transform;
     if (t.type === "direct") {
       return {
-        x: ((pixel.x / this.camW) * 2 - 1) * this.boardHalf,
-        y: -((pixel.y / this.camH) * 2 - 1) * this.boardHalf,
+        x: ((fx / this.camW) * 2 - 1) * this.boardHalf,
+        y: -((fy / this.camH) * 2 - 1) * this.boardHalf,
       };
     }
 
     const H = t.matrix;
-    const w = H[6]! * pixel.x + H[7]! * pixel.y + H[8]!;
+    const w = H[6]! * fx + H[7]! * fy + H[8]!;
     return {
-      x: (H[0]! * pixel.x + H[1]! * pixel.y + H[2]!) / w,
-      y: (H[3]! * pixel.x + H[4]! * pixel.y + H[5]!) / w,
+      x: (H[0]! * fx + H[1]! * fy + H[2]!) / w,
+      y: (H[3]! * fx + H[4]! * fy + H[5]!) / w,
     };
   }
 

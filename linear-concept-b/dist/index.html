@@ -52,7 +52,7 @@
       opacity: 0.75;
     }
   </style>
-  <script type="module" crossorigin src="/assets/index-BMtg7z_v.js"></script>
+  <script type="module" crossorigin src="/assets/index-CujSBAVq.js"></script>
 </head>
 
 <body>
@@ -64,14 +64,13 @@
     onload="console.log('[LineAR] OpenCV.js ready.')"
     onerror="console.error('[LineAR] Failed to load OpenCV.js from CDN.'); window.__opencvFailed = true"></script>
 
-  <!-- Pure-JS ArUco: marker generation -->
+  <!-- [2024-06-03] Switched to OpenCV.js built-in ArUco (4×4). Revert to restore:
   <script async src="https://cdn.jsdelivr.net/npm/aruco-marker@3.0.1/dist/aruco-marker.umd.js"
     onload="console.log('[LineAR] aruco-marker ready.')"
     onerror="console.error('[LineAR] Failed to load aruco-marker.'); window.__arucoMarkerFailed = true"></script>
-
-  <!-- Pure-JS ArUco: detection (jcmellado/js-aruco, MIT) -->
   <script src="/src/../public/js-aruco/cv.js"></script>
   <script src="/src/../public/js-aruco/aruco.js"></script>
+  -->
 
   <script>console.log("[LineAR] HTML loaded, about to fetch module…");</script>
 </body>

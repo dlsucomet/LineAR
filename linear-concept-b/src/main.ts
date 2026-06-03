@@ -10,11 +10,12 @@ import { TabletopUI } from "./components/tabletopui.ts";
 import { generateId } from "./utils/helpers.ts";
 import { CoordinateMapper } from "./utils/coordinatemapper.ts";
 import {
-  detectMarkers,
+  detectProjectedMarkers,
+  computeCalibrationFromMarkers,
   computeHomography,
   saveCalibration,
   loadCalibration,
-  type DetectionResult,
+  type PhysicalMarker,
 } from "./core/calibration.ts";
 import {
   VIRTUAL_OBJECT,
@@ -152,6 +153,7 @@ window.addEventListener("load", () => {
   (function renderLoop() {
     ui.setFlipH(flipH);
     ui.setFlipV(flipV);
+    if (coordMapper) coordMapper.setFlips(flipH, flipV);
     ui.draw(state);
 
     // 1. Track local state wipes on phase transitions
@@ -331,18 +333,22 @@ async function bootstrap(
         console.log("[LineAR] Loaded saved calibration");
         console.warn("[LineAR] Run localStorage.clear() in DevTools console and reload to re-calibrate");
       } else {
-        console.log("[LineAR] No calibration found — entering calibration mode");
+        console.log("[LineAR] No calibration found — running projected marker calibration");
+        dispatch({ type: "CALIBRATE" });
         const calibrated = await runCalibrationSequence(
-          cameraTracker, coordMapper, 3,
+          cameraTracker, coordMapper, 10,
           (msg) => ui.setDemoInstructions({ CALIBRATING: msg }),
+          flipH, flipV,
         );
         ui.setDemoInstructions(null);
         dispatch({ type: "CALIBRATION_DONE" });
         if (calibrated) {
-          console.log("[LineAR] Calibration complete");
+          console.log("[LineAR] Physical calibration complete");
         } else {
-          console.warn("[LineAR] Continuing without calibration");
+          console.warn("[LineAR] Continuing without calibration — using direct mapping");
         }
+        // Re-capture background so printed markers are no longer detected as objects
+        cameraTrackerRef?.resetBackground();
       }
 
       let absentFrames = 0;
@@ -518,47 +524,49 @@ function sleep(ms: number): Promise<void> {
 }
 
 /**
- * Run the projector-camera calibration sequence.
- * Captures a camera frame, detects markers, computes homography, saves.
- * Retries up to `retries` times on failure.
- * Returns true if calibration succeeded, false otherwise.
+ * Run physical ArUco marker calibration.
+ * The user places 4 printed markers (IDs 1-4) at workspace corners.
+ * Captures camera frames until all 4 markers are detected,
+ * then computes and saves the homography.
  */
 async function runCalibrationSequence(
   cameraTracker: import("./core/cameratracker.ts").CameraTracker,
   mapper: CoordinateMapper,
   retries: number,
   onStatus?: (msg: string) => void,
+  flipH?: boolean,
+  flipV?: boolean,
 ): Promise<boolean> {
   for (let attempt = 0; attempt < retries; attempt++) {
-    if (attempt > 0) {
-      onStatus?.(`Calibration attempt ${attempt + 1} of ${retries}…`);
-      await sleep(2000);
-    } else {
-      onStatus?.("Capturing calibration markers…");
-      await sleep(1500);
-    }
+    onStatus?.(`Looking for markers… (attempt ${attempt + 1}/${retries})`);
+    await sleep(2000);
 
     const canvas = cameraTracker.processCanvas;
     const ctx = canvas.getContext("2d");
     if (!ctx) continue;
 
     const imageData = ctx.getImageData(0, 0, canvas.width, canvas.height);
-    const result: DetectionResult | null = detectMarkers(imageData, canvas.width, canvas.height);
+    const markers = detectProjectedMarkers(imageData);
 
-    if (result && result.cameraPoints.length >= 4) {
-      const homography = computeHomography(result.cameraPoints, result.gridPoints);
-      if (homography) {
-        mapper.setTransform({ type: "homography", matrix: homography });
-        saveCalibration(homography);
-        console.log(`[LineAR] Calibration succeeded (${result.method}, ${result.cameraPoints.length} points)`);
+    if (markers && markers.length >= 4) {
+      onStatus?.("Found 4/4 markers! Computing homography…");
+      const res = cameraTracker.resolution;
+      const result = computeCalibrationFromMarkers(markers, res.width, res.height, flipH, flipV);
+      if (result) {
+        mapper.setTransform({ type: "homography", matrix: result.matrix });
+        saveCalibration(result.matrix);
+        onStatus?.("Calibration complete");
+        console.log(`[LineAR] Calibration succeeded with IDs: ${markers.map(m => m.id).join(",")}`);
         return true;
       }
     }
 
-    console.warn(`[LineAR] Calibration attempt ${attempt + 1} failed`);
+    const count = markers?.length ?? 0;
+    onStatus?.(`Found ${count}/4 markers — retrying… (attempt ${attempt + 1}/${retries})`);
+    console.warn(`[LineAR] Calibration attempt ${attempt + 1} failed — found: ${count}`);
   }
 
-  console.warn("[LineAR] Calibration failed after all retries — using direct mapping");
+  console.warn("[LineAR] Calibration failed — using direct mapping");
   return false;
 }
 

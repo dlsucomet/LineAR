@@ -12,8 +12,8 @@ import {
 } from "../core/appstatemachine.ts";
 import {
   ARUCO_MARKERS,
-  getMarkerCanvas,
   ARUCO_MARKER_PX,
+  getMarkerCanvas,
 } from "../core/calibration.ts";
 import type { DetectedHand, Matrix2x2, Point2D } from "../types/index.ts";
 
@@ -301,9 +301,10 @@ export class TabletopUI {
     ctx.rect(grid.x, grid.y, grid.width, grid.height);
     ctx.clip();
 
-    this.drawCameraBackground(grid);
+    // this.drawCameraBackground(grid);
     this.drawGrid(grid);
-    this.drawCalibrationMarkers(grid, state.phase);
+    // [2024-06-03] Physical 4×4 ArUco markers used instead of projected
+    // this.drawCalibrationMarkers(grid, state.phase);
     this.drawDetectionOutline(grid, state.phase);
     const anim = this.getAnimationProgress(state.phase);
     this.drawVirtualObject(grid, state.phase, state.appliedMatrix, anim);
@@ -376,42 +377,15 @@ export class TabletopUI {
     ctx.restore();
   }
 
-  /** Draw calibration markers during CALIBRATING phase. */
+  /** Draw projected ArUco markers (IDs 1-4) at the 4 corners during CALIBRATING. */
   private drawCalibrationMarkers(grid: DOMRect, phase: AppPhase): void {
     if (phase !== "CALIBRATING") return;
-
     const { ctx } = this;
-    console.log("[TabletopUI] drawCalibrationMarkers — phase is CALIBRATING");
-
     for (const m of ARUCO_MARKERS) {
       const canvas = getMarkerCanvas(m.id);
-      const p = this.gridToCanvas({ x: m.gridX, y: m.gridY }, grid);
-      if (canvas) {
-        console.log("[TabletopUI] Drawing marker", m.id, "at", p.x, p.y, "canvas size:", canvas.width, "x", canvas.height);
-        const half = ARUCO_MARKER_PX / 2;
-        // Draw marker canvas
-        ctx.drawImage(canvas, p.x - half, p.y - half);
-        // Bright cyan border for visibility
-        ctx.strokeStyle = "#00ffff";
-        ctx.lineWidth = 3;
-        ctx.strokeRect(p.x - half, p.y - half, ARUCO_MARKER_PX, ARUCO_MARKER_PX);
-        // White ID label
-        ctx.fillStyle = "#fff";
-        ctx.font = "bold 14px sans-serif";
-        ctx.strokeStyle = "#000";
-        ctx.lineWidth = 3;
-        ctx.strokeText(`${m.id}`, p.x - 10, p.y - half - 4);
-        ctx.fillStyle = "#fff";
-        ctx.fillText(`${m.id}`, p.x - 10, p.y - half - 4);
-      } else {
-        // Diagnostic fallback: visible red square if marker canvas missing
-        console.warn("[TabletopUI] Marker canvas null for id", m.id, "- drawing red fallback");
-        ctx.fillStyle = "rgba(255, 0, 0, 0.8)";
-        ctx.fillRect(p.x - 15, p.y - 15, 30, 30);
-        ctx.fillStyle = "#fff";
-        ctx.font = "bold 12px sans-serif";
-        ctx.fillText(`${m.id}`, p.x - 6, p.y + 5);
-      }
+      if (!canvas) continue;
+      const pos = this.gridToCanvas({ x: m.gridX, y: m.gridY }, grid);
+      ctx.drawImage(canvas, pos.x - ARUCO_MARKER_PX / 2, pos.y - ARUCO_MARKER_PX / 2);
     }
   }
 

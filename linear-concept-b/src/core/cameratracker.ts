@@ -6,10 +6,6 @@
 import type { CameraConfig, DetectedObject, BoundingBox, Point2D } from "../types/index.ts";
 import { generateId } from "../utils/helpers.ts";
 
-// ---------------------------------------------------------------------------
-// OpenCV.js ambient type shim
-// (The full OpenCV.js type definitions are not always available via npm.)
-// ---------------------------------------------------------------------------
 declare global {
   interface Window {
     // eslint-disable-next-line @typescript-eslint/no-explicit-any
@@ -76,6 +72,10 @@ export class CameraTracker {
   private recentPositions: Point2D[] = [];
   private lastConfirmedPosition: Point2D | null = null;
   private cachedObjects: DetectedObject[] = [];
+
+  // ── ArUco Marker Masking (OpenCV.js 4×4) ──────────────────────────────────
+  /** Lazily-created OpenCV ArUco detector (DICT_4X4_50). */
+  private arucoDetector: any = null;
 
   // ── Background Subtraction (projector-friendly) ────────────────────────────
   /** Accumulated background grayscale frame (null until capture completes). */
@@ -225,6 +225,41 @@ export class CameraTracker {
 
     // Convert to grayscale
     cv.cvtColor(src, gray, cv.COLOR_RGBA2GRAY, 0);
+
+    // ── Auto-exclude any ArUco markers in the frame (OpenCV.js 4×4) ───────────
+    // [2024-06-03] Switched from js-aruco (5×5) → OpenCV ArUco (4×4).
+    if (cv && cv.aruco_ArucoDetector) {
+      try {
+        if (!this.arucoDetector) {
+          const dict = cv.getPredefinedDictionary(0); // DICT_4X4_50
+          const params = new cv.aruco_DetectorParameters();
+          this.arucoDetector = new cv.aruco_ArucoDetector(dict, params, new cv.aruco_RefineParameters(10, 3, true));
+        }
+        const markerCorners = new cv.MatVector();
+        const markerIds = new cv.Mat();
+        this.arucoDetector.detectMarkers(gray, markerCorners, markerIds);
+        const pad = 30;
+        for (let i = 0; i < markerIds.rows; i++) {
+          const cm = markerCorners.get(i);
+          let x1 = Infinity, y1 = Infinity, x2 = -Infinity, y2 = -Infinity;
+          for (let j = 0; j < 4; j++) {
+            const x = cm.data32F[j * 2], y = cm.data32F[j * 2 + 1];
+            if (x < x1) x1 = x; if (y < y1) y1 = y;
+            if (x > x2) x2 = x; if (y > y2) y2 = y;
+          }
+          const r = {
+            x: Math.max(0, x1 - pad), y: Math.max(0, y1 - pad),
+            w: Math.min(this.canvas.width, x2 + pad) - Math.max(0, x1 - pad),
+            h: Math.min(this.canvas.height, y2 + pad) - Math.max(0, y1 - pad),
+          };
+          cv.rectangle(gray, new cv.Point(r.x, r.y), new cv.Point(r.x + r.w, r.y + r.h),
+                       new cv.Scalar(0), -1);
+          cm.delete();
+        }
+        markerCorners.delete();
+        markerIds.delete();
+      } catch { /* detection errors are harmless */ }
+    }
 
     // ── Layer 4: Background capture (replaces initial lockout) ────────────────
     // First BG_CAPTURE_FRAMES frames are used to build a clean background model.
@@ -452,6 +487,11 @@ export class CameraTracker {
     }
     this.bgFrameCount = 0;
     this.bgCaptured = false;
+  }
+
+  /** Force re-capture of background so markers become part of it. */
+  resetBackground(): void {
+    this.disposeBackground();
   }
 
   /** Return available video input devices. */
