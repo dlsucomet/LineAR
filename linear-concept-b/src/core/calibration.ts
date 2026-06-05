@@ -145,9 +145,9 @@ export function detectProjectedMarkers(imageData: ImageData): PhysicalMarker[] |
  * Removes dependency on hardcoded ID→grid mappings.
  */
 function assignGridPositions(markers: PhysicalMarker[]): void {
-  const sorted = [...markers].sort((a, b) => a.center.y - b.center.y);
-  const top = [sorted[0]!, sorted[1]!].sort((a, b) => a.center.x - b.center.x);
-  const bot = [sorted[2]!, sorted[3]!].sort((a, b) => a.center.x - b.center.x);
+  const sorted = [...markers].sort((a, b) => b.center.y - a.center.y);
+  const top = [sorted[0]!, sorted[1]!].sort((a, b) => b.center.x - a.center.x);
+  const bot = [sorted[2]!, sorted[3]!].sort((a, b) => b.center.x - a.center.x);
   top[0]!.gridPos = { x: -9, y: 9 };
   top[1]!.gridPos = { x: 9, y: 9 };
   bot[0]!.gridPos = { x: -9, y: -9 };
@@ -160,10 +160,6 @@ function assignGridPositions(markers: PhysicalMarker[]): void {
  */
 export function computeCalibrationFromMarkers(
   markers: PhysicalMarker[],
-  camW?: number,
-  camH?: number,
-  flipH?: boolean,
-  flipV?: boolean,
 ): { matrix: number[]; cameraPoints: Point2D[]; gridPoints: Point2D[] } | null {
   if (markers.length < 4) return null;
 
@@ -171,11 +167,7 @@ export function computeCalibrationFromMarkers(
   const gridPoints: Point2D[] = [];
 
   for (const m of markers) {
-    let cx = m.center.x;
-    let cy = m.center.y;
-    if (camW && flipH) cx = camW - cx;
-    if (camH && flipV) cy = camH - cy;
-    cameraPoints.push({ x: cx, y: cy });
+    cameraPoints.push(m.center);
     gridPoints.push(m.gridPos);
   }
 

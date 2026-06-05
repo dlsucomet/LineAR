@@ -567,16 +567,15 @@ export class TabletopUI {
         const tx = appliedMatrix[0] * orig.x + appliedMatrix[1] * orig.y;
         const ty = appliedMatrix[2] * orig.x + appliedMatrix[3] * orig.y;
         const fmt = (n: number) => Math.round(n * 10) / 10;
-        ctx.font = "10px 'Courier New', monospace";
-        ctx.fillStyle = `rgba(51, 51, 51, ${animT})`;
+        ctx.font = "bold 13px 'Courier New', monospace";
+        ctx.fillStyle = `rgba(255, 255, 255, ${animT})`;
+        ctx.strokeStyle = `rgba(0, 0, 0, ${animT * 0.7})`;
+        ctx.lineWidth = 3;
         const label = `(${fmt(orig.x)},${fmt(orig.y)}) → (${fmt(tx)},${fmt(ty)})`;
-        if (i === 0 || i === 3) {
-          ctx.textAlign = "right";
-          ctx.fillText(label, p.x - 14, p.y + 4);
-        } else {
-          ctx.textAlign = "left";
-          ctx.fillText(label, p.x + 14, p.y + 4);
-        }
+        const offsetX = (i === 0 || i === 3) ? -16 : 16;
+        ctx.textAlign = i === 0 || i === 3 ? "right" : "left";
+        ctx.strokeText(label, p.x + offsetX, p.y - 10);
+        ctx.fillText(label, p.x + offsetX, p.y - 10);
       }
     }
   }

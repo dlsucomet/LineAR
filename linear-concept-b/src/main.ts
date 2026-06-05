@@ -153,7 +153,6 @@ window.addEventListener("load", () => {
   (function renderLoop() {
     ui.setFlipH(flipH);
     ui.setFlipV(flipV);
-    if (coordMapper) coordMapper.setFlips(flipH, flipV);
     ui.draw(state);
 
     // 1. Track local state wipes on phase transitions
@@ -338,7 +337,6 @@ async function bootstrap(
         const calibrated = await runCalibrationSequence(
           cameraTracker, coordMapper, 10,
           (msg) => ui.setDemoInstructions({ CALIBRATING: msg }),
-          flipH, flipV,
         );
         ui.setDemoInstructions(null);
         dispatch({ type: "CALIBRATION_DONE" });
@@ -534,8 +532,6 @@ async function runCalibrationSequence(
   mapper: CoordinateMapper,
   retries: number,
   onStatus?: (msg: string) => void,
-  flipH?: boolean,
-  flipV?: boolean,
 ): Promise<boolean> {
   for (let attempt = 0; attempt < retries; attempt++) {
     onStatus?.(`Looking for markers… (attempt ${attempt + 1}/${retries})`);
@@ -550,8 +546,7 @@ async function runCalibrationSequence(
 
     if (markers && markers.length >= 4) {
       onStatus?.("Found 4/4 markers! Computing homography…");
-      const res = cameraTracker.resolution;
-      const result = computeCalibrationFromMarkers(markers, res.width, res.height, flipH, flipV);
+      const result = computeCalibrationFromMarkers(markers);
       if (result) {
         mapper.setTransform({ type: "homography", matrix: result.matrix });
         saveCalibration(result.matrix);
