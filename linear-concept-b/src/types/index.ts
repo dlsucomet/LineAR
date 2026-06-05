@@ -54,6 +54,8 @@ export interface DetectedObject {
   colorLabel: string;
   /** Raw HSV dominant hue (0-360). */
   hue: number;
+  /** Quadrilateral corner points of the detected shape (camera pixels). */
+  shapeCorners?: Point2D[];
 }
 
 export interface BoundingBox {

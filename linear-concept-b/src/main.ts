@@ -402,20 +402,22 @@ async function bootstrap(
         console.log("[LineAR] Smoothed detection (window {trueCount}/{" + DETECTION_WINDOW_SIZE + "}):", smoothedObjects.length, "object(s)");
         dispatch({ type: "OBJECTS_DETECTED", payload: smoothedObjects });
 
-        const { x, y, width, height } = avgObj.boundingBox;
         const tb = (p: Point2D) => coordMapper.cameraToGrid(p);
-        const outline: Point2D[] = [
-          tb({ x, y }),
-          tb({ x: x + width, y }),
-          tb({ x: x + width, y: y + height }),
-          tb({ x, y: y + height }),
-        ];
+        const outline: Point2D[] = avgObj.shapeCorners
+          ? avgObj.shapeCorners.map(tb)
+          : [
+              tb({ x: avgObj.boundingBox.x, y: avgObj.boundingBox.y }),
+              tb({ x: avgObj.boundingBox.x + avgObj.boundingBox.width, y: avgObj.boundingBox.y }),
+              tb({ x: avgObj.boundingBox.x + avgObj.boundingBox.width, y: avgObj.boundingBox.y + avgObj.boundingBox.height }),
+              tb({ x: avgObj.boundingBox.x, y: avgObj.boundingBox.y + avgObj.boundingBox.height }),
+            ];
         ui.setDetectionOutline(outline);
 
         if (currentPhase === "OBJECT_DETECTED" && currentStableCount >= STABLE_THRESHOLD) {
           console.log("[LineAR] Stability threshold reached, locking corners...");
           ui.setDetectionOutline(null);
           console.log("[LineAR] Stable object, locking corners:", avgObj.boundingBox);
+          const { x, y, width, height } = avgObj.boundingBox;
           const rawCorners: [Point2D, Point2D, Point2D, Point2D] = [
             tb({ x, y }),
             tb({ x: x + width, y }),
@@ -455,25 +457,19 @@ async function bootstrap(
           return;
         }
 
-        const vw = video.videoWidth || CAM_W;
-        const vh = video.videoHeight || CAM_H;
-        if (!vw || !vh) return;
+        if (!video.videoWidth || !video.videoHeight) return;
 
-        const scaleX = canvas.width / vw;
-        const scaleY = canvas.height / vh;
-        const uniformScale = Math.min(scaleX, scaleY);
-        const offsetX = (canvas.width - vw * uniformScale) / 2;
-        const offsetY = (canvas.height - vh * uniformScale) / 2;
-
-        const toMirroredCanvas = (lm: HandLandmark): Point2D => ({
-          x: (flipH ? vw - lm.x : lm.x) * uniformScale + offsetX,
-          y: (flipV ? vh - lm.y : lm.y) * uniformScale + offsetY,
-        });
+        const toGridCanvas = (lm: HandLandmark): Point2D => {
+          const gp = coordMapper.cameraToGrid({ x: lm.x, y: lm.y });
+          const r = ui.getLastGridRect();
+          if (!r) return { x: -9999, y: -9999 };
+          return ui.gridToCanvas(gp, r);
+        };
 
         if (hands.length > 0) {
           const hand = hands[0]!;
           if (hand.score >= 0.1 && hand.landmarks[8]) {
-        const rawPoint = toMirroredCanvas(hand.landmarks[8]);
+        const rawPoint = toGridCanvas(hand.landmarks[8]);
         const SMOOTH_ALPHA = 0.7;
         const DEADZONE_PX = 3;
             if (latestHandPosition === null) {
@@ -493,7 +489,7 @@ async function bootstrap(
             handedness: h.handedness,
             score: h.score,
             gesture: h.gesture,
-            landmarks: h.landmarks.map((lm) => ({ ...lm, ...toMirroredCanvas(lm) })),
+            landmarks: h.landmarks.map((lm) => ({ ...lm, ...toGridCanvas(lm) })),
           }));
           ui.setRawHands(mirroredHands);
           handEmptyCount = 0;
@@ -739,25 +735,19 @@ async function setupDemoTracker(canvas: HTMLCanvasElement, video: HTMLVideoEleme
   handTracker.start(video);
 
   handTracker.onFrame((hands) => {
-    const vw = video.videoWidth || CAM_W;
-    const vh = video.videoHeight || CAM_H;
-    if (!vw || !vh) return;
+    if (!video.videoWidth || !video.videoHeight) return;
 
-    const scaleX = canvas.width / vw;
-    const scaleY = canvas.height / vh;
-    const uniformScale = Math.min(scaleX, scaleY);
-    const offsetX = (canvas.width - vw * uniformScale) / 2;
-    const offsetY = (canvas.height - vh * uniformScale) / 2;
-
-    const toMirroredCanvas = (lm: HandLandmark): Point2D => ({
-      x: (flipH ? vw - lm.x : lm.x) * uniformScale + offsetX,
-      y: (flipV ? vh - lm.y : lm.y) * uniformScale + offsetY,
-    });
+    const toGridCanvas = (lm: HandLandmark): Point2D => {
+      const gp = coordMapper.cameraToGrid({ x: lm.x, y: lm.y });
+      const r = ui.getLastGridRect();
+      if (!r) return { x: -9999, y: -9999 };
+      return ui.gridToCanvas(gp, r);
+    };
 
     if (hands.length > 0) {
       const hand = hands[0]!;
       if (hand.score >= 0.1 && hand.landmarks[8]) {
-            const rawPoint = toMirroredCanvas(hand.landmarks[8]);
+            const rawPoint = toGridCanvas(hand.landmarks[8]);
             const SMOOTH_ALPHA = 0.7;
             const DEADZONE_PX = 3;
             if (latestHandPosition === null) {
@@ -777,7 +767,7 @@ async function setupDemoTracker(canvas: HTMLCanvasElement, video: HTMLVideoEleme
         handedness: h.handedness,
         score: h.score,
         gesture: h.gesture,
-        landmarks: h.landmarks.map((lm) => ({ ...lm, ...toMirroredCanvas(lm) })),
+        landmarks: h.landmarks.map((lm) => ({ ...lm, ...toGridCanvas(lm) })),
       }));
       ui.setRawHands(mirroredHands);
       handEmptyCount = 0;
@@ -823,7 +813,7 @@ function processInteractionFrame(
   const gridHeight = canvas.height - TEXT_STRIP_H;
   const gridCenterX = canvas.width / 2 + pan.x;
   const gridCenterY = TEXT_STRIP_H + gridHeight / 2 + pan.y;
-  const scale = Math.min(canvas.width, gridHeight) / (GRID_RANGE * 2);
+  const scale = Math.min(canvas.width, gridHeight) / (GRID_RANGE * 2) * ui.getZoom();
 
   // ── PHASE: WAITING FOR OBJECT ──────────────────────────────────────────────
   if (state.phase === "WAITING_FOR_OBJECT") {

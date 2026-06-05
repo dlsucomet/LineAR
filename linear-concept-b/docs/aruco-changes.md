@@ -131,3 +131,71 @@ All three visual paths now use the same flips:
 Clearing the saved homography (`localStorage.clear()` + reload) is **required**
 after revert, since the matrix was saved in the flipped coordinate space.
 ```
+
+---
+
+## Changeset 4: Reverse spatial sort (descending) + remove coordinate flips
+
+**Goal:** Fix the 180° inverted object placement caused by the camera being
+physically rotated (flipH+flipV). The ascending sort assumed the raw camera
+top was the far edge of the table, but with a 180° rotation the near edge
+appears at the top — reversing both axes.
+
+**Changes:**
+
+| File | Before | After |
+|---|---|---|
+| `src/core/calibration.ts:148-150` | `sort((a,b)=>a.center.y-b.center.y)`, X ascending | `sort((a,b)=>b.center.y-a.center.y)`, X **descending** |
+| `src/utils/coordinatemapper.ts` | `flipH`/`flipV` fields + `setFlips()` + flip logic in `cameraToGrid` | Removed — `cameraToGrid` uses raw `pixel.x, pixel.y` |
+| `src/core/calibration.ts:161-180` | `computeCalibrationFromMarkers` accepted `camW/camH/flipH/flipV` and flipped marker centers | Original signature — uses `m.center` directly |
+| `src/main.ts:156` | `coordMapper.setFlips(flipH, flipV)` | Removed |
+| `src/main.ts:338-341` | `runCalibrationSequence(... flipH, flipV)` | Removed extra args |
+| `src/main.ts:532-554` | `runCalibrationSequence` accepted `flipH?, flipV?` and called `computeCalibrationFromMarkers(markers, res.w, res.h, flipH, flipV)` | Original — no flip params |
+
+### Sort logic (new)
+
+```
+1. Sort all 4 markers by center.y DESCENDING (was ascending)
+2. Top 2 → back row (gridY = 9), bottom 2 → front row (gridY = -9)
+3. Within each row, sort by center.x DESCENDING (was ascending)
+   - Left → gridX = -9
+   - Right → gridX = 9
+```
+
+For a user facing the table with a 180°-rotated camera:
+- Physical far-left → camera bottom-right (largest y, largest x) → desc Y → top row → desc X → grid x=-9 ✓
+- Physical near-right → camera top-left (smallest y, smallest x) → desc Y → bottom row → desc X → grid x=9 ✓
+
+### Revert
+
+```
+# calibration.ts: restore ascending Y and X sort in assignGridPositions
+# (no other revert needed — coords are back to original)
+```
+```
+
+### Changeset 6 — Hand tracking coordinate pipeline (2024-06-05)
+
+Replaced the old `toMirroredCanvas` function (manual flip+scale mapping using `uniformScale`/`offsetX`/`offsetY`) with a proper grid-pipeline approach using `coordMapper.cameraToGrid + ui.gridToCanvas` in both hand tracking callbacks in `main.ts`.
+
+**Files modified:** `src/main.ts` (two locations)
+
+**Old approach:**
+```typescript
+const toMirroredCanvas = (lm) => ({
+  x: (flipH ? vw - lm.x : lm.x) * uniformScale + offsetX,
+  y: (flipV ? vh - lm.y : lm.y) * uniformScale + offsetY,
+});
+```
+
+**New approach:**
+```typescript
+const toGridCanvas = (lm) => {
+  const gp = coordMapper.cameraToGrid({ x: lm.x, y: lm.y });
+  const r = ui.getLastGridRect();
+  if (!r) return { x: -9999, y: -9999 };
+  return ui.gridToCanvas(gp, r);
+};
+```
+
+**To revert:** Restore the old `toMirroredCanvas` function and its usage (`toMirroredCanvas(...)` calls) in both hand-tracking callbacks. Also restore the `vw`/`vh`/`uniformScale`/`offsetX`/`offsetY` computation before the callback body.

@@ -156,6 +156,7 @@ function assignGridPositions(markers: PhysicalMarker[]): void {
 
 /**
  * Compute homography from detected markers using spatial-sorted grid positions.
+ * Uses all 4 corners per marker (16 points) for a more robust RANSAC estimate.
  * Requires exactly 4 markers with gridPos populated (by detectProjectedMarkers).
  */
 export function computeCalibrationFromMarkers(
@@ -166,9 +167,25 @@ export function computeCalibrationFromMarkers(
   const cameraPoints: Point2D[] = [];
   const gridPoints: Point2D[] = [];
 
+  const CORNER_HALF = 0.35;
+  const cornerOffsets = [
+    { dx: -CORNER_HALF, dy: -CORNER_HALF },
+    { dx:  CORNER_HALF, dy: -CORNER_HALF },
+    { dx:  CORNER_HALF, dy:  CORNER_HALF },
+    { dx: -CORNER_HALF, dy:  CORNER_HALF },
+  ];
+
   for (const m of markers) {
-    cameraPoints.push(m.center);
-    gridPoints.push(m.gridPos);
+    for (let j = 0; j < 4; j++) {
+      const c = m.corners[j];
+      const o = cornerOffsets[j];
+      if (!c || !o) continue;
+      cameraPoints.push(c);
+      gridPoints.push({
+        x: m.gridPos.x + o.dx,
+        y: m.gridPos.y + o.dy,
+      });
+    }
   }
 
   const matrix = computeHomography(cameraPoints, gridPoints);

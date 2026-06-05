@@ -71,7 +71,12 @@ export class TabletopUI {
 
   panX = 0;
   panY = 0;
+  zoom = 1;
   private panBounds: { minX: number; maxX: number; minY: number; maxY: number } | null = null;
+  private currentPhase: AppPhase = "WAITING_FOR_OBJECT";
+  private activeTouches = new Map<number, Touch>();
+  private lastPinchDist = 0;
+  private lastPinchMid: Point2D | null = null;
 
   private animStartTime = 0;
   private readonly ANIM_DURATION = 10000;
@@ -138,6 +143,9 @@ export class TabletopUI {
     canvas.addEventListener("mousemove", (e) => this.handleMouseMove(e));
     canvas.addEventListener("mouseup", () => this.handleMouseUp());
     canvas.addEventListener("mouseleave", () => this.handleMouseUp());
+    canvas.addEventListener("touchstart", (e) => this.handleTouchStart(e), { passive: false });
+    canvas.addEventListener("touchmove", (e) => this.handleTouchMove(e), { passive: false });
+    canvas.addEventListener("touchend", (e) => this.handleTouchEnd(e));
   }
 
   resize(w: number, h: number): void {
@@ -192,6 +200,8 @@ export class TabletopUI {
     return { x: this.panX, y: this.panY };
   }
 
+  getZoom(): number { return this.zoom; }
+
   setPanBounds(bounds: { minX: number; maxX: number; minY: number; maxY: number } | null): void {
     this.panBounds = bounds;
   }
@@ -202,18 +212,16 @@ export class TabletopUI {
     if (!this.panBounds) return;
 
     const gridH = this.H - TEXT_STRIP_H;
-    const scale = Math.min(this.W, gridH) / (GRID_RANGE * 2);
-    const halfW = (this.W / 2) / scale;
-    const halfH = (gridH / 2) / scale;
+    const effScale = Math.min(this.W, gridH) / (GRID_RANGE * 2) * this.zoom;
 
-    const pkMin = -(this.panBounds.maxX * scale - this.W / 2);
-    const pkMax = -(this.panBounds.minX * scale + this.W / 2);
+    const pkMin = -(this.panBounds.maxX * effScale - this.W / 2);
+    const pkMax = -(this.panBounds.minX * effScale + this.W / 2);
     this.panX = pkMin > pkMax
       ? (pkMin + pkMax) / 2
       : Math.max(pkMin, Math.min(pkMax, this.panX));
 
-    const pyMin = this.panBounds.minY * scale + gridH / 2;
-    const pyMax = this.panBounds.maxY * scale - gridH / 2;
+    const pyMin = this.panBounds.minY * effScale + gridH / 2;
+    const pyMax = this.panBounds.maxY * effScale - gridH / 2;
     this.panY = pyMin > pyMax
       ? (pyMin + pyMax) / 2
       : Math.max(pyMin, Math.min(pyMax, this.panY));
@@ -235,7 +243,7 @@ export class TabletopUI {
     }
     const centerX = (minX + maxX) / 2;
     const centerY = (minY + maxY) / 2;
-    const scale = Math.min(grid.width, grid.height) / 20;
+    const scale = Math.min(grid.width, grid.height) / 20 * this.zoom;
     this.panX = -centerX * scale;
     this.panY = centerY * scale;
 
@@ -252,7 +260,7 @@ export class TabletopUI {
     if (this.W === 0 || this.H === 0) return null;
     const gridY = TEXT_STRIP_H;
     const gridHeight = this.H - TEXT_STRIP_H;
-    const scale = Math.min(this.W, gridHeight) / (GRID_RANGE * 2);
+    const scale = Math.min(this.W, gridHeight) / (GRID_RANGE * 2) * this.zoom;
     return {
       gridX: 0,
       gridY,
@@ -290,6 +298,7 @@ export class TabletopUI {
     ctx.fillRect(0, 0, W, H);
 
     const grid = this.computeGridRect();
+    this.currentPhase = state.phase;
 
     // Grid background — flash yellow during CALIBRATING for visibility
     ctx.fillStyle = state.phase === "CALIBRATING" ? "#fff1a0" : C.gridBg;
@@ -393,7 +402,7 @@ export class TabletopUI {
     const { ctx, W, H } = this;
     const cx = r.x + r.width * 0.5 + this.panX;
     const cy = r.y + r.height * 0.5 + this.panY;
-    const scale = Math.min(r.width, r.height) / (GRID_RANGE * 2);
+    const scale = Math.min(r.width, r.height) / (GRID_RANGE * 2) * this.zoom;
 
     // Vertical lines at every integer grid x that falls within the canvas
     const firstCol = Math.ceil((0 - cx) / scale);
@@ -588,41 +597,33 @@ export class TabletopUI {
     const { ctx } = this;
     const cx = grid.x + grid.width * 0.5 + this.panX;
     const cy = grid.y + grid.height * 0.5 + this.panY;
-    const scale = Math.min(grid.width, grid.height) / 20;
+    const scale = Math.min(grid.width, grid.height) / 20 * this.zoom;
 
-    // e1 = first column of matrix → (mat[0], mat[2])
     const e1x = cx + mat[0] * scale;
-    const e1y = cy - mat[2] * scale;   // flip Y
-
-    // e2 = second column → (mat[1], mat[3])
+    const e1y = cy - mat[2] * scale;
     const e2x = cx + mat[1] * scale;
     const e2y = cy - mat[3] * scale;
 
     drawArrow(ctx, cx, cy, e1x, e1y, this.dwellColor(C.e1, this.e1DwellProgress), 3);
     drawArrow(ctx, cx, cy, e2x, e2y, this.dwellColor(C.e2, this.e2DwellProgress), 3);
 
-    // Matrix label — positioned just to the right of arrow origin
-    const lx = cx + 12;
-    const ly = cy - 20;
-    this.drawMatrixLabel(lx, ly, mat);
-  }
-
-  private drawMatrixLabel(x: number, y: number, mat: Matrix2x2): void {
-    const { ctx } = this;
     ctx.font = "bold 15px 'Courier New', monospace";
     ctx.fillStyle = C.matrixText;
 
     const fmt = (n: number): string => {
-      // Show as integer if clean, else 1 decimal
       const v = Math.round(n * 10) / 10;
       return Number.isInteger(v) ? String(v) : v.toFixed(1);
     };
 
-    const a = fmt(mat[0]), b = fmt(mat[1]);
-    const c = fmt(mat[2]), d = fmt(mat[3]);
+    // First column (a,c) labelled at E1 tip — right of red arrowhead
+    ctx.textAlign = "left";
+    ctx.fillText(`(${fmt(mat[0])},${fmt(mat[2])})`, e1x + 8, e1y + 6);
 
-    ctx.fillText(`[ ${a}  ${b} ]`, x, y);
-    ctx.fillText(`[ ${c}  ${d} ]`, x, y + 20);
+    // Second column (b,d) labelled at E2 tip — left of green arrowhead
+    ctx.textAlign = "right";
+    ctx.fillText(`(${fmt(mat[1])},${fmt(mat[3])})`, e2x - 8, e2y + 6);
+
+    ctx.textAlign = "left";
   }
 
   private dwellColor(baseHex: string, progress: number): string {
@@ -801,7 +802,7 @@ export class TabletopUI {
     const ctx = this.ctx;
     const cx = grid.x + grid.width * 0.5 + this.panX;
     const cy = grid.y + grid.height * 0.5 + this.panY;
-    const scale = Math.min(grid.width, grid.height) / 20;
+    const scale = Math.min(grid.width, grid.height) / 20 * this.zoom;
 
     ctx.save();
     ctx.globalAlpha = 0.3;
@@ -824,7 +825,7 @@ export class TabletopUI {
     const { ctx } = this;
     const cx = grid.x + grid.width * 0.5 + this.panX;
     const cy = grid.y + grid.height * 0.5 + this.panY;
-    const scale = Math.min(grid.width, grid.height) / 20;
+    const scale = Math.min(grid.width, grid.height) / 20 * this.zoom;
 
     const drawCircle = (gx: number, gy: number, color: string) => {
       const px = cx + gx * scale;
@@ -848,7 +849,7 @@ export class TabletopUI {
     const ctx = this.ctx;
     const cx = grid.x + grid.width * 0.5 + this.panX;
     const cy = grid.y + grid.height * 0.5 + this.panY;
-    const scale = Math.min(grid.width, grid.height) / 20;
+    const scale = Math.min(grid.width, grid.height) / 20 * this.zoom;
 
     const mat = this.matrix;
 
@@ -1005,7 +1006,7 @@ export class TabletopUI {
   gridToCanvas(p: Point2D, grid: DOMRect): Point2D {
     const cx = grid.x + grid.width * 0.5 + this.panX;
     const cy = grid.y + grid.height * 0.5 + this.panY;
-    const scale = Math.min(grid.width, grid.height) / 20;
+    const scale = Math.min(grid.width, grid.height) / 20 * this.zoom;
     return {
       x: cx + p.x * scale,
       y: cy - p.y * scale,
@@ -1016,7 +1017,7 @@ export class TabletopUI {
   canvasToGrid(p: Point2D, grid: DOMRect): Point2D {
     const cx = grid.x + grid.width * 0.5 + this.panX;
     const cy = grid.y + grid.height * 0.5 + this.panY;
-    const scale = Math.min(grid.width, grid.height) / 20;
+    const scale = Math.min(grid.width, grid.height) / 20 * this.zoom;
     return {
       x: (p.x - cx) / scale,
       y: -(p.y - cy) / scale,
@@ -1056,6 +1057,86 @@ export class TabletopUI {
 
   private handleMouseUp(): void {
     this.mouseDown = false;
+  }
+
+  // ─── Touch handling (pinch-to-pan/zoom in TRANSFORMED / CONFIRM_RESET) ──────
+
+  private canPinchZoom(): boolean {
+    return this.currentPhase === "TRANSFORMED" || this.currentPhase === "CONFIRM_RESET";
+  }
+
+  private getTouchDist(touches: TouchList): number {
+    const dx = touches[0]!.clientX - touches[1]!.clientX;
+    const dy = touches[0]!.clientY - touches[1]!.clientY;
+    return Math.sqrt(dx * dx + dy * dy);
+  }
+
+  private getTouchMid(touches: TouchList): Point2D {
+    const rect = this.canvas.getBoundingClientRect();
+    return {
+      x: (touches[0]!.clientX + touches[1]!.clientX) / 2 - rect.left,
+      y: (touches[0]!.clientY + touches[1]!.clientY) / 2 - rect.top,
+    };
+  }
+
+  private startPinch(touches: TouchList): void {
+    this.lastPinchDist = this.getTouchDist(touches);
+    this.lastPinchMid = this.getTouchMid(touches);
+  }
+
+  private updatePinch(touches: TouchList): void {
+    if (!this.lastPinchMid) return;
+    const dist = this.getTouchDist(touches);
+    const mid = this.getTouchMid(touches);
+    const zoomRatio = this.lastPinchDist > 0 ? dist / this.lastPinchDist : 1;
+    const newZoom = Math.max(0.3, Math.min(5, this.zoom * zoomRatio));
+
+    const grid = this.computeGridRect();
+    const baseScale = Math.min(grid.width, grid.height) / (GRID_RANGE * 2);
+    const baseCx = grid.x + grid.width * 0.5;
+    const baseCy = grid.y + grid.height * 0.5;
+
+    const Gx = (this.lastPinchMid.x - (baseCx + this.panX)) / (baseScale * this.zoom);
+    const Gy = -(this.lastPinchMid.y - (baseCy + this.panY)) / (baseScale * this.zoom);
+
+    this.panX = mid.x - baseCx - Gx * baseScale * newZoom;
+    this.panY = mid.y - baseCy + Gy * baseScale * newZoom;
+    this.zoom = newZoom;
+
+    this.lastPinchDist = dist;
+    this.lastPinchMid = mid;
+  }
+
+  private handleTouchStart(e: TouchEvent): void {
+    for (let i = 0; i < e.changedTouches.length; i++) {
+      const t = e.changedTouches[i];
+      if (t) this.activeTouches.set(t.identifier, t);
+    }
+    if (e.touches.length >= 2 && this.canPinchZoom()) {
+      e.preventDefault();
+      this.startPinch(e.touches);
+    }
+  }
+
+  private handleTouchMove(e: TouchEvent): void {
+    for (let i = 0; i < e.changedTouches.length; i++) {
+      const t = e.changedTouches[i];
+      if (t) this.activeTouches.set(t.identifier, t);
+    }
+    if (e.touches.length >= 2 && this.canPinchZoom()) {
+      e.preventDefault();
+      this.updatePinch(e.touches);
+    }
+  }
+
+  private handleTouchEnd(e: TouchEvent): void {
+    for (let i = 0; i < e.changedTouches.length; i++) {
+      const t = e.changedTouches[i];
+      if (t) this.activeTouches.delete(t.identifier);
+    }
+    if (e.touches.length < 2) {
+      this.lastPinchMid = null;
+    }
   }
 
   // ─── Input handling ────────────────────────────────────────────────────────

@@ -18,7 +18,7 @@ declare global {
 // ---------------------------------------------------------------------------
 
 /** Minimum contour area (px²) to be considered a valid object. */
-const MIN_CONTOUR_AREA = 800;
+const MIN_CONTOUR_AREA = 400;
 
 /** Minimum area ratio for a contour to be considered a quadrilateral (0-1). */
 const MIN_QUAD_RATIO = 0.35;
@@ -27,7 +27,7 @@ const MIN_QUAD_RATIO = 0.35;
 const QUAD_VERTICES = 4;
 
 /** Epsilon factor for contour approximation (smaller = more precise). */
-const APPROX_EPSILON_FACTOR = 0.03;
+const APPROX_EPSILON_FACTOR = 0.05;
 
 // ── Layer 1: Aspect Ratio ─────────────────────────────────────────────────────
 /** Minimum aspect ratio (width/height) of detected quad. */
@@ -315,53 +315,71 @@ export class CameraTracker {
       const contour = contours.get(i);
       const area = cv.contourArea(contour);
 
-      // Skip small contours
       if (area < MIN_CONTOUR_AREA) { debugSkip.area++; contour.delete(); continue; }
 
-      // Get bounding rectangle for area ratio check
       const rect = cv.boundingRect(contour);
       const rectArea = rect.width * rect.height;
       const areaRatio = area / rectArea;
 
-      // Skip if area ratio suggests it's not a solid shape
       if (areaRatio < MIN_QUAD_RATIO) { debugSkip.ratio++; contour.delete(); continue; }
 
-      // Approximate contour to a polygon
-      const perimeter = cv.arcLength(contour, true);
-      const epsilon = perimeter * APPROX_EPSILON_FACTOR;
-      const approx = new cv.Mat();
-      cv.approxPolyDP(contour, approx, epsilon, true);
+      // Try to extract 4 corners via polygon approximation (with fallbacks)
+      let corners: Point2D[] | null = null;
 
-      // Check if we have 4 vertices (quadrilateral)
-      if (approx.rows === QUAD_VERTICES) {
-        // Extract corner points
-        const corners: Point2D[] = [];
-        for (let j = 0; j < approx.rows; j++) {
-          corners.push({
-            x: approx.data32S[j * 2],
-            y: approx.data32S[j * 2 + 1],
-          });
+      // Attempt 1: standard epsilon
+      const tryApprox = (epsFactor: number): Point2D[] | null => {
+        const approx = new cv.Mat();
+        try {
+          cv.approxPolyDP(contour, approx, cv.arcLength(contour, true) * epsFactor, true);
+          if (approx.rows === QUAD_VERTICES) {
+            const pts: Point2D[] = [];
+            for (let j = 0; j < approx.rows; j++) {
+              pts.push({ x: approx.data32S[j * 2], y: approx.data32S[j * 2 + 1] });
+            }
+            return pts;
+          }
+        } finally {
+          approx.delete();
         }
+        return null;
+      };
 
-        // Calculate bounding box from corners
+      corners = tryApprox(APPROX_EPSILON_FACTOR);
+      if (!corners) corners = tryApprox(APPROX_EPSILON_FACTOR * 2);
+
+      // Fallback: rotated-rect heuristic for near-rectangular contours
+      if (!corners) {
+        try {
+          const rotRect = cv.minAreaRect(contour);
+          const boxPts = new cv.Mat();
+          cv.boxPoints(rotRect, boxPts);
+          const rc: Point2D[] = [];
+          for (let j = 0; j < 4; j++) {
+            rc.push({ x: boxPts.data32F[j * 2], y: boxPts.data32F[j * 2 + 1] });
+          }
+          boxPts.delete();
+          const rectMat = cv.matFromArray(4, 2, cv.CV_32F, rc.flatMap(p => [p.x, p.y]));
+          const rectFitArea = cv.contourArea(rectMat);
+          rectMat.delete();
+          if (rectFitArea > 0 && area / rectFitArea >= 0.7) {
+            corners = rc;
+          }
+        } catch { /* degenerate contour */ }
+      }
+
+      if (corners) {
         const xs = corners.map(c => c.x);
         const ys = corners.map(c => c.y);
         const minX = Math.min(...xs);
         const maxX = Math.max(...xs);
         const minY = Math.min(...ys);
         const maxY = Math.max(...ys);
-        const bb: BoundingBox = {
-          x: minX,
-          y: minY,
-          width: maxX - minX,
-          height: maxY - minY,
-        };
+        const bb: BoundingBox = { x: minX, y: minY, width: maxX - minX, height: maxY - minY };
 
         // ── Layer 1: Aspect ratio filter ──────────────────────────────────────────
         const aspectRatio = bb.width / bb.height;
         if (aspectRatio < MIN_ASPECT_RATIO || aspectRatio > MAX_ASPECT_RATIO) {
           debugSkip.aspect++;
-          approx.delete();
           contour.delete();
           continue;
         }
@@ -374,12 +392,10 @@ export class CameraTracker {
         if (widthFraction < MIN_SIZE_FRACTION || widthFraction > MAX_SIZE_FRACTION ||
             heightFraction < MIN_SIZE_FRACTION || heightFraction > MAX_SIZE_FRACTION) {
           debugSkip.size++;
-          approx.delete();
           contour.delete();
           continue;
         }
 
-        // Keep the largest quadrilateral
         if (!bestQuad || area > bestQuad.area) {
           if (bestQuad) bestQuad.contour.delete();
           bestQuad = { contour, area, corners, boundingBox: bb };
@@ -390,8 +406,10 @@ export class CameraTracker {
         debugSkip.vertices++;
         contour.delete();
       }
+    }
 
-      approx.delete();
+    if (this.frameCount % 30 === 0) {
+      console.log("[CameraTracker] Skip counts:", debugSkip);
     }
 
     // ── Layer 3: Multi-frame position consistency ─────────────────────────────
@@ -469,6 +487,7 @@ export class CameraTracker {
         },
         colorLabel: "detected",
         hue: 0,
+        shapeCorners: bestQuad.corners,
       });
     }
 
