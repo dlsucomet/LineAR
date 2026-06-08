@@ -23,9 +23,9 @@ import type { DetectedHand, Matrix2x2, Point2D } from "../types/index.ts";
 const C = {
   gridLine: "rgba(40, 80, 140, 0.7)",
   gridBg: "#eef4fb",
-  instrBlue: "#1a3a6b",
-  instrCyan: "#1a7a9a",
-  instrOrange: "#c05000",
+  instrBlue: "#3a7bd5",
+  instrCyan: "#3abfcf",
+  instrOrange: "#f08030",
   btnYesBg: "#3a5a7a",
   btnNoBg: "#555",
   btnText: "#fff",
@@ -443,19 +443,23 @@ export class TabletopUI {
     if (phase === "CONFIRM_RESET") color = C.instrBlue;
 
     ctx.fillStyle = color;
-    ctx.font = "18px 'Courier New', monospace";
+    ctx.font = "bold 18px 'Courier New', monospace";
+    ctx.strokeStyle = "#000";
+    ctx.lineWidth = 1.5;
 
     // For phases with buttons, left-align text as part of a centered group (text + buttons)
     if (phase === "CONFIRM_TRANSFORM" || phase === "CONFIRM_RESET" || phase === "TRANSFORMED") {
       const buttonWidth = phase === "TRANSFORMED" ? 100 : 64 * 2 + 10;
       const tw = ctx.measureText(text).width;
-      const gap = 10;
+    const gap = 40;
       const groupWidth = tw + gap + buttonWidth;
       const groupStartX = (W - groupWidth) / 2;
       ctx.textAlign = "left";
+      ctx.strokeText(text, groupStartX, TEXT_STRIP_H - 12);
       ctx.fillText(text, groupStartX, TEXT_STRIP_H - 12);
     } else {
       ctx.textAlign = "center";
+      ctx.strokeText(text, W / 2, TEXT_STRIP_H - 12);
       ctx.fillText(text, W / 2, TEXT_STRIP_H - 12);
     }
     ctx.textAlign = "left";
@@ -831,7 +835,7 @@ export class TabletopUI {
       const px = cx + gx * scale;
       const py = cy - gy * scale;
       ctx.beginPath();
-      ctx.arc(px, py, 12, 0, Math.PI * 2);
+      ctx.arc(px, py, 18, 0, Math.PI * 2);
       ctx.fillStyle = color;
       ctx.fill();
       ctx.strokeStyle = "rgba(0,0,0,0.4)";

@@ -200,6 +200,8 @@ window.addEventListener("load", () => {
       if (state.phase === "SHOW_BASIS_VECTORS") {
         ds.e1Snapped = false;
         ds.e2Snapped = false;
+        ds.e1Locked = false;
+        ds.e2Locked = false;
         ds.isDraggingE1 = false;
         ds.isDraggingE2 = false;
         ds.arrowTransitionFired = false;
