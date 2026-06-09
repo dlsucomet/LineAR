@@ -2,8 +2,8 @@ const emptyInstruction = "";
 
 const topInstructionText = [
   "Place paper on the blue area",
+  "",
   "Represent the linear transformation as a sum of the given vectors",
-  "Substitute the given vectors by their linear transformations",
   "Perform scalar multiplication on the highlighted vector",
   "Perform vector addition on the highlighted vector",
   "Now, try solving a problem on your own",
@@ -12,8 +12,8 @@ const topInstructionText = [
 ];
 
 const sideInstructionText = [
+  "",
   "Copy the blue element and blue vector on the empty highlighted area",
-  "Copy the highlighted vector on the empty highlighted area",
   `Scalar multiplication is done this way:
   \\[
   a
@@ -53,12 +53,16 @@ const sideInstructionText = [
 
   0. Empty (Transitioning and whatever)
   1. Initialization
+  
+  --Removed
   2. First step (1)
   3. First step (1 correct) 
   4. First step (1 wrong)
   5. First step (2)
   6. First step (2 correct)
   7. First step (2 wrong)
+  --Removed
+
   8. Second step (1)
   9. Second step (1 correct)
   10. Second step (1 wrong)
@@ -96,7 +100,8 @@ const steps = [
     highlights: []
   },
 
-  { /* 2 */
+  /*
+  { 2 
     topText: topInstructionText[1],
 
     sideText: sideInstructionText[0],
@@ -121,7 +126,7 @@ const steps = [
     ]
   },
 
-  { /* 3 */
+  { 3
     topText: topInstructionText[1],
 
     sideText: emptyInstruction,
@@ -144,7 +149,7 @@ const steps = [
     ]
   },
 
-  { /* 4 */
+  { 4
     topText: topInstructionText[1],
 
     sideText: emptyInstruction,
@@ -167,7 +172,7 @@ const steps = [
     ]
   },
 
-  { /* 5 */
+  { 5 
     topText: topInstructionText[1],
 
     sideText: sideInstructionText[0],
@@ -192,7 +197,7 @@ const steps = [
     ]
   },
 
-  { /* 6 */
+  { 6 
     topText: topInstructionText[1],
 
     sideText: emptyInstruction,
@@ -215,7 +220,7 @@ const steps = [
     ]
   },
 
-  { /* 7 */
+  {  7 
     topText: topInstructionText[1],
 
     sideText: emptyInstruction,
@@ -237,6 +242,7 @@ const steps = [
       }
     ]
   },
+  */
 
   { /* 8 */
     topText: topInstructionText[2],
@@ -246,12 +252,36 @@ const steps = [
     highlights: [
       {
         ids: [
+          /*
           "top-left-sixth-sixth",
           "top-left-sixth-ninth",
           "top-mid-seventh-ninth",
           "top-mid-eighth-seventh",
           "mid-mid-first-third",
           "mid-mid-second-first",
+          */
+          "top-mid-fourth-fourth",
+          "top-mid-fourth-fifth",
+          "top-mid-fourth-seventh",
+          "top-mid-fourth-eighth",
+          "top-mid-seventh-first",
+          "top-mid-seventh-second",
+
+          "top-mid-seventh-fourth",
+
+          "mid-left-third-fifth",
+          "mid-left-third-sixth",
+          "mid-left-third-eighth",
+          "mid-left-third-ninth",
+          
+          "mid-mid-first-second",
+          "mid-mid-first-third",
+          "mid-mid-first-fifth",
+          "mid-mid-first-sixth",
+          "mid-mid-first-eighth",
+          "mid-mid-first-ninth",
+          "mid-mid-fourth-second",
+          "mid-mid-fourth-third"
         ],
 
         state: "copy-box"
@@ -267,10 +297,33 @@ const steps = [
     highlights: [
       {
         ids: [
+          /*
           "top-mid-seventh-ninth",
           "top-mid-eighth-seventh",
           "mid-mid-first-third",
           "mid-mid-second-first",
+          */
+          "mid-left-third-second",
+          "mid-left-third-third",
+          "mid-left-third-fifth",
+          "mid-left-third-sixth",
+          "mid-left-third-eighth",
+          "mid-left-third-ninth",
+          "mid-left-sixth-second",
+          "mid-left-sixth-third",
+        
+          "mid-mid-first-first",
+          "mid-mid-first-second",
+          "mid-mid-first-third",
+          "mid-mid-first-fourth",
+          "mid-mid-first-fifth",
+          "mid-mid-first-sixth",
+          "mid-mid-first-seventh",
+          "mid-mid-first-eighth",
+          "mid-mid-first-ninth",
+          "mid-mid-fourth-first",
+          "mid-mid-fourth-second",
+          "mid-mid-fourth-third"
         ],
 
         state: "correct-box"
@@ -286,10 +339,33 @@ const steps = [
     highlights: [
       {
         ids: [
+          /*
           "top-mid-seventh-ninth",
           "top-mid-eighth-seventh",
           "mid-mid-first-third",
           "mid-mid-second-first",
+          */
+          "mid-left-third-second",
+          "mid-left-third-third",
+          "mid-left-third-fifth",
+          "mid-left-third-sixth",
+          "mid-left-third-eighth",
+          "mid-left-third-ninth",
+          "mid-left-sixth-second",
+          "mid-left-sixth-third",
+        
+          "mid-mid-first-first",
+          "mid-mid-first-second",
+          "mid-mid-first-third",
+          "mid-mid-first-fourth",
+          "mid-mid-first-fifth",
+          "mid-mid-first-sixth",
+          "mid-mid-first-seventh",
+          "mid-mid-first-eighth",
+          "mid-mid-first-ninth",
+          "mid-mid-fourth-first",
+          "mid-mid-fourth-second",
+          "mid-mid-fourth-third"
         ],
 
         state: "wrong-box"
@@ -305,12 +381,34 @@ const steps = [
     highlights: [
       {
         ids: [
+          /*
           "top-mid-fifth-fifth",
           "top-mid-fifth-eighth",
           "top-mid-ninth-eighth",
           "top-mid-ninth-ninth",
           "mid-mid-third-second",
           "mid-mid-third-third",
+          */
+          "top-mid-sixth-sixth",
+          "top-mid-sixth-ninth",
+          "top-right-fourth-fourth",
+          "top-right-fourth-seventh",
+
+          "top-mid-seventh-seventh",
+          
+          "mid-mid-second-fifth",
+          "mid-mid-second-sixth",
+          "mid-mid-second-eighth",
+          "mid-mid-second-ninth",
+
+          "mid-mid-third-second",
+          "mid-mid-third-third",
+          "mid-mid-third-fifth",
+          "mid-mid-third-sixth",
+          "mid-mid-third-eighth",
+          "mid-mid-third-ninth",
+          "mid-mid-sixth-second",
+          "mid-mid-sixth-third",
         ],
 
         state: "copy-box"
@@ -326,10 +424,33 @@ const steps = [
     highlights: [
       {
         ids: [
+          /*
           "top-mid-ninth-eighth",
           "top-mid-ninth-ninth",
           "mid-mid-third-second",
           "mid-mid-third-third",
+          */
+          "mid-mid-second-second",
+          "mid-mid-second-third",
+          "mid-mid-second-fifth",
+          "mid-mid-second-sixth",
+          "mid-mid-second-eighth",
+          "mid-mid-second-ninth",
+          "mid-mid-fifth-second",
+          "mid-mid-fifth-third",
+
+          "mid-mid-third-first",
+          "mid-mid-third-second",
+          "mid-mid-third-third",
+          "mid-mid-third-fourth",
+          "mid-mid-third-fifth",
+          "mid-mid-third-sixth",
+          "mid-mid-third-seventh",
+          "mid-mid-third-eighth",
+          "mid-mid-third-ninth",
+          "mid-mid-sixth-first",
+          "mid-mid-sixth-second",
+          "mid-mid-sixth-third",
         ],
 
         state: "correct-box"
@@ -345,10 +466,33 @@ const steps = [
     highlights: [
       {
         ids: [
+          /*
           "top-mid-ninth-eighth",
           "top-mid-ninth-ninth",
           "mid-mid-third-second",
           "mid-mid-third-third",
+          */
+          "mid-mid-second-second",
+          "mid-mid-second-third",
+          "mid-mid-second-fifth",
+          "mid-mid-second-sixth",
+          "mid-mid-second-eighth",
+          "mid-mid-second-ninth",
+          "mid-mid-fifth-second",
+          "mid-mid-fifth-third",
+
+          "mid-mid-third-first",
+          "mid-mid-third-second",
+          "mid-mid-third-third",
+          "mid-mid-third-fourth",
+          "mid-mid-third-fifth",
+          "mid-mid-third-sixth",
+          "mid-mid-third-seventh",
+          "mid-mid-third-eighth",
+          "mid-mid-third-ninth",
+          "mid-mid-sixth-first",
+          "mid-mid-sixth-second",
+          "mid-mid-sixth-third",
         ],
 
         state: "wrong-box"
@@ -364,14 +508,36 @@ const steps = [
     highlights: [
       {
         ids: [
-          "top-mid-seventh-eighth",
-          "top-mid-seventh-ninth",
-          "top-mid-eighth-seventh",
+          "mid-left-third-second",
+          "mid-left-third-third",
+          "mid-left-third-fifth",
+          "mid-left-third-sixth",
+          "mid-left-third-eighth",
+          "mid-left-third-ninth",
+          "mid-left-sixth-second",
+          "mid-left-sixth-third",
+        
+          "mid-mid-first-first",
           "mid-mid-first-second",
           "mid-mid-first-third",
+          "mid-mid-first-fourth",
+          "mid-mid-first-fifth",
+          "mid-mid-first-sixth",
+          "mid-mid-first-seventh",
           "mid-mid-first-eighth",
-          "mid-mid-second-first",
+          "mid-mid-first-ninth",
+          "mid-mid-fourth-first",
           "mid-mid-fourth-second",
+          "mid-mid-fourth-third",
+
+          "mid-mid-fourth-seventh",
+          "mid-mid-fourth-eighth",
+          "mid-mid-seventh-first",
+          "mid-mid-seventh-second",
+          "mid-mid-seventh-fourth",
+          "mid-mid-seventh-fifth",
+          "mid-mid-seventh-seventh",
+          "mid-mid-seventh-eighth",
         ],
 
         state: "copy-box"
@@ -387,8 +553,14 @@ const steps = [
     highlights: [
       {
         ids: [
-          "mid-mid-first-eighth",
-          "mid-mid-fourth-second",
+          "mid-mid-fourth-seventh",
+          "mid-mid-fourth-eighth",
+          "mid-mid-seventh-first",
+          "mid-mid-seventh-second",
+          "mid-mid-seventh-fourth",
+          "mid-mid-seventh-fifth",
+          "mid-mid-seventh-seventh",
+          "mid-mid-seventh-eighth",
         ],
 
         state: "correct-box"
@@ -404,8 +576,14 @@ const steps = [
     highlights: [
       {
         ids: [
-          "mid-mid-first-eighth",
-          "mid-mid-fourth-second",
+          "mid-mid-fourth-seventh",
+          "mid-mid-fourth-eighth",
+          "mid-mid-seventh-first",
+          "mid-mid-seventh-second",
+          "mid-mid-seventh-fourth",
+          "mid-mid-seventh-fifth",
+          "mid-mid-seventh-seventh",
+          "mid-mid-seventh-eighth",
         ],
 
         state: "wrong-box"
@@ -421,14 +599,36 @@ const steps = [
     highlights: [
       {
         ids: [
-          "top-mid-eighth-ninth",
-          "top-mid-ninth-seventh",
-          "top-mid-ninth-eighth",
+          "mid-mid-second-second",
           "mid-mid-second-third",
+          "mid-mid-second-fifth",
+          "mid-mid-second-sixth",
+          "mid-mid-second-eighth",
+          "mid-mid-second-ninth",
+          "mid-mid-fifth-second",
+          "mid-mid-fifth-third",
+
           "mid-mid-third-first",
           "mid-mid-third-second",
-          "mid-mid-second-eighth",
-          "mid-mid-fifth-second",
+          "mid-mid-third-third",
+          "mid-mid-third-fourth",
+          "mid-mid-third-fifth",
+          "mid-mid-third-sixth",
+          "mid-mid-third-seventh",
+          "mid-mid-third-eighth",
+          "mid-mid-third-ninth",
+          "mid-mid-sixth-first",
+          "mid-mid-sixth-second",
+          "mid-mid-sixth-third",
+
+          "mid-mid-fifth-seventh",
+          "mid-mid-fifth-eighth",
+          "mid-mid-eighth-first",
+          "mid-mid-eighth-second",
+          "mid-mid-eighth-fourth",
+          "mid-mid-eighth-fifth",
+          "mid-mid-eighth-seventh",
+          "mid-mid-eighth-eighth",
         ],
 
         state: "copy-box"
@@ -444,8 +644,14 @@ const steps = [
     highlights: [
       {
         ids: [
-          "mid-mid-second-eighth",
-          "mid-mid-fifth-second",
+          "mid-mid-fifth-seventh",
+          "mid-mid-fifth-eighth",
+          "mid-mid-eighth-first",
+          "mid-mid-eighth-second",
+          "mid-mid-eighth-fourth",
+          "mid-mid-eighth-fifth",
+          "mid-mid-eighth-seventh",
+          "mid-mid-eighth-eighth",
         ],
 
         state: "correct-box"
@@ -461,8 +667,14 @@ const steps = [
     highlights: [
       {
         ids: [
-          "mid-mid-second-eighth",
-          "mid-mid-fifth-second",
+          "mid-mid-fifth-seventh",
+          "mid-mid-fifth-eighth",
+          "mid-mid-eighth-first",
+          "mid-mid-eighth-second",
+          "mid-mid-eighth-fourth",
+          "mid-mid-eighth-fifth",
+          "mid-mid-eighth-seventh",
+          "mid-mid-eighth-eighth",
         ],
 
         state: "wrong-box"
@@ -478,18 +690,36 @@ const steps = [
     highlights: [
       {
         ids: [
-          "mid-mid-first-eighth",
-          "mid-mid-first-ninth",
-          "mid-mid-second-seventh",
-          "mid-mid-second-eighth",
-          "mid-mid-fourth-second",
-          "mid-mid-fourth-third",
+          "mid-mid-fourth-seventh",
           "mid-mid-fourth-eighth",
           "mid-mid-fourth-ninth",
-          "mid-mid-fifth-first",
-          "mid-mid-fifth-second",
+          "mid-mid-seventh-first",
           "mid-mid-seventh-second",
           "mid-mid-seventh-third",
+          "mid-mid-seventh-fourth",
+          "mid-mid-seventh-fifth",
+          "mid-mid-seventh-sixth",
+          "mid-mid-seventh-seventh",
+          "mid-mid-seventh-eighth",
+          "mid-mid-seventh-ninth",
+
+          "mid-mid-fifth-seventh",
+          "mid-mid-fifth-eighth",
+          "mid-mid-eighth-first",
+          "mid-mid-eighth-second",
+          "mid-mid-eighth-fourth",
+          "mid-mid-eighth-fifth",
+          "mid-mid-eighth-seventh",
+          "mid-mid-eighth-eighth",
+
+          "bot-mid-first-fourth",
+          "bot-mid-first-fifth",
+          "bot-mid-first-seventh",
+          "bot-mid-first-eighth",
+          "bot-mid-fourth-first",
+          "bot-mid-fourth-second",
+          "bot-mid-fourth-fourth",
+          "bot-mid-fourth-fifth",
         ],
 
         state: "copy-box"
@@ -505,10 +735,14 @@ const steps = [
     highlights: [
       {
         ids: [
-          "mid-mid-fourth-eighth",
-          "mid-mid-fourth-ninth",
-          "mid-mid-seventh-second",
-          "mid-mid-seventh-third",
+          "bot-mid-first-fourth",
+          "bot-mid-first-fifth",
+          "bot-mid-first-seventh",
+          "bot-mid-first-eighth",
+          "bot-mid-fourth-first",
+          "bot-mid-fourth-second",
+          "bot-mid-fourth-fourth",
+          "bot-mid-fourth-fifth",
         ],
 
         state: "correct-box"
@@ -524,10 +758,14 @@ const steps = [
     highlights: [
       {
         ids: [
-          "mid-mid-fourth-eighth",
-          "mid-mid-fourth-ninth",
-          "mid-mid-seventh-second",
-          "mid-mid-seventh-third",
+          "bot-mid-first-fourth",
+          "bot-mid-first-fifth",
+          "bot-mid-first-seventh",
+          "bot-mid-first-eighth",
+          "bot-mid-fourth-first",
+          "bot-mid-fourth-second",
+          "bot-mid-fourth-fourth",
+          "bot-mid-fourth-fifth",
         ],
 
         state: "wrong-box"
@@ -645,10 +883,7 @@ function renderStep(stepIndex) {
 
   });
 
-  console.log(
-    "State changed to " + stepIndex
-  );
-
+  console.log("State changed to " + stepIndex);
 }
 
 /*
@@ -682,7 +917,7 @@ let previousFrame = null;
 let isProcessing = false;
 
 const delays = {
-  correct: 3000,
+  correct: 7000,
   wrong: 5000,
   transition: 7000,
   initialization: 5000,
@@ -765,8 +1000,8 @@ async function recognitionLoop() {
               "application/json"
           },
           body: JSON.stringify({
-            image:
-              currentFrame
+            image:currentFrame,
+            step: currentStep
           })
         }
       );
@@ -794,16 +1029,10 @@ async function recognitionLoop() {
         handleValidation(result, 15, 16, 14);
         break;
       case 17:
-        handleValidation(result, 18, 19, 17);
+        goToStep(18);
+        delayedStep(19, delays.transition);
         break;
-      case 20:
-        handleValidation(result, 21, 22, 20);
-        break;
-      case 23:
-        goToStep(24);
-        delayedStep(25, delays.transition);
-        break;
-      case 25:
+      case 19:
         delayedStep(1, delays.final);
         break;
       default:
@@ -818,12 +1047,12 @@ async function recognitionLoop() {
 }
 
 async function initializeSystem() {
-  let override = 1;
+  let override = 0;
 
   if(override == 0) {
     await initializeCamera();
 
-    await new Promise(resolve => setTimeout(resolve, 2000));
+    await new Promise(resolve => setTimeout(resolve, 3000));
 
     renderStep(currentStep);
 
@@ -835,31 +1064,34 @@ initializeSystem();
 
 const buttonStepMap = {
   init: 1,
+  /*
   L1: 2,
   L1c: 3,
   L1w: 4,
   R1: 5,
   R1c: 6,
   R1w: 7,
-  L2: 8,
-  L2c: 9,
-  L2w: 10,
-  R2: 11,
-  R2c: 12,
-  R2w: 13,
-  L3: 14,
-  L3c: 15,
-  L3w: 16,
-  R3: 17,
-  R3c: 18,
-  R3w: 19,
-  b4: 20,
-  b4c: 21,
-  b4w: 22,
-  b5: 23,
-  b6: 24,
-  b7: 25
+  */
+  L2: 2,
+  L2c: 3,
+  L2w: 4,
+  R2: 5,
+  R2c: 6,
+  R2w: 7,
+  L3: 8,
+  L3c: 9,
+  L3w: 10,
+  R3: 11,
+  R3c: 12,
+  R3w: 13,
+  b4: 14,
+  b4c: 15,
+  b4w: 16,
+  b5: 17,
+  b6: 18,
+  b7: 19
 };
+
 
 window.addEventListener("DOMContentLoaded",() => {
     Object.keys(buttonStepMap).forEach(id => {
@@ -878,4 +1110,5 @@ window.addEventListener("DOMContentLoaded",() => {
     });
   }
 );
+
 

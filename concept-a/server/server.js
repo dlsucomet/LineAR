@@ -2,267 +2,129 @@ const express = require("express");
 const fs = require("fs");
 const path = require("path");
 const cors = require("cors");
-const sharp = require("sharp");
-const Tesseract = require("tesseract.js");
+const { exec } = require("child_process");
+const util = require("util");
+
+const execPromise = util.promisify(exec);
 const app = express();
 
 app.use(cors());
+app.use(express.json({ limit: "50mb" }));
+app.use(express.static(path.join(__dirname, "../client")));
+app.use("/captures", express.static(path.join(__dirname, "../captures")));
 
-app.use(express.json({
-  limit: "50mb"
-}));
+let currentStep = "secondStepLeft"; 
 
-/* Change values here according to setup */
-const cropRegions = {
-  firstStepLeft: {
-    one: {
-      top: 400,
-      left: 840,
-      width: 70,
-      height: 70
-    },
-
-    two: {
-      top: 400,
-      left: 910,
-      width: 70,
-      height: 70
-    },
-
-    three: {
-      top: 400,
-      left: 910,
-      width: 70,
-      height: 70
-    }
-  },
-
-  firstStepRight: {
-    one: {
-      top: 200,
-      left: 900,
-      width: 300,
-      height: 300
-    },
-
-    two: {
-      top: 200,
-      left: 200,
-      width: 300,
-      height: 300
-    },
-
-    three: {
-      top: 400,
-      left: 910,
-      width: 70,
-      height: 70
-    }
-  },
-
-  secondStepLeft: {
-    one: {
-      top: 550,
-      left: 200,
-      width: 300,
-      height: 300
-    }
-  },
-
-  secondStepRight: {
-    one: {
-      top: 550,
-      left: 900,
-      width: 300,
-      height: 300
-    }
-  },
-
-  thirdStepLeft: {
-    one: {
-      top: 900,
-      left: 200,
-      width: 300,
-      height: 300
-    }
-  },
-
-  thirdStepRight: {
-    one: {
-      top: 900,
-      left: 900,
-      width: 300,
-      height: 300
-    }
-  },
-
-  fourthStep: {
-    one: {
-      top: 200,
-      left: 550,
-      width: 300,
-      height: 300
-    }
-  }
-};
-
-let currentStep = "firstStepLeft";
-
-/* Hardcoded answers for prototype */
 const expectedAnswers = {
-  firstStepLeft: {
-    one: ["3"],
-    two: ["1"],
-    three: ["2"]
-  },
-
-  firstStepRight: {
-    one: ["2"],
-    two: ["0"],
-    three: ["1"]
-  },
-
-  secondStepLeft: {
-    one: ["4"],
-    two: ["-1"]
-  },
-
-  secondStepRight: {
-    one: ["-2"],
-    two: ["-1"]
-  },
-
-  thirdStepLeft: {
-    one: ["12"],
-    two: ["-3"]
-  },
-
-  thirdStepRight: {
-    one: ["-2"],
-    two: ["4"]
-  },
-
-  fourthStep: {
-    one: ["10"],
-    two: ["1"]
-  }
-
+  secondStepLeft:  { one: ["3"],    two: ["4", "-1", "-4", "1"] },
+  secondStepRight: { one: ["-2", "2"],   two: ["-1", "2"] },
+  thirdStepLeft:   { one: ["12", "1", "2", "3", "-3"]},
+  thirdStepRight:  { one: ["2", "-4", "-2", "4"]},
+  fourthStep:      { one: ["14", "7", "-7"]}
 };
-
-const stepOrder = [
-  "firstStepLeft",
-  "firstStepRight",
-  "secondStepLeft",
-  "secondStepRight",
-  "thirdStepLeft",
-  "thirdStepRight",
-  "fourthStep"
-];
-
 
 app.post("/frame", async (req, res) => {
     try {
         const image = req.body.image;
-        const base64 = image.replace(/^data:image\/png;base64,/,"");
+        if (!image) return res.status(400).json({ success: false, error: "Missing image payload" });
+
+        const base64 = image.replace(/^data:image\/\w+;base64,/, "");
         const filename = `frame-${Date.now()}.png`;
         const filepath = path.join(__dirname, "../captures", filename);
+        const warpedPath = path.join(__dirname, "../captures", `warped-${filename}`);
 
-        const imageBuffer = Buffer.from(base64,"base64");
+        fs.writeFileSync(filepath, Buffer.from(base64, "base64"));
 
-        fs.writeFileSync(filepath,imageBuffer);
+        let pythonData;
 
-        console.log("Saved:", filename);
+        try {
+            const flaskResponse = await fetch("http://127.0.0.1:5000/process", {
+                method: "POST",
+                headers: { "Content-Type": "application/json" },
+                body: JSON.stringify({
+                    image_path: filepath,
+                    warped_out_path: warpedPath,
+                    current_step: currentStep
+                })
+            });
 
+            // Extract the json data matrix output directly
+            pythonData = await flaskResponse.json();
 
-        const currentRegions = cropRegions[currentStep];
-        const recognizedResults = {};
-        recognizedResults[currentStep] = {};
-
-        for (const regionName in currentRegions) {
-          const region = currentRegions[regionName];
-          const croppedPath = path.join(__dirname, "../captures", `${currentStep}-${regionName}-${filename}`);
-
-          await sharp(imageBuffer)
-            .extract({
-              left: region.left,
-              top: region.top,
-              width: region.width,
-              height: region.height
-            })
-            .resize(800, 800)
-            .toFile(croppedPath);
-
-          console.log("Cropped:", croppedPath);
-
-          const result = await Tesseract.recognize(
-              croppedPath,
-              "eng",
-              {
-                config: {
-                  tessedit_char_whitelist: "0123456789-",
-                  tessedit_pageseg_mode: 7
-                }
-              }
-            );
-
-          const rawText = result.data.text;
-          const recognizedValues =
-            rawText
-              .split(/\s+/)
-              .map(
-                value =>
-                  value.replace(
-                    /[^0-9-]/g,
-                    ""
-                  )
-              )
-              .filter(
-                value =>
-                  value !== ""
-              );
-
-          console.log(`${currentStep} ${regionName}`);
-          console.log("OCR:",rawText);
-          console.log("Recognized:", recognizedValues);
-
-          recognizedResults[currentStep][regionName] = recognizedValues;
+        } catch (error) {
+            console.error("Pipeline Communication Error:", error.message || error);
+            return res.status(500).json({ 
+                success: false, 
+                error: "Flask API pipeline communication failed" 
+            });
         }
 
-        let state = "correct";
+        if (pythonData.status === "paper_not_found") {
+            console.log("ArUco Verification Failure: Markers could not be located.");
+            return res.json({ success: true, state: "paper_not_found" });
+        }
 
+        if (pythonData.status === "error") {
+            console.error("Python processing runtime error:", pythonData.message);
+            return res.status(500).json({ success: false, error: pythonData.message });
+        }
+
+        console.log(`Python execution succeeded for ${currentStep}. Validating answers via OR rules...`);
+        
+        const recognizedResults = { [currentStep]: pythonData.recognized };
+        let state = "correct";
         const expectedStep = expectedAnswers[currentStep];
         const recognizedStep = recognizedResults[currentStep];
 
         for (const regionName in expectedStep) {
-          const expectedValues = expectedStep[regionName];
-          const recognizedValues = recognizedStep[regionName];
+            const expectedValues = expectedStep[regionName];
+            const recognizedValues = recognizedStep[regionName] || [];
 
-          if (recognizedValues.length < expectedValues.length) {
-            state = "incomplete";
-            console.log(`${regionName} incomplete`);
-            break;
-          }
+            console.log(`Region [${regionName}] | Expected: ${expectedValues} | Found: ${recognizedValues}`);
 
-          const matches = JSON.stringify(expectedValues) === JSON.stringify(recognizedValues);
+            if (recognizedValues.length === 0) {
+                state = "incomplete";
+                break;
+            }
 
-          if (!matches) {
-            state = "wrong";
-            console.log(`${regionName} incorrect`);
-            break;
-          }
-          console.log(`${regionName} correct`);
+            const containsValidAnswer = expectedValues.some(val => {
+                const escapedVal = val.replace(/[-\/\\^$*+?.()|[\]{}]/g, '\\$&');
+                
+                const regex = new RegExp(`${escapedVal}`);
+                return recognizedValues.some(ocrStr => regex.test(ocrStr));
+            });
+
+            if (!containsValidAnswer) {
+                state = "wrong";
+                break;
+            }
         }
 
-        res.json({success: true, filename, currentStep, recognizedResults, state});
-
-        } catch(error) {
-            console.error(error);
-            res.status(500).json({success: false});
+        if (state === "correct") {
+            console.log(`Step ${currentStep} successfully cleared!`);
+            if (currentStep === "secondStepLeft") {
+                currentStep = "secondStepRight";
+            } else if (currentStep === "secondStepRight") {
+                currentStep = "thirdStepLeft";
+            } else if (currentStep === "thirdStepLeft") {
+                currentStep = "thirdStepRight";
+            } else if (currentStep === "thirdStepRight") {
+                currentStep = "fourthStep";
+            } else if (currentStep === "fourthStep") {
+                console.log("Sheet completed!");
+            }
+            
+            console.log(`Next frame payload will request Python to look at: ${currentStep}`);
         }
+
+        return res.json({ success: true, filename, currentStep, recognizedResults, state });
+
+    } catch (error) {
+        console.error("Server Pipeline Error:", error);
+        return res.status(500).json({ success: false, error: "Internal Server Error" });
     }
-);
+});
 
 app.listen(3000, () => {
     console.log("Server running on port 3000");
-  }
-);
+});
