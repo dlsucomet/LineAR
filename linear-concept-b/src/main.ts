@@ -793,10 +793,9 @@ function processInteractionFrame(
   ds: DemoInteractionState,
   isHandActive: boolean,
 ): void {
-  ui.setFingerPosition(pointerCanvas);
-
   // If no finger or mouse coordinate is active, drop grabs and bail
   if (!pointerCanvas) {
+    ui.setFingerPosition(null);
     ds.isDraggingCornerA = false;
     ds.isDraggingCornerB = false;
     ds.isDraggingCornerC = false;
@@ -806,12 +805,19 @@ function processInteractionFrame(
     return;
   }
 
+  // Strip pan offset from hand-tracked pointer so fixed-position
+  // UI buttons (Continue, Yes/No) can be hit-tested correctly after panning.
+  const pan = ui.getPanOffset();
+  const pointerUI = isHandActive
+    ? { x: pointerCanvas.x - pan.x, y: pointerCanvas.y - pan.y }
+    : pointerCanvas;
+  ui.setFingerPosition(pointerUI);
+
   const gridLayout = ui.getLayoutProperties();
-  const TEXT_STRIP_H = 40;
+  const TEXT_STRIP_H = 48;
   const GRID_RANGE = 10;
 
   // Grid center in canvas pixels, accounting for viewport pan
-  const pan = ui.getPanOffset();
   const gridHeight = canvas.height - TEXT_STRIP_H;
   const gridCenterX = canvas.width / 2 + pan.x;
   const gridCenterY = TEXT_STRIP_H + gridHeight / 2 + pan.y;
@@ -824,10 +830,10 @@ function processInteractionFrame(
       const bx = (canvas.width - 180) / 2;
       const by = gridY + gridHeight / 2 - 24;
       if (
-        pointerCanvas.x >= bx &&
-        pointerCanvas.x <= bx + 180 &&
-        pointerCanvas.y >= by &&
-        pointerCanvas.y <= by + 48
+        pointerUI.x >= bx &&
+        pointerUI.x <= bx + 180 &&
+        pointerUI.y >= by &&
+        pointerUI.y <= by + 48
       ) {
         if (ds.dwellStart === 0) ds.dwellStart = Date.now();
         if (Date.now() - ds.dwellStart > HOVER_DWELL_MS) {
@@ -1227,13 +1233,13 @@ function processInteractionFrame(
     const insideBox = (p: Point2D, box: DOMRect) =>
       p.x >= box.x && p.x <= box.x + box.width && p.y >= box.y && p.y <= box.y + box.height;
 
-    if (insideBox(pointerCanvas, btnYes)) {
+    if (insideBox(pointerUI, btnYes)) {
       if (ds.dwellStart === 0) ds.dwellStart = Date.now();
       if (Date.now() - ds.dwellStart > HOVER_DWELL_MS) {
         ds.dwellStart = 0;
         ui.onYes?.();
       }
-    } else if (insideBox(pointerCanvas, btnNo)) {
+    } else if (insideBox(pointerUI, btnNo)) {
       if (ds.dwellStart === 0) ds.dwellStart = Date.now();
       if (Date.now() - ds.dwellStart > HOVER_DWELL_MS) {
         ds.dwellStart = 0;
@@ -1251,10 +1257,10 @@ function processInteractionFrame(
     const btnContinue = buttons.continue;
     if (
       btnContinue &&
-      pointerCanvas.x >= btnContinue.x &&
-      pointerCanvas.x <= btnContinue.x + btnContinue.width &&
-      pointerCanvas.y >= btnContinue.y &&
-      pointerCanvas.y <= btnContinue.y + btnContinue.height
+      pointerUI.x >= btnContinue.x &&
+      pointerUI.x <= btnContinue.x + btnContinue.width &&
+      pointerUI.y >= btnContinue.y &&
+      pointerUI.y <= btnContinue.y + btnContinue.height
     ) {
       if (ds.dwellStart === 0) ds.dwellStart = Date.now();
       if (Date.now() - ds.dwellStart > HOVER_DWELL_MS) {

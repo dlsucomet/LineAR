@@ -24,7 +24,7 @@ const C = {
   gridLine: "rgba(40, 80, 140, 0.7)",
   gridBg: "#eef4fb",
   instrBlue: "#3a7bd5",
-  instrCyan: "#3abfcf",
+  // instrCyan: "#3abfcf",
   instrOrange: "#f08030",
   btnYesBg: "#3a5a7a",
   btnNoBg: "#555",
@@ -49,7 +49,7 @@ const C = {
 // ---------------------------------------------------------------------------
 const GRID_RANGE = 10;
 const GRID_SNAP_RADIUS = 2.0;
-const TEXT_STRIP_H = 40;
+const TEXT_STRIP_H = 48;
 const PAN_PADDING = 4;
 
 /** Basis vector target positions (grid coords, within ±3 of origin).
@@ -436,31 +436,31 @@ export class TabletopUI {
 
     let color = C.instrBlue;
     if (phase === "OBJECT_DETECTED") color = C.instrOrange;
-    if (phase === "TRANSFORMED") color = C.instrCyan;
+    if (phase === "TRANSFORMED") color = C.instrBlue;
     if (phase === "WAITING_FOR_OBJECT") color = C.instrBlue;
-    if (phase === "POINTS_CALCULATED") color = C.instrCyan;
+    if (phase === "POINTS_CALCULATED") color = C.instrBlue;
     if (phase === "CONFIRM_TRANSFORM") color = C.instrBlue;
     if (phase === "CONFIRM_RESET") color = C.instrBlue;
 
     ctx.fillStyle = color;
-    ctx.font = "bold 18px 'Courier New', monospace";
+    ctx.font = "bold 22px 'Courier New', monospace";
     ctx.strokeStyle = "#000";
     ctx.lineWidth = 1.5;
 
     // For phases with buttons, left-align text as part of a centered group (text + buttons)
     if (phase === "CONFIRM_TRANSFORM" || phase === "CONFIRM_RESET" || phase === "TRANSFORMED") {
-      const buttonWidth = phase === "TRANSFORMED" ? 100 : 64 * 2 + 10;
+      const buttonWidth = phase === "TRANSFORMED" ? 100 : 64 * 2 + 20;
       const tw = ctx.measureText(text).width;
-    const gap = 40;
+    const gap = 20;
       const groupWidth = tw + gap + buttonWidth;
       const groupStartX = (W - groupWidth) / 2;
       ctx.textAlign = "left";
-      ctx.strokeText(text, groupStartX, TEXT_STRIP_H - 12);
-      ctx.fillText(text, groupStartX, TEXT_STRIP_H - 12);
+      ctx.strokeText(text, groupStartX, TEXT_STRIP_H - 14);
+      ctx.fillText(text, groupStartX, TEXT_STRIP_H - 14);
     } else {
       ctx.textAlign = "center";
-      ctx.strokeText(text, W / 2, TEXT_STRIP_H - 12);
-      ctx.fillText(text, W / 2, TEXT_STRIP_H - 12);
+      ctx.strokeText(text, W / 2, TEXT_STRIP_H - 14);
+      ctx.fillText(text, W / 2, TEXT_STRIP_H - 14);
     }
     ctx.textAlign = "left";
   }
@@ -469,9 +469,9 @@ export class TabletopUI {
     const { ctx, W } = this;
     const bw = 64;
     const bh = 28;
-    const gap = 10;
+    const gap = 20;
 
-    ctx.font = "18px 'Courier New', monospace";
+    ctx.font = "22px 'Courier New', monospace";
     const text = this.demoInstructions?.[phase] ?? getInstructionText(phase);
     const tw = ctx.measureText(text).width;
     const buttonGroupWidth = bw * 2 + gap;
@@ -480,7 +480,7 @@ export class TabletopUI {
 
     const yesX = groupStartX + tw + gap;
     const noX = yesX + bw + gap;
-    const btnY = 6;
+    const btnY = 10;
 
     // Yes button (darker blue in frames)
     ctx.fillStyle = C.btnYesBg;
@@ -717,7 +717,7 @@ export class TabletopUI {
   /** Draw "Continue →" button during TRANSFORMED phase. */
   private drawContinueButton(_grid: DOMRect): void {
     const ctx = this.ctx;
-    ctx.font = "18px 'Courier New', monospace";
+    ctx.font = "22px 'Courier New', monospace";
     const text = this.demoInstructions?.["TRANSFORMED"] ?? getInstructionText("TRANSFORMED");
     const tw = ctx.measureText(text).width;
     const gap = 10;
@@ -726,7 +726,7 @@ export class TabletopUI {
     const groupWidth = tw + gap + bw;
     const groupStartX = (this.W - groupWidth) / 2;
     const x = groupStartX + tw + gap;
-    const y = 6;
+    const y = 10;
 
     ctx.fillStyle = "#3a5a7a";
     ctx.beginPath();
