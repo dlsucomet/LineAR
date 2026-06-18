@@ -918,9 +918,9 @@ let isProcessing = false;
 
 const delays = {
   correct: 7000,
-  wrong: 5000,
+  wrong: 7000,
   transition: 7000,
-  initialization: 5000,
+  initialization: 20000,
   final: 200000
 };
 
