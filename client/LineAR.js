@@ -1,85 +1,135 @@
 const video = document.getElementById('webcamFeed');
-const canvas = document.getElementById('arOverlay');
-const ctx = canvas.getContext('2d');
+const arCanvas = document.getElementById('arOverlay');
+const arCtx = arCanvas.getContext('2d');
+
+const graphCanvas = document.getElementById('graphCanvas');
+const graphCtx = graphCanvas.getContext('2d');
 const statusBadge = document.getElementById('status');
 
-// Target answer parameters for Problem 1
 let executionStep = "secondStepLeft"; 
-const validationTargets = {
-    "secondStepLeft": ["12", "-3"],
-    "secondStepRight": ["2", "-4"],
-    "finalAnswer": ["14", "-7"]
-};
 
-// Initialize Web Video Components
+// Active vectors state coordinates to render on the left panel
+let activeVectors = [
+    { x: 3, y: -2, color: '#ff4757', label: 'v' } // Initial target vector from step (i)
+];
+
 async function setupCamera() {
     try {
         const stream = await navigator.mediaDevices.getUserMedia({
-            video: { width: 1920, height: 1080, facingMode: "environment" },
+            video: { width: 1280, height: 720, facingMode: "environment" },
             audio: false
         });
         video.srcObject = stream;
-        return new Promise((resolve) => {
-            video.onloadedmetadata = () => {
-                resolve(video);
-            };
-        });
+        return new Promise((resolve) => video.onloadedmetadata = () => resolve(video));
     } catch (err) {
         statusBadge.innerText = "Error: Camera Access Denied";
-        console.error(err);
     }
 }
 
-function configureCanvasSize() {
-    canvas.width = canvas.clientWidth;
-    canvas.height = canvas.clientHeight;
+function resizeCanvases() {
+    arCanvas.width = arCanvas.clientWidth;
+    arCanvas.height = arCanvas.clientHeight;
+    
+    graphCanvas.width = graphCanvas.clientWidth;
+    graphCanvas.height = graphCanvas.clientHeight;
 }
 
-// Draws static user targets matching your design layout
-function renderTargetGuidelines() {
-    ctx.clearRect(0, 0, canvas.width, canvas.height);
-    
-    // Draw Target Alignment Guides (Simulating bounding tracking ranges)
-    ctx.strokeStyle = '#7cb5ec';
-    ctx.lineWidth = 4;
-    ctx.strokeRect(canvas.width * 0.25, canvas.height * 0.15, canvas.width * 0.5, canvas.height * 0.7);
+// ─── DRAW CARTESIAN COORDINATE SYSTEM ON THE LEFT ───
+function drawCartesianPlane() {
+    const w = graphCanvas.width;
+    const h = graphCanvas.height;
+    graphCtx.clearRect(0, 0, w, h);
 
-    // Conditional AR Verification Projection Boxes
+    const originX = w / 2;
+    const originY = h / 2;
+    const scale = 40; // Pixels per unit grid space
+
+    // 1. Draw Grid Lines
+    graphCtx.strokeStyle = '#e2e8f0';
+    graphCtx.lineWidth = 1;
+    
+    for (let x = originX % scale; x < w; x += scale) {
+        graphCtx.beginPath(); graphCtx.moveTo(x, 0); graphCtx.lineTo(x, h); graphCtx.stroke();
+    }
+    for (let y = originY % scale; y < h; y += scale) {
+        graphCtx.beginPath(); graphCtx.moveTo(0, y); graphCtx.lineTo(w, y); graphCtx.stroke();
+    }
+
+    // 2. Draw Main Axes
+    graphCtx.strokeStyle = '#475569';
+    graphCtx.lineWidth = 2;
+    graphCtx.beginPath(); graphCtx.moveTo(0, originY); graphCtx.lineTo(w, originY); graphCtx.stroke(); // X axis
+    graphCtx.beginPath(); graphCtx.moveTo(originX, 0); graphCtx.lineTo(originX, h); graphCtx.stroke(); // Y axis
+
+    // 3. Render Active Vectors from Linear Algebra calculations
+    activeVectors.forEach(vec => {
+        const targetX = originX + (vec.x * scale);
+        const targetY = originY - (vec.y * scale); // Invert Y because canvas draws downward
+
+        // Vector Arrow Body
+        graphCtx.strokeStyle = vec.color;
+        graphCtx.lineWidth = 3;
+        graphCtx.beginPath();
+        graphCtx.moveTo(originX, originY);
+        graphCtx.lineTo(targetX, targetY);
+        graphCtx.stroke();
+
+        // Vector End Point Indicator node
+        graphCtx.fillStyle = vec.color;
+        graphCtx.beginPath();
+        graphCtx.arc(targetX, targetY, 5, 0, 2 * Math.PI);
+        graphCtx.fill();
+
+        // Text label metadata rendering
+        graphCtx.font = "bold 12px sans-serif";
+        graphCtx.fillText(`${vec.label} [${vec.x}, ${vec.y}]`, targetX + 8, targetY - 4);
+    });
+}
+
+// ─── DRAW AR CAMERA GUIDES ON THE RIGHT ───
+function drawAROverlay() {
+    arCtx.clearRect(0, 0, arCanvas.width, arCanvas.height);
+    
+    // Draw tracking crosshair framework zone
+    arCtx.strokeStyle = 'rgba(124, 181, 236, 0.5)';
+    arCtx.lineWidth = 2;
+    arCtx.strokeRect(arCanvas.width * 0.1, arCanvas.height * 0.1, arCanvas.width * 0.8, arCanvas.height * 0.8);
+
     if (executionStep === "secondStepLeft") {
-        ctx.fillStyle = "rgba(74, 222, 128, 0.4)"; // Projected translucent target highlight
-        ctx.fillRect(320, 220, 80, 140);
-        
-        ctx.strokeStyle = "#22c55e";
-        ctx.lineWidth = 3;
-        ctx.strokeRect(320, 220, 80, 140);
+        arCtx.fillStyle = "rgba(74, 222, 128, 0.35)";
+        arCtx.fillRect(150, 120, 90, 180);
+        arCtx.strokeStyle = "#22c55e";
+        arCtx.lineWidth = 2;
+        arCtx.strokeRect(150, 120, 90, 180);
     }
 }
 
-// Emulates your pipeline execution flow inside the browser
 function triggerValidationPass() {
-    statusBadge.innerText = "Processing Step OCR...";
+    statusBadge.innerText = "Analyzing handwritten steps...";
     
-    // Emulating an OCR evaluation hit cycle against current target coordinates
     setTimeout(() => {
-        // Mocking positive handwriting detection evaluation from the OCR cycle
-        statusBadge.innerText = "Step Validated: Correct!";
-        
-        // Transition system processing states to update target tracking locations
+        statusBadge.innerText = "Step Validated! Correct.";
         executionStep = "secondStepRight";
-        renderTargetGuidelines();
-    }, 1200);
+        
+        // Push a new linear combination component to the graph matrix dynamically
+        activeVectors.push({ x: 12, y: -3, color: '#3b82f6', label: '3*L(v1)' });
+        
+        drawCartesianPlane();
+        drawAROverlay();
+    }, 1000);
 }
 
-// Core App Initialization Routine
+function renderLoop() {
+    drawCartesianPlane();
+    drawAROverlay();
+}
+
 async function init() {
     await setupCamera();
-    configureCanvasSize();
-    statusBadge.innerText = "System Status: Active";
-    
-    // Run regular frame overlay update loops
-    setInterval(renderTargetGuidelines, 33); // Handles redraw frames approx 30fps
+    resizeCanvases();
+    statusBadge.innerText = "System Ready";
+    setInterval(renderLoop, 33);
 }
 
-// Global Event Triggers
-window.addEventListener('resize', configureCanvasSize);
+window.addEventListener('resize', () => { resizeCanvases(); renderLoop(); });
 window.addEventListener('DOMContentLoaded', init);
