@@ -2,8 +2,6 @@ run:
 	cmd /c make kill
 	cmd /c make clean
 	cmd /c start /b python server/process_paper.py
-	@echo Waiting for EasyOCR Engine to initialize...
-	cmd /c "FOR /L %i in (1,1,30) DO @(curl -s http://127.0.0.1:5000/ >nul && (echo EasyOCR Is Ready! && goto :out) || (timeout /t 1 /nobreak >nul))" 2>nul & :out
 	cmd /c start http://localhost:3000/index.html
 	node server/server.js
 

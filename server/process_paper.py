@@ -4,14 +4,15 @@ import cv2
 import numpy as np
 import json
 import re
-import easyocr
+from paddleocr import PaddleOCR
 from flask import Flask, request, jsonify
 
 app = Flask(__name__)
 
-print("Initializing EasyOCR Engine...")
-reader = easyocr.Reader(['en'], gpu=False, verbose=False)
-print("EasyOCR Engine Ready!")
+print("Initializing PaddleOCR Engine...")
+# Set use_gpu=False to match your previous CPU implementation
+reader = PaddleOCR(use_angle_cls=False, lang='en', use_gpu=False, show_log=False)
+print("PaddleOCR Engine Ready!")
 
 CAPTURES_DIR = os.path.abspath(os.path.join(os.path.dirname(__file__), "../captures"))
 os.makedirs(CAPTURES_DIR, exist_ok=True)
@@ -134,7 +135,7 @@ def process_endpoint():
                 if comp_h > (r_height * 0.50) or comp_w > (r_width * 0.75):
                     cleaned_mask[labels == i] = 0
 
-            # Convert white-on-black mask back into black-on-white text image for EasyOCR
+            # Convert white-on-black mask back into black-on-white text image for PaddleOCR
             processed_crop = cv2.bitwise_not(cleaned_mask)
 
             h, w = processed_crop.shape[:2]
@@ -153,32 +154,39 @@ def process_endpoint():
             crop_debug_path = os.path.join(CAPTURES_DIR, f"{current_step}-{region_name}-{base_filename}")
             cv2.imwrite(crop_debug_path, final_canvas)
 
-            ocr_results = reader.readtext(final_canvas, allowlist='0123456789-', paragraph=False)
+            # PaddleOCR extraction pass
+            ocr_results = reader.ocr(final_canvas, cls=False)
             detected_tokens = []
 
-            for (bbox, text, confidence) in ocr_results:
-                cleaned = text.replace(" ", "")
-                if not cleaned:
-                    continue
+            # PaddleOCR formats output as a nested list: [ [ [bbox, (text, confidence)], ... ] ]
+            if ocr_results and ocr_results[0]:
+                for line in ocr_results[0]:
+                    bbox = line[0]
+                    text = line[1][0]
+                    confidence = line[1][1]
 
-                y_top = bbox[0][1]
-                y_bottom = bbox[2][1]
-                box_height = y_bottom - y_top
-
-                # Regex splitter
-                for match in re.finditer(r'-?\d+', cleaned):
-                    token = match.group()
-                    if token == "" or token == "-":
+                    cleaned = text.replace(" ", "")
+                    if not cleaned:
                         continue
-                    
-                    start_idx = match.start()
-                    end_idx = match.end()
-                    str_len = len(cleaned)
 
-                    relative_pos = (start_idx + end_idx) / 2.0
-                    token_y_center = y_top + (relative_pos / str_len) * box_height
+                    y_top = bbox[0][1]
+                    y_bottom = bbox[2][1]
+                    box_height = y_bottom - y_top
 
-                    detected_tokens.append((token_y_center, token))
+                    # Regex splitter to keep numbers and minus signs
+                    for match in re.finditer(r'-?\d+', cleaned):
+                        token = match.group()
+                        if token == "" or token == "-":
+                            continue
+                        
+                        start_idx = match.start()
+                        end_idx = match.end()
+                        str_len = len(cleaned)
+
+                        relative_pos = (start_idx + end_idx) / 2.0
+                        token_y_center = y_top + (relative_pos / str_len) * box_height
+
+                        detected_tokens.append((token_y_center, token))
 
             # Sort detected elements strictly top-to-bottom
             detected_tokens.sort(key=lambda item: item[0])
