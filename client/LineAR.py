@@ -55,6 +55,7 @@ tracking_matrix = None
 paper_detected = False
 shared_frame_lock = threading.Lock()
 fullscreen = False
+app_phase = "start"
 
 LOG_FILE_PATH = os.path.abspath(os.path.join(os.path.dirname(__file__), "linear_session.log"))
 
@@ -92,18 +93,6 @@ def log_message(message):
 
 with open(LOG_FILE_PATH, "w", encoding="utf-8") as f:
     f.write(f"=== LineAR System Session Log Start: {datetime.now().strftime('%Y-%m-%d %H:%M:%S')} ===\n")
-
-log_message("Loading OCR Engine context...")
-ocr_reader = easyocr.Reader(['en'], gpu=False, verbose=False)
-log_message("OCR Engine Ready.")
-
-log_message("Initializing hardware camera capture access...")
-cap = cv2.VideoCapture(0)
-cap.set(cv2.CAP_PROP_FRAME_WIDTH, 1280)
-cap.set(cv2.CAP_PROP_FRAME_HEIGHT, 720)
-
-if not cap.isOpened():
-    log_message("CRITICAL ERROR: Could not open the system video capture stream.")
 
 CROP_REGIONS = {
     "secondStepLeft": {
@@ -196,6 +185,38 @@ def background_ocr_pipeline():
     except Exception as e:
         log_message(f"CRITICAL OCR FAILURE: Exception thrown -> {str(e)}")
     is_processing = False
+
+
+def start_session():
+    global app_phase, ocr_reader, cap
+    log_message("Loading OCR Engine context...")
+    ocr_reader = easyocr.Reader(['en'], gpu=False, verbose=False)
+    log_message("OCR Engine Ready.")
+    log_message("Initializing hardware camera capture access...")
+    cap = cv2.VideoCapture(0)
+    cap.set(cv2.CAP_PROP_FRAME_WIDTH, 1280)
+    cap.set(cv2.CAP_PROP_FRAME_HEIGHT, 720)
+    if not cap.isOpened():
+        log_message("CRITICAL ERROR: Could not open the system video capture stream.")
+    log_message("Booting up backend real-time tracking daemon thread pass...")
+    threading.Thread(target=paper_tracking_daemon, daemon=True).start()
+    app_phase = "running"
+    with open(SESSION_PATH) as f:
+        data = json.load(f)
+    data["time_started"] = datetime.now().strftime("%H:%M:%S")
+    with open(SESSION_PATH, "w") as f:
+        json.dump(data, f, indent=2)
+
+
+def handle_shutdown(from_button=False):
+    global running
+    running = False
+    if from_button and os.path.exists(SESSION_PATH):
+        with open(SESSION_PATH) as f:
+            data = json.load(f)
+        data["end_task_pressed"] = True
+        with open(SESSION_PATH, "w") as f:
+            json.dump(data, f, indent=2)
 
 
 def transform_to_projection_space(w_x, w_y):
@@ -413,32 +434,101 @@ def draw_panels(surface):
     draw_instruction_panel(surface, right_rect)
 
 
+def draw_panels_start(surface):
+    left_rect, center_rect, right_rect = get_panel_rects()
+    for rect in [left_rect, center_rect, right_rect]:
+        pygame.draw.rect(surface, COLOR_WHITE, rect)
+        pygame.draw.rect(surface, COLOR_BLUE, rect, 3)
+
+
+def draw_start_button(surface, center_rect):
+    btn_w, btn_h = 260, 70
+    btn_rect = pygame.Rect(center_rect.centerx - btn_w // 2,
+                           center_rect.centery - btn_h // 2, btn_w, btn_h)
+    mx, my = pygame.mouse.get_pos()
+    hovered = btn_rect.collidepoint(mx, my)
+    if hovered:
+        pygame.draw.rect(surface, COLOR_WHITE, btn_rect, border_radius=12)
+        pygame.draw.rect(surface, COLOR_BLUE, btn_rect, 3, border_radius=12)
+        text = font_large.render("START", True, COLOR_BLUE)
+    else:
+        pygame.draw.rect(surface, COLOR_BLUE, btn_rect, border_radius=12)
+        text = font_large.render("START", True, COLOR_WHITE)
+    text_rect = text.get_rect(center=btn_rect.center)
+    surface.blit(text, text_rect)
+    return btn_rect
+
+
+def draw_end_task_button(surface, center_rect):
+    btn_w, btn_h = 160, 44
+    btn_x = center_rect.centerx - btn_w // 2
+    btn_y = screen.get_height() - BOTTOM_BAR_HEIGHT + (BOTTOM_BAR_HEIGHT - btn_h) // 2
+    btn_rect = pygame.Rect(btn_x, btn_y, btn_w, btn_h)
+    mx, my = pygame.mouse.get_pos()
+    hovered = btn_rect.collidepoint(mx, my)
+    if hovered:
+        pygame.draw.rect(surface, COLOR_WHITE, btn_rect, border_radius=6)
+        pygame.draw.rect(surface, COLOR_BLUE, btn_rect, 3, border_radius=6)
+        text = font_medium.render("End Task", True, COLOR_BLUE)
+    else:
+        pygame.draw.rect(surface, COLOR_BLUE, btn_rect, border_radius=6)
+        text = font_medium.render("End Task", True, COLOR_WHITE)
+    text_rect = text.get_rect(center=btn_rect.center)
+    surface.blit(text, text_rect)
+    return btn_rect
+
+
 running = True
-log_message("Booting up backend real-time tracking daemon thread pass...")
-threading.Thread(target=paper_tracking_daemon, daemon=True).start()
+
+start_btn_rect = None
+end_btn_rect = None
 
 while running:
     screen.fill(COLOR_BG)
     for event in pygame.event.get():
         if event.type == pygame.QUIT:
-            running = False
+            handle_shutdown(from_button=False)
+        elif event.type == pygame.MOUSEBUTTONDOWN:
+            if app_phase == "start" and start_btn_rect and start_btn_rect.collidepoint(event.pos):
+                start_session()
+            elif app_phase == "running" and end_btn_rect and end_btn_rect.collidepoint(event.pos):
+                handle_shutdown(from_button=True)
         elif event.type == pygame.KEYDOWN:
             if event.key == pygame.K_ESCAPE:
-                running = False
-            elif event.key == pygame.K_RETURN and not is_processing:
-                is_processing = True
-                threading.Thread(target=background_ocr_pipeline, daemon=True).start()
+                handle_shutdown(from_button=False)
+            elif event.key == pygame.K_RETURN:
+                if app_phase == "start":
+                    start_session()
+                elif not is_processing:
+                    is_processing = True
+                    threading.Thread(target=background_ocr_pipeline, daemon=True).start()
             elif event.key == pygame.K_F11:
                 toggle_fullscreen()
 
-    draw_top_bar(screen)
-    draw_panels(screen)
-    draw_bottom_bar(screen)
+    if app_phase == "start":
+        draw_top_bar(screen)
+        draw_panels_start(screen)
+        _, center_rect, _ = get_panel_rects()
+        start_btn_rect = draw_start_button(screen, center_rect)
+        draw_bottom_bar(screen)
+    else:
+        draw_top_bar(screen)
+        draw_panels(screen)
+        draw_bottom_bar(screen)
+        _, center_rect, _ = get_panel_rects()
+        end_btn_rect = draw_end_task_button(screen, center_rect)
 
     pygame.display.flip()
     clock.tick(60)
 
 log_message("System shutting down. Closing capture devices.")
-cap.release()
+if os.path.exists(SESSION_PATH):
+    with open(SESSION_PATH) as f:
+        data = json.load(f)
+    data["time_ended"] = datetime.now().strftime("%H:%M:%S")
+    with open(SESSION_PATH, "w") as f:
+        json.dump(data, f, indent=2)
+if 'cap' in dir() and cap is not None:
+    cap.release()
 pygame.quit()
 sys.exit()
