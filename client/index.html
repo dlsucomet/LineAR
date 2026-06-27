@@ -3,24 +3,38 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>LineAR - Training System Core</title>
-    <link rel="stylesheet" href="LineAR.css">
+    <title>LineAR - Projector Optimization Workspace</title>
+    <link rel="stylesheet" href="style.css">
 </head>
 <body>
 
-    <div class="header-banner">Place paper on the blue area</div>
+    <div class="header-banner">Place paper on the designated projection area</div>
     <div id="status" class="status-badge">System Status: Booting...</div>
 
     <div class="app-container">
         
         <div class="panel left-panel">
-            <div class="panel-title">Geometric Space Visualizer</div>
-            <canvas id="graphCanvas"></canvas>
+            <div class="canvas-container">
+                <canvas id="graphCanvas"></canvas>
+            </div>
+        </div>
+
+        <div class="panel center-panel">
+            <div class="paper-container">
+                <div class="paper-sheet">
+                    <canvas id="arOverlay"></canvas>
+                </div>
+            </div>
         </div>
 
         <div class="panel right-panel">
-            <video id="webcamFeed" autoplay playsinline></video>
-            <canvas id="arOverlay"></canvas>
+            <div class="instruction-content">
+                <h3 id="instructionHeading">Vector Addition Property</h3>
+                <p class="instruction-text">Linear transformations distribute over scalar values and vector groupings:</p>
+                <div class="math-card">
+                    $$\begin{bmatrix} a \\ b \end{bmatrix} + \begin{bmatrix} c \\ d \end{bmatrix} = \begin{bmatrix} a + c \\ b + d \end{bmatrix}$$
+                </div>
+            </div>
         </div>
 
     </div>
@@ -30,6 +44,7 @@
         <button class="action-btn exit-btn" onclick="window.close()">Exit</button>
     </div>
 
-    <script src="LineAR.js"></script>
+    <script id="MathJax-script" async src="https://cdn.jsdelivr.net/npm/mathjax@3/es5/tex-mml-chtml.js"></script>
+    <script src="app.js"></script>
 </body>
 </html>

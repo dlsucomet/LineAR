@@ -1,0 +1,197 @@
+body {
+    margin: 0;
+    padding: 0;
+    font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
+    background-color: #f8fafc; /* Lighter clean backdrop */
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    justify-content: center;
+    height: 100vh;
+    overflow: hidden;
+}
+
+/* High contrast projector banner */
+.header-banner {
+    background-color: #000000;
+    color: #ffffff;
+    width: 100%;
+    text-align: center;
+    padding: 14px 0;
+    font-weight: 700;
+    font-size: 1.3rem;
+    box-shadow: 0 2px 4px rgba(0,0,0,0.1);
+    position: absolute;
+    top: 0;
+}
+
+.app-container {
+    display: flex;
+    gap: 20px;
+    width: 98vw;
+    max-width: 1440px;
+    height: 72vh;
+    margin-top: 40px;
+}
+
+/* Containers completely stripped of blue borders */
+.panel {
+    position: relative;
+    background: #ffffff;
+    border: 3px solid #000000; /* Crisp black borders for clear panel separation */
+    border-radius: 4px;
+    overflow: hidden;
+    display: flex;
+    flex-direction: column;
+}
+
+.left-panel {
+    flex: 1;
+}
+
+/* Removed slate-blue ambient fill background completely */
+.center-panel {
+    flex: 1.4;
+    background-color: #ffffff; 
+}
+
+.right-panel {
+    flex: 1;
+}
+
+/* Titles converted to thick black text links */
+.panel-title {
+    background: #ffffff;
+    color: #000000;
+    border-bottom: 2px solid #000000;
+    padding: 8px;
+    font-size: 1rem;
+    font-weight: 800;
+    text-align: center;
+    z-index: 10;
+    text-transform: uppercase;
+    letter-spacing: 0.5px;
+}
+
+.canvas-container {
+    flex: 1;
+    position: relative;
+    width: 100%;
+    height: 100%;
+}
+
+#graphCanvas {
+    position: absolute;
+    width: 100%;
+    height: 100%;
+    background-color: #ffffff;
+}
+
+.paper-container {
+    flex: 1;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    padding: 15px;
+}
+
+/* Stripped container colors and borders entirely from the alignment sheet */
+.paper-sheet {
+    position: relative;
+    width: auto;
+    height: 100%;
+    aspect-ratio: 1 / 1.41; 
+    background: #ffffff;
+    overflow: hidden;
+}
+
+canvas#arOverlay {
+    position: absolute;
+    width: 100%;
+    height: 100%;
+    z-index: 2;
+    pointer-events: none;
+}
+
+/* High contrast bold text implementations for standard projector setups */
+.instruction-content {
+    padding: 20px;
+    display: flex;
+    flex-direction: column;
+    gap: 15px;
+    color: #000000;
+    overflow-y: auto;
+}
+
+.instruction-content h3 {
+    margin: 0;
+    color: #000000;
+    font-size: 1.4rem;
+    font-weight: 800;
+}
+
+.instruction-text {
+    margin: 0;
+    line-height: 1.5;
+    font-size: 1.05rem;
+    font-weight: 600;
+}
+
+.math-card {
+    background: #ffffff;
+    border: 2px solid #000000;
+    border-radius: 4px;
+    color: #000000;
+    padding: 12px;
+    display: flex;
+    justify-content: center;
+    font-size: 1.2rem;
+    font-weight: bold;
+}
+
+.hint-box {
+    background-color: #ffffff;
+    border: 2px dashed #000000;
+    padding: 12px;
+    border-radius: 4px;
+    font-size: 1rem;
+    color: #000000;
+    font-weight: 600;
+}
+
+.control-panel {
+    margin-top: 25px;
+    display: flex;
+    gap: 15px;
+}
+
+.action-btn {
+    background-color: #000000;
+    color: white;
+    border: none;
+    padding: 12px 28px;
+    font-size: 1rem;
+    font-weight: 700;
+    border-radius: 4px;
+    cursor: pointer;
+    text-transform: uppercase;
+}
+
+.action-btn.exit-btn { 
+    background-color: #ffffff; 
+    color: #000000;
+    border: 2px solid #000000;
+}
+
+.status-badge {
+    position: absolute;
+    top: 70px;
+    right: 20px;
+    background: #000000;
+    color: #ffffff;
+    padding: 6px 14px;
+    border-radius: 4px;
+    font-size: 0.9rem;
+    font-weight: 700;
+    z-index: 3;
+}
