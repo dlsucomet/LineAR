@@ -2,3 +2,4 @@
 eng.traineddata
 /node_modules
 venv
+client/logs/
