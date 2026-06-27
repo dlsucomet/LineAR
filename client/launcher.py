@@ -10,8 +10,6 @@ COLOR_BLACK = (0, 0, 0)
 COLOR_WHITE = (255, 255, 255)
 COLOR_BG = (248, 250, 252)
 COLOR_BLUE = (26, 58, 107)
-COLOR_BLUE_HOVER = (20, 46, 85)
-COLOR_GRAY_HOVER = (200, 200, 200)
 
 BTN_WIDTH = 220
 BTN_HEIGHT = 50
@@ -70,18 +68,24 @@ def main():
         screen.blit(title, title_rect)
 
         # With Highlights button
-        hl_color = COLOR_BLUE_HOVER if hl_hover else COLOR_BLUE
-        pygame.draw.rect(screen, hl_color, highlights_rect, border_radius=6)
-        hl_text = font_btn.render("With Highlights", True, COLOR_WHITE)
+        if hl_hover:
+            pygame.draw.rect(screen, COLOR_WHITE, highlights_rect, border_radius=6)
+            pygame.draw.rect(screen, COLOR_BLUE, highlights_rect, 3, border_radius=6)
+            hl_text = font_btn.render("With Highlights", True, COLOR_BLUE)
+        else:
+            pygame.draw.rect(screen, COLOR_BLUE, highlights_rect, border_radius=6)
+            hl_text = font_btn.render("With Highlights", True, COLOR_WHITE)
         hl_text_rect = hl_text.get_rect(center=highlights_rect.center)
         screen.blit(hl_text, hl_text_rect)
 
         # No Highlights button
-        no_bg = COLOR_GRAY_HOVER if no_hover else COLOR_WHITE
-        no_border = COLOR_BLUE
-        pygame.draw.rect(screen, no_bg, no_highlights_rect, border_radius=6)
-        pygame.draw.rect(screen, no_border, no_highlights_rect, 2, border_radius=6)
-        no_text = font_btn.render("No Highlights", True, COLOR_BLACK)
+        if no_hover:
+            pygame.draw.rect(screen, COLOR_WHITE, no_highlights_rect, border_radius=6)
+            pygame.draw.rect(screen, COLOR_BLUE, no_highlights_rect, 3, border_radius=6)
+            no_text = font_btn.render("No Highlights", True, COLOR_BLUE)
+        else:
+            pygame.draw.rect(screen, COLOR_BLUE, no_highlights_rect, border_radius=6)
+            no_text = font_btn.render("No Highlights", True, COLOR_WHITE)
         no_text_rect = no_text.get_rect(center=no_highlights_rect.center)
         screen.blit(no_text, no_text_rect)
 
