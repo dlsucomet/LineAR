@@ -6,7 +6,13 @@ import numpy as np
 import pygame
 import threading
 import easyocr
+import argparse
+import json
 from datetime import datetime  # Added for high-precision log timestamps
+
+parser = argparse.ArgumentParser()
+parser.add_argument("--mode", choices=["highlights", "no_highlights"], default="no_highlights")
+args = parser.parse_args()
 
 # Initialize Pygame Core
 pygame.init()
@@ -55,6 +61,26 @@ shared_frame_lock = threading.Lock()
 
 # Define the log destination path
 LOG_FILE_PATH = os.path.abspath(os.path.join(os.path.dirname(__file__), "linear_session.log"))
+
+# Session JSON file (pX.json) — created once on launch
+LOGS_DIR = os.path.join(os.path.dirname(__file__), "logs")
+os.makedirs(LOGS_DIR, exist_ok=True)
+existing = sorted(
+    (f for f in os.listdir(LOGS_DIR) if re.match(r'p\d+\.json$', f)),
+    key=lambda x: int(re.search(r'p(\d+)\.json', x).group(1))
+)
+p_num = (int(re.search(r'p(\d+)\.json', existing[-1]).group(1)) + 1) if existing else 1
+SESSION_PATH = os.path.join(LOGS_DIR, f"p{p_num}.json")
+with open(SESSION_PATH, "w") as f:
+    json.dump({
+        "date": datetime.now().strftime("%Y-%m-%d"),
+        "mode": args.mode,
+        "time_started": None,
+        "time_ended": None,
+        "end_task_pressed": False,
+        "green_count": 0,
+        "red_count": 0,
+    }, f, indent=2)
 
 # ────────────────────────────────────────────────────────
 # FILE LOGGING UTILITY SYSTEM
