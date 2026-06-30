@@ -15,7 +15,6 @@ BTN_WIDTH = 220
 BTN_HEIGHT = 50
 BTN_GAP = 20
 
-
 def main():
     pygame.init()
     screen = pygame.display.set_mode((WINDOW_WIDTH, WINDOW_HEIGHT))

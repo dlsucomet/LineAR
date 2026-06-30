@@ -1,5 +1,6 @@
 *.env
-eng.traineddata
-/node_modules
 venv
 client/logs/
+client/linear_session.log
+package-lock.json
+package.json

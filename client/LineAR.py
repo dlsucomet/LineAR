@@ -17,8 +17,11 @@ args = parser.parse_args()
 pygame.init()
 pygame.font.init()
 
-WINDOW_WIDTH = 1920
-WINDOW_HEIGHT = 1080
+# 1920 x 1080
+# 1600 x 900
+# 1280 x 720
+WINDOW_WIDTH = 1600
+WINDOW_HEIGHT = 900
 TOP_BAR_HEIGHT = 50
 BOTTOM_BAR_HEIGHT = 70
 OUTER_GAP = 14
@@ -57,27 +60,42 @@ shared_frame_lock = threading.Lock()
 fullscreen = False
 app_phase = "start"
 
-LOG_FILE_PATH = os.path.abspath(os.path.join(os.path.dirname(__file__), "linear_session.log"))
-
-LOGS_DIR = os.path.join(os.path.dirname(__file__), "logs")
+BASE_DIR = os.path.dirname(os.path.abspath(__file__))
+LOGS_DIR = os.path.join(BASE_DIR, "logs")
 os.makedirs(LOGS_DIR, exist_ok=True)
-existing = sorted(
-    (f for f in os.listdir(LOGS_DIR) if re.match(r'p\d+\.json$', f)),
-    key=lambda x: int(re.search(r'p(\d+)\.json', x).group(1))
+
+existing_folders = sorted(
+    (d for d in os.listdir(LOGS_DIR) if os.path.isdir(os.path.join(LOGS_DIR, d)) and re.match(r'^p\d+$', d)),
+    key=lambda x: int(re.search(r'p(\d+)', x).group(1))
 )
-p_num = (int(re.search(r'p(\d+)\.json', existing[-1]).group(1)) + 1) if existing else 1
-SESSION_PATH = os.path.join(LOGS_DIR, f"p{p_num}.json")
-with open(SESSION_PATH, "w") as f:
+p_num = (int(re.search(r'p(\d+)', existing_folders[-1]).group(1)) + 1) if existing_folders else 1
+PARTICIPANT_DIR = os.path.join(LOGS_DIR, f"p{p_num}")
+os.makedirs(PARTICIPANT_DIR, exist_ok=True)
+LOG_FILE_PATH = os.path.join(PARTICIPANT_DIR, "linear_session.log")
+SESSION_PATH = os.path.join(PARTICIPANT_DIR, f"p{p_num}.json")
+def log_message(message):
+    """Updates the internal UI status and safely writes the entry into the local text log file."""
+    global status_msg
+    status_msg = message  
+    timestamp = datetime.now().strftime("%Y-%m-%d %H:%M:%S.%f")[:-3]
+    log_entry = f"[{timestamp}] {message}\n"
+    try:
+        with open(LOG_FILE_PATH, "a", encoding="utf-8") as f:
+            f.write(log_entry)
+    except Exception as e:
+        print(f"Failed writing to file log: {str(e)}", file=sys.stderr)
+with open(LOG_FILE_PATH, "w", encoding="utf-8") as f:
+    f.write(f"=== LineAR System Session Log Start: {datetime.now().strftime('%Y-%m-%d %H:%M:%S')} ===\n")
+with open(SESSION_PATH, "w", encoding="utf-8") as f:
     json.dump({
         "date": datetime.now().strftime("%Y-%m-%d"),
-        "mode": args.mode,
-        "time_started": None,
+        "mode": getattr(args, 'mode', 'projector'),
+        "time_started": datetime.now().strftime("%H:%M:%S"),
         "time_ended": None,
         "end_task_pressed": False,
         "green_count": 0,
         "red_count": 0,
     }, f, indent=2)
-
 
 def log_message(message):
     global status_msg
@@ -252,15 +270,16 @@ def get_panel_rects():
 
 def toggle_fullscreen():
     global fullscreen, WINDOW_WIDTH, WINDOW_HEIGHT, screen
-    fullscreen = not fullscreen
     if fullscreen:
         info = pygame.display.Info()
         WINDOW_WIDTH = info.current_w
         WINDOW_HEIGHT = info.current_h
         screen = pygame.display.set_mode((WINDOW_WIDTH, WINDOW_HEIGHT), pygame.FULLSCREEN | pygame.SCALED)
     else:
-        WINDOW_WIDTH = 1920
-        WINDOW_HEIGHT = 1080
+        # 1920 x 1080
+        # 1280 x 720
+        WINDOW_WIDTH = 1280
+        WINDOW_HEIGHT = 720
         screen = pygame.display.set_mode((WINDOW_WIDTH, WINDOW_HEIGHT), pygame.RESIZABLE)
 
 
