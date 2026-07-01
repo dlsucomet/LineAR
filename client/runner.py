@@ -78,15 +78,17 @@ while config.running:
     left_rect, center_rect, right_rect = config.get_panel_rects(screen.get_width(), screen.get_height())
     
     # Dynamically determine where the button rect boundaries are located on this frame
-    btn_w, btn_h = 260, 70
+    start_btn_w = max(100, min(260, int(center_rect.width * 0.30)))
+    start_btn_h = max(28, min(70, int(start_btn_w * 70 / 260)))
     start_btn_rect = pygame.Rect(
-        center_rect.x + (center_rect.width - btn_w) // 2,
-        center_rect.y + (center_rect.height - btn_h) // 2, 
-        btn_w, 
-        btn_h
+        center_rect.x + (center_rect.width - start_btn_w) // 2,
+        center_rect.y + (center_rect.height - start_btn_h) // 2, 
+        start_btn_w, 
+        start_btn_h
     )
     
-    end_box_w, end_box_h = 160, 44
+    end_box_w = max(80, min(160, int(center_rect.width * 0.18)))
+    end_box_h = max(22, min(44, int(end_box_w * 44 / 160)))
     end_btn_rect = pygame.Rect(
         center_rect.centerx - end_box_w // 2, 
         screen.get_height() - config.BOTTOM_BAR_HEIGHT + (config.BOTTOM_BAR_HEIGHT - end_box_h) // 2, 
@@ -121,17 +123,21 @@ while config.running:
                 config.fullscreen = not config.fullscreen
                 toggle_fullscreen()
 
+        elif event.type == pygame.VIDEORESIZE:
+            if not config.fullscreen:
+                screen = pygame.display.set_mode((event.w, event.h), pygame.RESIZABLE)
+
     ui.draw_top_bar(screen)
+    returned_debug_rect = ui.draw_bottom_bar(screen, center_rect)
+    if returned_debug_rect:
+        debug_btn_rect = returned_debug_rect
+
     if config.app_phase == "start":
         center_rect = ui.draw_panels(screen, mode="start")
         start_btn_rect = ui.draw_start_button(screen, center_rect)
     else:
         center_rect = ui.draw_panels(screen, mode="running")
         end_btn_rect = ui.draw_end_task_button(screen, center_rect)
-        
-    returned_debug_rect = ui.draw_bottom_bar(screen)
-    if returned_debug_rect:
-        debug_btn_rect = returned_debug_rect
 
     pygame.display.flip()
     clock.tick(60)
