@@ -19,41 +19,44 @@ STEP_GUIDANCE = {
     "firstStepRight": {
         "title": "Transformation Property Expansion",
         "desc": "Substitute the known transformed vector definitions into your linear combination equation.",
-        "math": "c1 * [transformed 1] + c2 * [transformed 2]"
+        "math": "c1 * [x1 / y1] + c2 * [x2 / y2]"
     },
     "secondStepLeft": {
-        "title": "Scalar Multiplication (Left Component)",
+        "title": "Scalar Multiplication",
         "desc": "Distribute the first scalar coefficient into the left vector component elements.",
-        "math": "c * [x, y]^T = [c*x, c*y]^T"
+        "math": "a * [b / c] = [a * b / a * c]"
     },
     "secondStepRight": {
-        "title": "Scalar Multiplication (Right Component)",
+        "title": "Scalar Multiplication",
         "desc": "Distribute the second scalar coefficient into the right vector component elements.",
-        "math": "c * [x, y]^T = [c*x, c*y]^T"
+        "math": "a * [b / c] = [a * b / a * c]"
     },
     "thirdStep": {
-        "title": "Vector Addition (Final Matrix)",
+        "title": "Vector Addition",
         "desc": "Perform row-by-row matrix addition on your scaled vector elements to solve.",
-        "math": "[a1, b1]^T + [a2, b2]^T = [a1+a2, b1+b2]^T"
+        "math": "[a / b] + [c / d] = [a + c / b + d]"
     },
     "complete": {
         "title": "Problem Completed!",
         "desc": "The linear transformation mapping operations match the coordinate target state vector space outputs.",
-        "math": "L(v) = [14, -7]^T"
+        "math": "L(v) = [14 / -7]"
     }
 }
 
 def wrap_text(text, font, max_width):
     words = text.split(" ")
-    lines, current = [], ""
+    lines = []
+    current_line = ""
     for word in words:
-        test = current + (" " if current else "") + word
-        if font.size(test)[0] <= max_width:
-            current = test
+        test_line = current_line + (" " if current_line else "") + word
+        if font.size(test_line)[0] <= max_width:
+            current_line = test_line
         else:
-            if current: lines.append(current)
-            current = word
-    if current: lines.append(current)
+            if current_line:
+                lines.append(current_line)
+            current_line = word
+    if current_line:
+        lines.append(current_line)
     return lines
 
 def draw_top_bar(surface):
@@ -67,6 +70,9 @@ def draw_bottom_bar(surface):
     pygame.draw.rect(surface, config.COLOR_BG, pygame.Rect(0, H - config.BOTTOM_BAR_HEIGHT, surface.get_width(), config.BOTTOM_BAR_HEIGHT))
     console = font_bold.render(f"CONSOLE LOG: {config.status_msg}", True, config.COLOR_TEXT)
     surface.blit(console, (config.OUTER_GAP, H - config.BOTTOM_BAR_HEIGHT + (config.BOTTOM_BAR_HEIGHT - console.get_height()) // 2))
+    if getattr(config, "debug_mode", False):
+        return draw_debug_button(surface)
+    return None
 
 def draw_cartesian_plane(surface, area):
     pygame.draw.rect(surface, config.COLOR_WHITE, area)
@@ -102,11 +108,42 @@ def draw_instruction_panel(surface, area):
         surface.blit(font_body.render(line, True, config.COLOR_TEXT), (cx, cy))
         cy += 22
     cy += 10
-    eq_rect = pygame.Rect(cx, cy, mw, 50)
+    
+    eq_rect = pygame.Rect(cx, cy, mw, 70) 
     pygame.draw.rect(surface, config.COLOR_WHITE, eq_rect)
     pygame.draw.rect(surface, config.COLOR_TEXT, eq_rect, 2)
-    eq_t = font_equation.render(step_info["math"], True, config.COLOR_TEXT)
-    surface.blit(eq_t, eq_t.get_rect(center=eq_rect.center))
+    
+    raw_math = step_info["math"]
+    if "/" in raw_math:
+        tokens = raw_math.split(" ")
+        current_x = eq_rect.x + 15
+        center_y = eq_rect.centery
+        
+        for token in tokens:
+            if token.startswith("[") and token.endswith("]") and "/" in token:
+                inner = token[1:-1]
+                top_val, bot_val = inner.split("/")
+                t_surf = font_medium.render(top_val.strip(), True, config.COLOR_TEXT)
+                b_surf = font_medium.render(bot_val.strip(), True, config.COLOR_TEXT)
+                max_w = max(t_surf.get_width(), b_surf.get_width())
+                v_box_w = max_w + 12
+                pygame.draw.line(surface, config.COLOR_TEXT, (current_x, center_y - 22), (current_x, center_y + 22), 2)
+                pygame.draw.line(surface, config.COLOR_TEXT, (current_x, center_y - 22), (current_x + 4, center_y - 22), 2)
+                pygame.draw.line(surface, config.COLOR_TEXT, (current_x, center_y + 22), (current_x + 4, center_y + 22), 2)
+                surface.blit(t_surf, (current_x + 6 + (max_w - t_surf.get_width()) // 2, center_y - 20))
+                surface.blit(b_surf, (current_x + 6 + (max_w - b_surf.get_width()) // 2, center_y + 2))
+                right_bracket_x = current_x + v_box_w - 2
+                pygame.draw.line(surface, config.COLOR_TEXT, (right_bracket_x, center_y - 22), (right_bracket_x, center_y + 22), 2)
+                pygame.draw.line(surface, config.COLOR_TEXT, (right_bracket_x, center_y - 22), (right_bracket_x - 4, center_y - 22), 2)
+                pygame.draw.line(surface, config.COLOR_TEXT, (right_bracket_x, center_y + 22), (right_bracket_x - 4, center_y + 22), 2)
+                current_x += v_box_w + 8
+            else:
+                t_surf = font_medium.render(token, True, config.COLOR_TEXT)
+                surface.blit(t_surf, (current_x, center_y - t_surf.get_height() // 2))
+                current_x += t_surf.get_width() + 8
+    else:
+        eq_t = font_equation.render(raw_math, True, config.COLOR_TEXT)
+        surface.blit(eq_t, eq_t.get_rect(center=eq_rect.center))
 
 def draw_panels(surface, mode="running"):
     left, center, right = config.get_panel_rects(surface.get_width(), surface.get_height())
@@ -164,5 +201,17 @@ def draw_end_task_button(surface, center_rect):
     pygame.draw.rect(surface, config.COLOR_WHITE if hovered else config.COLOR_BLUE, rect, border_radius=6)
     pygame.draw.rect(surface, config.COLOR_BLUE, rect, 3, border_radius=6)
     t = font_medium.render("End Task", True, config.COLOR_BLUE if hovered else config.COLOR_WHITE)
+    surface.blit(t, t.get_rect(center=rect.center))
+    return rect
+
+def draw_debug_button(surface):
+    H = surface.get_height()
+    W = surface.get_width()
+    btn_w, btn_h = 120, 30
+    rect = pygame.Rect(W - btn_w - config.OUTER_GAP, H - config.BOTTOM_BAR_HEIGHT + (config.BOTTOM_BAR_HEIGHT - btn_h) // 2, btn_w, btn_h)
+    hovered = rect.collidepoint(pygame.mouse.get_pos())
+    pygame.draw.rect(surface, config.COLOR_WHITE if hovered else config.COLOR_BLUE, rect, border_radius=4)
+    pygame.draw.rect(surface, config.COLOR_BLUE, rect, 2, border_radius=4)
+    t = font_bold.render("DEBUG: Next Step", True, config.COLOR_BLUE if hovered else config.COLOR_WHITE)
     surface.blit(t, t.get_rect(center=rect.center))
     return rect

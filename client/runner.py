@@ -12,6 +12,17 @@ import ui
 from logger import log_message, init_session_files
 from pipeline import paper_tracking_daemon, background_ocr_pipeline
 
+STEP_ORDER = ["firstStepLeft", "firstStepRight", "secondStepLeft", "secondStepRight", "thirdStep", "complete"]
+
+def advance_debug_state():
+    try:
+        current_idx = STEP_ORDER.index(config.current_step)
+        next_idx = (current_idx + 1) % len(STEP_ORDER)
+        config.current_step = STEP_ORDER[next_idx]
+        log_message(f"Debug forced phase transition to: {config.current_step}")
+    except ValueError:
+        config.current_step = STEP_ORDER[0]
+
 def start_session():
     log_message("Loading OCR Engine context...")
     config.ocr_reader = easyocr.Reader(['en'], gpu=False, verbose=False)
@@ -50,13 +61,13 @@ def toggle_fullscreen():
     else:
         pygame.display.set_mode((1280, 720), pygame.RESIZABLE)
 
-# Run Application Initialization
 screen = pygame.display.set_mode((config.WINDOW_WIDTH, config.WINDOW_HEIGHT), pygame.RESIZABLE)
 pygame.display.set_caption("LineAR - Production Projector Space")
 clock = pygame.time.Clock()
 init_session_files()
 
 # Keep persistent bounding box rects across frames so the event handler can read them
+debug_btn_rect = pygame.Rect(0, 0, 0, 0) 
 start_btn_rect = pygame.Rect(0, 0, 0, 0)
 end_btn_rect = pygame.Rect(0, 0, 0, 0)
 
@@ -91,8 +102,14 @@ while config.running:
                 start_session()
             elif config.app_phase == "running" and end_btn_rect.collidepoint(event.pos):
                 handle_shutdown(from_button=True)
+            elif getattr(config, "debug_mode", False) and debug_btn_rect.collidepoint(event.pos):
+                advance_debug_state()
+                
         elif event.type == pygame.KEYDOWN:
-            if event.key == pygame.K_ESCAPE:
+            if event.key == pygame.K_d:
+                config.debug_mode = not config.debug_mode
+                log_message(f"Debug interface display set to: {config.debug_mode}")
+            elif event.key == pygame.K_ESCAPE:
                 handle_shutdown(from_button=False)
             elif event.key == pygame.K_RETURN:
                 if config.app_phase == "start":
@@ -104,15 +121,17 @@ while config.running:
                 config.fullscreen = not config.fullscreen
                 toggle_fullscreen()
 
-    # Draw the elements to the display window
     ui.draw_top_bar(screen)
     if config.app_phase == "start":
-        ui.draw_panels(screen, mode="start")
-        ui.draw_start_button(screen, center_rect)
+        center_rect = ui.draw_panels(screen, mode="start")
+        start_btn_rect = ui.draw_start_button(screen, center_rect)
     else:
-        ui.draw_panels(screen, mode="running")
-        ui.draw_end_task_button(screen, center_rect)
-    ui.draw_bottom_bar(screen)
+        center_rect = ui.draw_panels(screen, mode="running")
+        end_btn_rect = ui.draw_end_task_button(screen, center_rect)
+        
+    returned_debug_rect = ui.draw_bottom_bar(screen)
+    if returned_debug_rect:
+        debug_btn_rect = returned_debug_rect
 
     pygame.display.flip()
     clock.tick(60)

@@ -11,6 +11,10 @@ parser = argparse.ArgumentParser()
 parser.add_argument("--mode", choices=["highlights", "no_highlights"], default="no_highlights")
 args = parser.parse_args()
 
+app_phase = "start"
+fullscreen = False
+debug_mode = False
+
 WINDOW_WIDTH = 1280
 WINDOW_HEIGHT = 720
 TOP_BAR_HEIGHT = 50
@@ -37,7 +41,7 @@ p_num = (int(re.search(r'p(\d+)', existing_folders[-1]).group(1)) + 1) if existi
 PARTICIPANT_DIR = os.path.join(LOGS_DIR, f"p{p_num}")
 os.makedirs(PARTICIPANT_DIR, exist_ok=True)
 
-LOG_FILE_PATH = os.path.join(PARTICIPANT_DIR, "linear_session.log")
+LOG_FILE_PATH = os.path.join(PARTICIPANT_DIR, f"p{p_num}_linear_session.log")
 SESSION_PATH = os.path.join(PARTICIPANT_DIR, f"p{p_num}.json")
 
 # WRITE THE TARGET INITIALIZATION FILES IMMEDIATELY ON IMPORT
@@ -59,9 +63,7 @@ STEP_SEQUENCE = ["firstStepLeft", "firstStepRight", "secondStepLeft", "secondSte
 current_step = "firstStepLeft"
 status_msg = "System Ready. Place paper to align ArUco markers."
 is_processing = False
-app_phase = "start"
 running = True
-fullscreen = False
 
 active_vectors = [
     {"x": 1, "y": 2, "label": "u"},

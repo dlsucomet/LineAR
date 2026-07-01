@@ -1,0 +1,19 @@
+version: '3.8'
+
+services:
+  linear-app:
+    build: .
+    container_name: linear_ar_system
+    network_mode: "host" 
+    environment:
+      - DISPLAY=${DISPLAY} 
+    volumes:
+      - /tmp/.X11-unix:/tmp/.X11-unix:ro 
+      # For Linux, allow local X11 connections in host terminal
+      #               xhost +local:docker
+      #               docker compose up --build
+      #               xhost -local:docker
+      - ./client/logs:/app/client/logs  # Persistent log mapping back to your host machine
+    devices:
+      - /dev/video0:/dev/video0 # Mounts your default host webcam directly into the container
+    ipc: host # Shared memory allocation needed to prevent Pygame/X11 rendering crashes
