@@ -46,12 +46,12 @@ def main():
                 sys.exit()
             elif event.type == pygame.MOUSEBUTTONDOWN:
                 if highlights_rect.collidepoint(event.pos):
-                    subprocess.Popen(["python", "LineAR.py", "--mode=highlights"],
+                    subprocess.Popen(["python", "runner.py", "--mode=highlights"],
                                      cwd=os.path.dirname(os.path.abspath(__file__)))
                     pygame.quit()
                     sys.exit()
                 elif no_highlights_rect.collidepoint(event.pos):
-                    subprocess.Popen(["python", "LineAR.py", "--mode=no_highlights"],
+                    subprocess.Popen(["python", "runner.py", "--mode=no_highlights"],
                                      cwd=os.path.dirname(os.path.abspath(__file__)))
                     pygame.quit()
                     sys.exit()

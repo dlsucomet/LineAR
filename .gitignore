@@ -1,6 +1,6 @@
 *.env
 venv
+client/__pycache__
 client/logs/
 client/linear_session.log
-package-lock.json
-package.json
+server/server.js

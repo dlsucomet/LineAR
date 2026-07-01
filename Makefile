@@ -4,10 +4,10 @@ run:
 	cmd /c make pyrun
 	
 clean:
-	if exist client\logs\* del /Q client\logs\*
+	if exist client\logs ( rmdir /S /Q client\logs && mkdir client\logs )
 	
 pyrun:
-	start /b python client/launcher.py
+	python client\launcher.py
 
 kill:
 	@echo Terminating all running Python backend processes...

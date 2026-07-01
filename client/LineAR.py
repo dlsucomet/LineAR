@@ -45,6 +45,7 @@ font_bold = pygame.font.SysFont("segoeui", 15, bold=True)
 font_equation = pygame.font.SysFont("segoeui", 22, bold=True)
 
 current_step = "secondStepLeft"
+
 status_msg = "System Ready. Place paper to align ArUco markers."
 is_processing = False
 
