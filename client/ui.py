@@ -65,11 +65,35 @@ def draw_top_bar(surface):
     text = font_large.render("Place paper on the designated projection area", True, config.COLOR_WHITE)
     surface.blit(text, text.get_rect(center=(surface.get_width() // 2, config.TOP_BAR_HEIGHT // 2)))
 
-def draw_bottom_bar(surface):
+def draw_bottom_bar(surface, center_rect=None):
     H = surface.get_height()
-    pygame.draw.rect(surface, config.COLOR_BG, pygame.Rect(0, H - config.BOTTOM_BAR_HEIGHT, surface.get_width(), config.BOTTOM_BAR_HEIGHT))
-    console = font_bold.render(f"CONSOLE LOG: {config.status_msg}", True, config.COLOR_TEXT)
-    surface.blit(console, (config.OUTER_GAP, H - config.BOTTOM_BAR_HEIGHT + (config.BOTTOM_BAR_HEIGHT - console.get_height()) // 2))
+    bar_rect = pygame.Rect(0, H - config.BOTTOM_BAR_HEIGHT, surface.get_width(), config.BOTTOM_BAR_HEIGHT)
+    pygame.draw.rect(surface, config.COLOR_BG, bar_rect)
+
+    msg = config.status_msg
+    if msg:
+        wrap_right = bar_rect.right - config.OUTER_GAP
+        if center_rect is not None:
+            end_btn_w = max(80, min(160, int(center_rect.width * 0.18)))
+            end_btn_x = center_rect.centerx - end_btn_w // 2
+            wrap_right = end_btn_x - config.OUTER_GAP
+        avail_w = wrap_right - config.OUTER_GAP
+        if avail_w > 20:
+            full_text = f"CONSOLE LOG: {msg}"
+            lines = wrap_text(full_text, font_bold, avail_w)
+            max_lines = 3
+            if len(lines) > max_lines:
+                lines = lines[:max_lines]
+                last = lines[-1]
+                if len(last) > 3:
+                    lines[-1] = last[:-3] + "..."
+            line_h = font_bold.get_height() + 2
+            total_h = len(lines) * line_h
+            start_y = bar_rect.y + (bar_rect.height - total_h) // 2
+            for i, line in enumerate(lines):
+                surf = font_bold.render(line, True, config.COLOR_TEXT)
+                surface.blit(surf, (config.OUTER_GAP, start_y + i * line_h))
+
     if getattr(config, "debug_mode", False):
         return draw_debug_button(surface)
     return None
@@ -101,49 +125,66 @@ def draw_instruction_panel(surface, area):
     pad = 20
     cx, cy, mw = area.x + pad, area.y + pad, area.width - pad * 2
     step_info = STEP_GUIDANCE.get(config.current_step, STEP_GUIDANCE["complete"])
-    
-    surface.blit(font_large.render(step_info["title"], True, config.COLOR_TEXT), (cx, cy))
-    cy += 40
+
+    default_panel_h = 572
+    scale_y = max(0.5, area.height / default_panel_h)
+
+    for line in wrap_text(step_info["title"], font_large, mw):
+        surface.blit(font_large.render(line, True, config.COLOR_TEXT), (cx, cy))
+        cy += int(36 * scale_y)
+    cy += int(4 * scale_y)
     for line in wrap_text(step_info["desc"], font_body, mw):
         surface.blit(font_body.render(line, True, config.COLOR_TEXT), (cx, cy))
-        cy += 22
-    cy += 10
-    
-    eq_rect = pygame.Rect(cx, cy, mw, 70) 
-    pygame.draw.rect(surface, config.COLOR_WHITE, eq_rect)
-    pygame.draw.rect(surface, config.COLOR_TEXT, eq_rect, 2)
-    
-    raw_math = step_info["math"]
-    if "/" in raw_math:
-        tokens = raw_math.split(" ")
-        current_x = eq_rect.x + 15
-        center_y = eq_rect.centery
-        
-        for token in tokens:
-            if token.startswith("[") and token.endswith("]") and "/" in token:
-                inner = token[1:-1]
-                top_val, bot_val = inner.split("/")
-                t_surf = font_medium.render(top_val.strip(), True, config.COLOR_TEXT)
-                b_surf = font_medium.render(bot_val.strip(), True, config.COLOR_TEXT)
-                max_w = max(t_surf.get_width(), b_surf.get_width())
-                v_box_w = max_w + 12
-                pygame.draw.line(surface, config.COLOR_TEXT, (current_x, center_y - 22), (current_x, center_y + 22), 2)
-                pygame.draw.line(surface, config.COLOR_TEXT, (current_x, center_y - 22), (current_x + 4, center_y - 22), 2)
-                pygame.draw.line(surface, config.COLOR_TEXT, (current_x, center_y + 22), (current_x + 4, center_y + 22), 2)
-                surface.blit(t_surf, (current_x + 6 + (max_w - t_surf.get_width()) // 2, center_y - 20))
-                surface.blit(b_surf, (current_x + 6 + (max_w - b_surf.get_width()) // 2, center_y + 2))
-                right_bracket_x = current_x + v_box_w - 2
-                pygame.draw.line(surface, config.COLOR_TEXT, (right_bracket_x, center_y - 22), (right_bracket_x, center_y + 22), 2)
-                pygame.draw.line(surface, config.COLOR_TEXT, (right_bracket_x, center_y - 22), (right_bracket_x - 4, center_y - 22), 2)
-                pygame.draw.line(surface, config.COLOR_TEXT, (right_bracket_x, center_y + 22), (right_bracket_x - 4, center_y + 22), 2)
-                current_x += v_box_w + 8
-            else:
-                t_surf = font_medium.render(token, True, config.COLOR_TEXT)
-                surface.blit(t_surf, (current_x, center_y - t_surf.get_height() // 2))
-                current_x += t_surf.get_width() + 8
-    else:
-        eq_t = font_equation.render(raw_math, True, config.COLOR_TEXT)
-        surface.blit(eq_t, eq_t.get_rect(center=eq_rect.center))
+        cy += int(22 * scale_y)
+    cy += int(10 * scale_y)
+
+    bottom_limit = area.y + area.height - pad
+    eq_card_h = max(20, min(int(70 * scale_y), bottom_limit - cy))
+
+    if eq_card_h > 20:
+        eq_rect = pygame.Rect(cx, cy, mw, eq_card_h)
+        pygame.draw.rect(surface, config.COLOR_WHITE, eq_rect)
+        pygame.draw.rect(surface, config.COLOR_TEXT, eq_rect, 2)
+
+        raw_math = step_info["math"]
+        if "/" in raw_math:
+            tokens = raw_math.split(" ")
+            current_x = eq_rect.x + 15
+            center_y = eq_rect.centery
+
+            for token in tokens:
+                if token.startswith("[") and token.endswith("]") and "/" in token:
+                    inner = token[1:-1]
+                    top_val, bot_val = inner.split("/")
+                    t_surf = font_medium.render(top_val.strip(), True, config.COLOR_TEXT)
+                    b_surf = font_medium.render(bot_val.strip(), True, config.COLOR_TEXT)
+                    max_w = max(t_surf.get_width(), b_surf.get_width())
+                    v_box_w = max_w + 12
+                    pygame.draw.line(surface, config.COLOR_TEXT, (current_x, center_y - 22), (current_x, center_y + 22), 2)
+                    pygame.draw.line(surface, config.COLOR_TEXT, (current_x, center_y - 22), (current_x + 4, center_y - 22), 2)
+                    pygame.draw.line(surface, config.COLOR_TEXT, (current_x, center_y + 22), (current_x + 4, center_y + 22), 2)
+                    surface.blit(t_surf, (current_x + 6 + (max_w - t_surf.get_width()) // 2, center_y - 20))
+                    surface.blit(b_surf, (current_x + 6 + (max_w - b_surf.get_width()) // 2, center_y + 2))
+                    right_bracket_x = current_x + v_box_w - 2
+                    pygame.draw.line(surface, config.COLOR_TEXT, (right_bracket_x, center_y - 22), (right_bracket_x, center_y + 22), 2)
+                    pygame.draw.line(surface, config.COLOR_TEXT, (right_bracket_x, center_y - 22), (right_bracket_x - 4, center_y - 22), 2)
+                    pygame.draw.line(surface, config.COLOR_TEXT, (right_bracket_x, center_y + 22), (right_bracket_x - 4, center_y + 22), 2)
+                    current_x += v_box_w + 8
+                else:
+                    t_surf = font_medium.render(token, True, config.COLOR_TEXT)
+                    surface.blit(t_surf, (current_x, center_y - t_surf.get_height() // 2))
+                    current_x += t_surf.get_width() + 8
+        else:
+            eq_max_w = mw - 8
+            eq_font_size = 15
+            for size in range(15, 8, -2):
+                test_font = pygame.font.SysFont("segoeui", size, bold=True)
+                if test_font.size(raw_math)[0] <= eq_max_w:
+                    eq_font_size = size
+                    break
+            use_font = pygame.font.SysFont("segoeui", eq_font_size, bold=True)
+            eq_t = use_font.render(raw_math, True, config.COLOR_TEXT)
+            surface.blit(eq_t, eq_t.get_rect(center=eq_rect.center))
 
 def draw_panels(surface, mode="running"):
     left, center, right = config.get_panel_rects(surface.get_width(), surface.get_height())
@@ -174,7 +215,8 @@ def draw_panels(surface, mode="running"):
     return center
 
 def draw_start_button(surface, center_rect):
-    btn_w, btn_h = 260, 70
+    btn_w = max(100, min(260, int(center_rect.width * 0.30)))
+    btn_h = max(28, min(70, int(btn_w * 70 / 260)))
     btn_rect = pygame.Rect(
         center_rect.x + (center_rect.width - btn_w) // 2,
         center_rect.y + (center_rect.height - btn_h) // 2, 
@@ -196,7 +238,10 @@ def draw_start_button(surface, center_rect):
 
 
 def draw_end_task_button(surface, center_rect):
-    rect = pygame.Rect(center_rect.centerx - 80, surface.get_height() - config.BOTTOM_BAR_HEIGHT + (config.BOTTOM_BAR_HEIGHT - 44) // 2, 160, 44)
+    btn_w = max(80, min(160, int(center_rect.width * 0.18)))
+    btn_h = max(22, min(44, int(btn_w * 44 / 160)))
+    H = surface.get_height()
+    rect = pygame.Rect(center_rect.centerx - btn_w // 2, H - config.BOTTOM_BAR_HEIGHT + (config.BOTTOM_BAR_HEIGHT - btn_h) // 2, btn_w, btn_h)
     hovered = rect.collidepoint(pygame.mouse.get_pos())
     pygame.draw.rect(surface, config.COLOR_WHITE if hovered else config.COLOR_BLUE, rect, border_radius=6)
     pygame.draw.rect(surface, config.COLOR_BLUE, rect, 3, border_radius=6)
