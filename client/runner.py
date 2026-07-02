@@ -4,6 +4,7 @@ import json
 import cv2
 import pygame
 import threading
+import subprocess
 import easyocr
 from datetime import datetime
 
@@ -36,8 +37,12 @@ def debug_simulate_correct():
     config.feedback_state = "green"
     config.feedback_timer = 60
     idx = config.STEP_SEQUENCE.index(config.current_step)
-    config.current_step = config.STEP_SEQUENCE[idx + 1]
-    log_message(f"DEBUG: Simulated correct -> step {config.current_step}")
+    if idx < len(config.STEP_SEQUENCE) - 1:
+        config.current_step = config.STEP_SEQUENCE[idx + 1]
+        log_message(f"DEBUG: Simulated correct -> step {config.current_step}")
+    else:
+        config.app_phase = "done"
+        log_message("DEBUG: Simulated correct -> problem completed, entering done phase")
     _write_session_counts()
 
 def debug_simulate_incorrect():
@@ -78,6 +83,14 @@ def handle_shutdown(from_button=False):
         with open(config.SESSION_PATH, "w") as f:
             json.dump(data, f, indent=2)
 
+def return_to_launcher():
+    log_message("Returning to launcher...")
+    subprocess.Popen(
+        ["python", "launcher.py"],
+        cwd=os.path.dirname(os.path.abspath(__file__))
+    )
+    handle_shutdown(from_button=False)
+
 def toggle_fullscreen():
     if config.fullscreen:
         info = pygame.display.Info()
@@ -94,6 +107,7 @@ init_session_files()
 debug_btn_rect = pygame.Rect(0, 0, 0, 0) 
 start_btn_rect = pygame.Rect(0, 0, 0, 0)
 end_btn_rect = pygame.Rect(0, 0, 0, 0)
+done_btn_rect = pygame.Rect(0, 0, 0, 0)
 
 while config.running:
     screen.fill(config.COLOR_BG)
@@ -126,6 +140,8 @@ while config.running:
         elif event.type == pygame.MOUSEBUTTONDOWN:
             if config.app_phase == "start" and start_btn_rect.collidepoint(event.pos):
                 start_session()
+            elif config.app_phase == "done" and done_btn_rect.collidepoint(event.pos):
+                return_to_launcher()
             elif config.app_phase == "running" and end_btn_rect.collidepoint(event.pos):
                 handle_shutdown(from_button=True)
             elif getattr(config, "debug_mode", False) and debug_btn_rect.collidepoint(event.pos):
@@ -138,7 +154,7 @@ while config.running:
             elif event.key == pygame.K_h:
                 config.debug_hints = not config.debug_hints
                 log_message(f"Debug hints display set to: {config.debug_hints}")
-            elif event.key == pygame.K_g and config.debug_mode and config.app_phase == "running":
+            elif event.key == pygame.K_g and config.debug_mode and config.app_phase in ("running", "done"):
                 debug_simulate_correct()
             elif event.key == pygame.K_r and config.debug_mode and config.app_phase == "running":
                 debug_simulate_incorrect()
@@ -147,6 +163,8 @@ while config.running:
             elif event.key == pygame.K_RETURN:
                 if config.app_phase == "start":
                     start_session()
+                elif config.app_phase == "done":
+                    return_to_launcher()
                 elif not config.is_processing:
                     config.is_processing = True
                     threading.Thread(target=background_ocr_pipeline, daemon=True).start()
@@ -166,6 +184,9 @@ while config.running:
     if config.app_phase == "start":
         center_rect = ui.draw_panels(screen, mode="start")
         start_btn_rect = ui.draw_start_button(screen, center_rect)
+    elif config.app_phase == "done":
+        center_rect = ui.draw_panels(screen, mode="done")
+        done_btn_rect = ui.draw_done_button(screen, center_rect)
     else:
         center_rect = ui.draw_panels(screen, mode="running")
         end_btn_rect = ui.draw_end_task_button(screen, center_rect)

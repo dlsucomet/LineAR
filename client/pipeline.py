@@ -99,8 +99,12 @@ def background_ocr_pipeline():
             config.feedback_state = "green"
             config.feedback_timer = 60
             idx = config.STEP_SEQUENCE.index(config.current_step)
-            config.current_step = config.STEP_SEQUENCE[idx + 1]
-            log_message(f"SUCCESS: Moving to step {config.current_step}")
+            if idx < len(config.STEP_SEQUENCE) - 1:
+                config.current_step = config.STEP_SEQUENCE[idx + 1]
+                log_message(f"SUCCESS: Moving to step {config.current_step}")
+            else:
+                config.app_phase = "done"
+                log_message("SUCCESS: Problem completed. Entering done phase.")
         else:
             config.red_count += 1
             config.feedback_state = "red"

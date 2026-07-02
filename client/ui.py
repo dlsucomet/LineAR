@@ -197,13 +197,17 @@ def draw_panels(surface, mode="running"):
     for rect in [left, center, right]:
         pygame.draw.rect(surface, config.COLOR_WHITE, rect)
         pygame.draw.rect(surface, config.COLOR_BLUE, rect, 3)
-        
+
     if mode == "start":
         return center
-        
+
     draw_cartesian_plane(surface, left)
     pygame.draw.rect(surface, config.COLOR_BLUE, left, 3)
-    
+
+    if mode == "done":
+        draw_instruction_panel(surface, right)
+        return center
+
     if config.args.mode == "highlights" and config.current_step in config.PROJECTION_REGIONS:
         with config.shared_frame_lock:
             tracking = config.paper_detected
@@ -216,7 +220,7 @@ def draw_panels(surface, mode="running"):
         else:
             msg = font_bold.render("[ Align ArUco Markers to Project Guides ]", True, config.COLOR_TEXT)
             surface.blit(msg, msg.get_rect(center=center.center))
-            
+
     if config.feedback_timer > 0 and config.feedback_state == "green":
         green = (34, 197, 94)
         pygame.draw.rect(surface, green, center, 8)
@@ -265,6 +269,29 @@ def draw_end_task_button(surface, center_rect):
     t = font_medium.render("End Task", True, config.COLOR_BLUE if hovered else config.COLOR_WHITE)
     surface.blit(t, t.get_rect(center=rect.center))
     return rect
+
+def draw_done_button(surface, center_rect):
+    btn_w = max(100, min(260, int(center_rect.width * 0.30)))
+    btn_h = max(28, min(70, int(btn_w * 70 / 260)))
+    btn_rect = pygame.Rect(
+        center_rect.x + (center_rect.width - btn_w) // 2,
+        center_rect.y + (center_rect.height - btn_h) // 2,
+        btn_w,
+        btn_h
+    )
+    mx, my = pygame.mouse.get_pos()
+    hovered = btn_rect.collidepoint(mx, my)
+    green = (34, 197, 94)
+    if hovered:
+        pygame.draw.rect(surface, config.COLOR_WHITE, btn_rect, border_radius=12)
+        pygame.draw.rect(surface, green, btn_rect, 3, border_radius=12)
+        text = font_large.render("DONE", True, green)
+    else:
+        pygame.draw.rect(surface, green, btn_rect, border_radius=12)
+        text = font_large.render("DONE", True, config.COLOR_WHITE)
+    text_rect = text.get_rect(center=btn_rect.center)
+    surface.blit(text, text_rect)
+    return btn_rect
 
 def draw_debug_button(surface):
     H = surface.get_height()
