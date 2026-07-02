@@ -23,6 +23,30 @@ def advance_debug_state():
     except ValueError:
         config.current_step = STEP_ORDER[0]
 
+def _write_session_counts():
+    with open(config.SESSION_PATH) as f:
+        data = json.load(f)
+    data["green_count"] = config.green_count
+    data["red_count"] = config.red_count
+    with open(config.SESSION_PATH, "w") as f:
+        json.dump(data, f, indent=2)
+
+def debug_simulate_correct():
+    config.green_count += 1
+    config.feedback_state = "green"
+    config.feedback_timer = 60
+    idx = config.STEP_SEQUENCE.index(config.current_step)
+    config.current_step = config.STEP_SEQUENCE[idx + 1]
+    log_message(f"DEBUG: Simulated correct -> step {config.current_step}")
+    _write_session_counts()
+
+def debug_simulate_incorrect():
+    config.red_count += 1
+    config.feedback_state = "red"
+    config.feedback_timer = 60
+    log_message("DEBUG: Simulated incorrect")
+    _write_session_counts()
+
 def start_session():
     log_message("Loading OCR Engine context...")
     config.ocr_reader = easyocr.Reader(['en'], gpu=False, verbose=False)
@@ -111,6 +135,13 @@ while config.running:
             if event.key == pygame.K_d:
                 config.debug_mode = not config.debug_mode
                 log_message(f"Debug interface display set to: {config.debug_mode}")
+            elif event.key == pygame.K_h:
+                config.debug_hints = not config.debug_hints
+                log_message(f"Debug hints display set to: {config.debug_hints}")
+            elif event.key == pygame.K_g and config.debug_mode and config.app_phase == "running":
+                debug_simulate_correct()
+            elif event.key == pygame.K_r and config.debug_mode and config.app_phase == "running":
+                debug_simulate_incorrect()
             elif event.key == pygame.K_ESCAPE:
                 handle_shutdown(from_button=False)
             elif event.key == pygame.K_RETURN:
@@ -138,6 +169,11 @@ while config.running:
     else:
         center_rect = ui.draw_panels(screen, mode="running")
         end_btn_rect = ui.draw_end_task_button(screen, center_rect)
+
+    if config.feedback_timer > 0:
+        config.feedback_timer -= 1
+        if config.feedback_timer == 0:
+            config.feedback_state = None
 
     pygame.display.flip()
     clock.tick(60)

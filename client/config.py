@@ -14,6 +14,7 @@ args = parser.parse_args()
 app_phase = "start"
 fullscreen = False
 debug_mode = False
+debug_hints = True
 
 WINDOW_WIDTH = 1280
 WINDOW_HEIGHT = 720
@@ -64,6 +65,10 @@ current_step = "firstStepLeft"
 status_msg = "System Ready. Place paper to align ArUco markers."
 is_processing = False
 running = True
+green_count = 0
+red_count = 0
+feedback_state = None
+feedback_timer = 0
 
 active_vectors = [
     {"x": 1, "y": 2, "label": "u"},

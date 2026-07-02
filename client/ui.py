@@ -81,7 +81,8 @@ def draw_bottom_bar(surface, center_rect=None):
         if avail_w > 20:
             full_text = f"CONSOLE LOG: {msg}"
             lines = wrap_text(full_text, font_bold, avail_w)
-            max_lines = 3
+            show_hints = getattr(config, "debug_mode", False) and getattr(config, "debug_hints", False)
+            max_lines = 2 if show_hints else 3
             if len(lines) > max_lines:
                 lines = lines[:max_lines]
                 last = lines[-1]
@@ -93,6 +94,11 @@ def draw_bottom_bar(surface, center_rect=None):
             for i, line in enumerate(lines):
                 surf = font_bold.render(line, True, config.COLOR_TEXT)
                 surface.blit(surf, (config.OUTER_GAP, start_y + i * line_h))
+
+    if getattr(config, "debug_mode", False) and getattr(config, "debug_hints", False):
+        hints = "[G] Correct | [R] Incorrect | [H] Hints"
+        hint_surf = font_bold.render(hints, True, config.COLOR_TEXT)
+        surface.blit(hint_surf, (config.OUTER_GAP, bar_rect.bottom - hint_surf.get_height() - 6))
 
     if getattr(config, "debug_mode", False):
         return draw_debug_button(surface)
@@ -211,6 +217,17 @@ def draw_panels(surface, mode="running"):
             msg = font_bold.render("[ Align ArUco Markers to Project Guides ]", True, config.COLOR_TEXT)
             surface.blit(msg, msg.get_rect(center=center.center))
             
+    if config.feedback_timer > 0 and config.feedback_state == "green":
+        green = (34, 197, 94)
+        pygame.draw.rect(surface, green, center, 8)
+        label = font_large.render("CORRECT", True, green)
+        surface.blit(label, label.get_rect(center=(center.centerx, center.y + 30)))
+    elif config.feedback_timer > 0 and config.feedback_state == "red":
+        red = (239, 68, 68)
+        pygame.draw.rect(surface, red, center, 8)
+        label = font_large.render("INCORRECT", True, red)
+        surface.blit(label, label.get_rect(center=(center.centerx, center.y + 30)))
+
     draw_instruction_panel(surface, right)
     return center
 

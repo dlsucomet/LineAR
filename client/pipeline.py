@@ -1,4 +1,5 @@
 import re
+import json
 import cv2
 import numpy as np
 import config
@@ -94,11 +95,24 @@ def background_ocr_pipeline():
             is_valid = True
 
         if is_valid:
+            config.green_count += 1
+            config.feedback_state = "green"
+            config.feedback_timer = 60
             idx = config.STEP_SEQUENCE.index(config.current_step)
             config.current_step = config.STEP_SEQUENCE[idx + 1]
             log_message(f"SUCCESS: Moving to step {config.current_step}")
         else:
+            config.red_count += 1
+            config.feedback_state = "red"
+            config.feedback_timer = 60
             log_message(f"REJECTED: Submission mismatch. Got: {list(recognized_data.values())}")
+        
+        with open(config.SESSION_PATH) as f:
+            session_data = json.load(f)
+        session_data["green_count"] = config.green_count
+        session_data["red_count"] = config.red_count
+        with open(config.SESSION_PATH, "w") as f:
+            json.dump(session_data, f, indent=2)
             
     except Exception as e:
         log_message(f"CRITICAL OCR FAILURE: Exception thrown -> {str(e)}")
