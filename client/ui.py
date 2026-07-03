@@ -110,9 +110,11 @@ def draw_cartesian_plane(surface, area):
     scale = max(1, int(min(area.width, area.height) / 14))
     grid_surf = pygame.Surface((area.width, area.height), pygame.SRCALPHA)
     for x in range(ox % scale, area.x + area.width, scale):
-        pygame.draw.line(grid_surf, (*config.COLOR_GRID, 180), (x, area.y), (x, area.y + area.height))
+        local_x = x - area.x
+        pygame.draw.line(grid_surf, (*config.COLOR_GRID, 180), (local_x, 0), (local_x, area.height))
     for y in range(oy % scale, area.y + area.height, scale):
-        pygame.draw.line(grid_surf, (*config.COLOR_GRID, 180), (area.x, y), (area.x + area.width, y))
+        local_y = y - area.y
+        pygame.draw.line(grid_surf, (*config.COLOR_GRID, 180), (0, local_y), (area.width, local_y))
     surface.blit(grid_surf, (area.x, area.y))
     pygame.draw.line(surface, config.COLOR_TEXT, (area.x, oy), (area.x + area.width, oy), 2)
     pygame.draw.line(surface, config.COLOR_TEXT, (ox, area.y), (ox, area.y + area.height), 2)
@@ -153,8 +155,15 @@ def draw_instruction_panel(surface, area):
         pygame.draw.rect(surface, config.COLOR_TEXT, eq_rect, 2)
 
         raw_math = step_info["math"]
+        has_bracket_tokens = False
         if "/" in raw_math:
             tokens = raw_math.split(" ")
+            has_bracket_tokens = any(
+                t.startswith("[") and t.endswith("]") and "/" in t
+                for t in tokens
+            )
+
+        if has_bracket_tokens:
             current_x = eq_rect.x + 15
             center_y = eq_rect.centery
 
