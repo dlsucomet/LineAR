@@ -1,3 +1,4 @@
+import re
 import pygame
 import config
 from pipeline import transform_to_projection_space
@@ -155,51 +156,67 @@ def draw_instruction_panel(surface, area):
         pygame.draw.rect(surface, config.COLOR_TEXT, eq_rect, 2)
 
         raw_math = step_info["math"]
-        has_bracket_tokens = False
-        if "/" in raw_math:
-            tokens = raw_math.split(" ")
-            has_bracket_tokens = any(
-                t.startswith("[") and t.endswith("]") and "/" in t
-                for t in tokens
-            )
 
-        if has_bracket_tokens:
-            current_x = eq_rect.x + 15
-            center_y = eq_rect.centery
+        parts = []
+        for seg in re.split(r'(\[[^\[\]]*\])', raw_math):
+            if not seg:
+                continue
+            if seg.startswith("[") and seg.endswith("]"):
+                inner = seg[1:-1]
+                rows = [r.strip() for r in inner.split("/")]
+                parts.append(("vector", rows))
+            else:
+                parts.append(("text", seg))
 
-            for token in tokens:
-                if token.startswith("[") and token.endswith("]") and "/" in token:
-                    inner = token[1:-1]
-                    top_val, bot_val = inner.split("/")
-                    t_surf = font_medium.render(top_val.strip(), True, config.COLOR_TEXT)
-                    b_surf = font_medium.render(bot_val.strip(), True, config.COLOR_TEXT)
-                    max_w = max(t_surf.get_width(), b_surf.get_width())
-                    v_box_w = max_w + 12
-                    pygame.draw.line(surface, config.COLOR_TEXT, (current_x, center_y - 22), (current_x, center_y + 22), 2)
-                    pygame.draw.line(surface, config.COLOR_TEXT, (current_x, center_y - 22), (current_x + 4, center_y - 22), 2)
-                    pygame.draw.line(surface, config.COLOR_TEXT, (current_x, center_y + 22), (current_x + 4, center_y + 22), 2)
-                    surface.blit(t_surf, (current_x + 6 + (max_w - t_surf.get_width()) // 2, center_y - 20))
-                    surface.blit(b_surf, (current_x + 6 + (max_w - b_surf.get_width()) // 2, center_y + 2))
-                    right_bracket_x = current_x + v_box_w - 2
-                    pygame.draw.line(surface, config.COLOR_TEXT, (right_bracket_x, center_y - 22), (right_bracket_x, center_y + 22), 2)
-                    pygame.draw.line(surface, config.COLOR_TEXT, (right_bracket_x, center_y - 22), (right_bracket_x - 4, center_y - 22), 2)
-                    pygame.draw.line(surface, config.COLOR_TEXT, (right_bracket_x, center_y + 22), (right_bracket_x - 4, center_y + 22), 2)
-                    current_x += v_box_w + 8
+        eq_max_w = mw - 8
+        eq_font_size = 15
+        for size in range(15, 8, -2):
+            test_font = pygame.font.SysFont("segoeui", size, bold=True)
+            total_w = 0
+            for ptype, pcontent in parts:
+                if ptype == "text":
+                    total_w += test_font.size(pcontent)[0]
                 else:
-                    t_surf = font_medium.render(token, True, config.COLOR_TEXT)
-                    surface.blit(t_surf, (current_x, center_y - t_surf.get_height() // 2))
-                    current_x += t_surf.get_width() + 8
-        else:
-            eq_max_w = mw - 8
-            eq_font_size = 15
-            for size in range(15, 8, -2):
-                test_font = pygame.font.SysFont("segoeui", size, bold=True)
-                if test_font.size(raw_math)[0] <= eq_max_w:
-                    eq_font_size = size
-                    break
-            use_font = pygame.font.SysFont("segoeui", eq_font_size, bold=True)
-            eq_t = use_font.render(raw_math, True, config.COLOR_TEXT)
-            surface.blit(eq_t, eq_t.get_rect(center=eq_rect.center))
+                    row_widths = [test_font.size(r)[0] for r in pcontent]
+                    total_w += (max(row_widths) if row_widths else 0) + 24
+            if total_w <= eq_max_w:
+                eq_font_size = size
+                break
+
+        use_font = pygame.font.SysFont("segoeui", eq_font_size, bold=True)
+        row_h = use_font.get_height()
+        center_y = eq_rect.centery
+        current_x = eq_rect.x + 15
+        line_spacing = 4
+
+        for i, (ptype, pcontent) in enumerate(parts):
+            if ptype == "text":
+                t_surf = use_font.render(pcontent, True, config.COLOR_TEXT)
+                surface.blit(t_surf, (current_x, center_y - t_surf.get_height() // 2))
+                current_x += t_surf.get_width()
+            else:
+                rows = pcontent
+                row_surfaces = [use_font.render(r, True, config.COLOR_TEXT) for r in rows]
+                max_row_w = max(s.get_width() for s in row_surfaces)
+                total_h = len(rows) * row_h + (len(rows) - 1) * line_spacing
+                bracket_top = center_y - total_h // 2
+                bracket_bottom = bracket_top + total_h
+
+                pygame.draw.line(surface, config.COLOR_TEXT, (current_x, bracket_top), (current_x, bracket_bottom), 2)
+                pygame.draw.line(surface, config.COLOR_TEXT, (current_x, bracket_top), (current_x + 4, bracket_top), 2)
+                pygame.draw.line(surface, config.COLOR_TEXT, (current_x, bracket_bottom), (current_x + 4, bracket_bottom), 2)
+
+                content_x = current_x + 6
+                for j, surf in enumerate(row_surfaces):
+                    row_y = bracket_top + j * (row_h + line_spacing)
+                    surface.blit(surf, (content_x + (max_row_w - surf.get_width()) // 2, row_y))
+
+                right_x = content_x + max_row_w + 6
+                pygame.draw.line(surface, config.COLOR_TEXT, (right_x, bracket_top), (right_x, bracket_bottom), 2)
+                pygame.draw.line(surface, config.COLOR_TEXT, (right_x, bracket_top), (right_x - 4, bracket_top), 2)
+                pygame.draw.line(surface, config.COLOR_TEXT, (right_x, bracket_bottom), (right_x - 4, bracket_bottom), 2)
+
+                current_x = right_x
 
 def draw_panels(surface, mode="running"):
     left, center, right = config.get_panel_rects(surface.get_width(), surface.get_height())
