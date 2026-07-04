@@ -6,6 +6,12 @@ import pygame
 import argparse
 import threading
 from datetime import datetime
+from matrix_utils import VariableMatrix
+
+matrix_engine = VariableMatrix()
+
+# Tracking variable for shape morphing progress (0.0 = Base Shape, 1.0 = Fully Transformed)
+transformation_progress = 0.0
 
 parser = argparse.ArgumentParser()
 parser.add_argument("--mode", choices=["highlights", "no_highlights"], default="no_highlights")

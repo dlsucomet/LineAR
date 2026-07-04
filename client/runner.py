@@ -176,6 +176,18 @@ while config.running:
             if not config.fullscreen:
                 screen = pygame.display.set_mode((event.w, event.h), pygame.RESIZABLE)
 
+    if config.current_step == "complete":
+        # Slide toward 1.0 (Fully transformed)
+        if config.transformation_progress < 1.0:
+            config.transformation_progress += 0.05  # Adjust velocity here
+    else:
+        # Move back to 0.0 (Return smoothly to base matrix if steps change)
+        if config.transformation_progress > 0.0:
+            config.transformation_progress -= 0.05
+
+    # Clamp safely
+    config.transformation_progress = max(0.0, min(1.0, config.transformation_progress))
+
     ui.draw_top_bar(screen)
     returned_debug_rect = ui.draw_bottom_bar(screen, center_rect)
     if returned_debug_rect:

@@ -1,6 +1,7 @@
 import re
 import pygame
 import config
+import math 
 from pipeline import transform_to_projection_space
 
 pygame.font.init()
@@ -107,19 +108,28 @@ def draw_bottom_bar(surface, center_rect=None):
 
 def draw_cartesian_plane(surface, area):
     pygame.draw.rect(surface, config.COLOR_WHITE, area)
+    
     ox, oy = area.x + area.width // 2, area.y + area.height // 2
+    
+    if getattr(config, "feedback_timer", 0) > 0 and getattr(config, "feedback_state", "") == "green":
+        amplitude = 25 
+        frequency = 0.1
+        bounce_offset = int(amplitude * math.sin(config.feedback_timer * frequency) * (config.feedback_timer / 60.0))
+        ox += bounce_offset
+        oy -= bounce_offset  
     scale = max(1, int(min(area.width, area.height) / 14))
     grid_surf = pygame.Surface((area.width, area.height), pygame.SRCALPHA)
+    
     for x in range(ox % scale, area.x + area.width, scale):
         local_x = x - area.x
         pygame.draw.line(grid_surf, (*config.COLOR_GRID, 180), (local_x, 0), (local_x, area.height))
     for y in range(oy % scale, area.y + area.height, scale):
         local_y = y - area.y
         pygame.draw.line(grid_surf, (*config.COLOR_GRID, 180), (0, local_y), (area.width, local_y))
+        
     surface.blit(grid_surf, (area.x, area.y))
     pygame.draw.line(surface, config.COLOR_TEXT, (area.x, oy), (area.x + area.width, oy), 2)
     pygame.draw.line(surface, config.COLOR_TEXT, (ox, area.y), (ox, area.y + area.height), 2)
-    
     clip_rect = surface.get_clip()
     surface.set_clip(area)
     for vec in config.active_vectors:
@@ -330,3 +340,38 @@ def draw_debug_button(surface):
     t = font_bold.render("DEBUG: Next Step", True, config.COLOR_BLUE if hovered else config.COLOR_WHITE)
     surface.blit(t, t.get_rect(center=rect.center))
     return rect
+
+def draw_transformed_triangle(surface, area, ox, oy, scale):
+    """Draws a base shape that dynamically morphs into the custom matrix state."""
+    # Define standard input shape coordinates
+    base_vertices = [
+        [1.0, 1.0],
+        [3.0, 1.0],
+        [2.0, 3.0]
+    ]
+    
+    step_info = STEP_GUIDANCE.get(config.current_step, STEP_GUIDANCE["complete"])
+    config.matrix_engine.parse_from_text(step_info["math"])
+    
+    current_progress = getattr(config, "transformation_progress", 0.0)
+    vertices = config.matrix_engine.transform_shape(base_vertices, current_progress)
+    
+    r = int(59 + (34 - 59) * current_progress)
+    g = int(130 + (197 - 130) * current_progress)
+    b = int(246 + (94 - 246) * current_progress)
+    color = (r, g, b)
+
+    pixel_points = []
+    for x, y in vertices:
+        px = ox + int(x * scale)
+        py = oy - int(y * scale)
+        pixel_points.append((px, py))
+
+    clip_rect = surface.get_clip()
+    surface.set_clip(area)
+    poly_surf = pygame.Surface((area.width, area.height), pygame.SRCALPHA)
+    local_pixels = [(pt[0] - area.x, pt[1] - area.y) for pt in pixel_points]
+    pygame.draw.polygon(poly_surf, (*color, 65), local_pixels)
+    surface.blit(poly_surf, (area.x, area.y))
+    pygame.draw.polygon(surface, color, pixel_points, 3)
+    surface.set_clip(clip_rect)
