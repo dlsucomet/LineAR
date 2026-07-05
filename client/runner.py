@@ -110,6 +110,7 @@ def main(mode):
     config.feedback_state = None
     config.feedback_timer = 0
     config.is_processing = False
+    config.debug_preview = False
     config.status_msg = "System Ready. Place paper to align ArUco markers."
     config.cap = None
     config.ocr_reader = None
@@ -175,6 +176,17 @@ def main(mode):
                     debug_simulate_correct()
                 elif event.key == pygame.K_r and config.debug_mode and config.app_phase == "running":
                     debug_simulate_incorrect()
+                elif event.key == pygame.K_p and config.debug_mode and config.args.mode == "highlights":
+                    config.debug_preview = not config.debug_preview
+                    if config.debug_preview:
+                        import numpy as np
+                        config.tracking_matrix = np.eye(3, dtype="float32")
+                        config.paper_detected = True
+                        log_message("DEBUG: Highlights preview ON")
+                    else:
+                        config.tracking_matrix = None
+                        config.paper_detected = False
+                        log_message("DEBUG: Highlights preview OFF")
                 elif event.key == pygame.K_ESCAPE:
                     handle_shutdown(from_button=False)
                 elif event.key == pygame.K_RETURN:

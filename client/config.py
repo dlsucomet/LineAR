@@ -21,6 +21,7 @@ app_phase = "start"
 fullscreen = False
 debug_mode = False
 debug_hints = True
+debug_preview = False
 
 WINDOW_WIDTH = 1280
 WINDOW_HEIGHT = 720

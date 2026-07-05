@@ -106,7 +106,10 @@ def draw_bottom_bar(surface, center_rect=None):
                 surface.blit(surf, (config.OUTER_GAP, start_y + i * line_h))
 
     if getattr(config, "debug_mode", False) and getattr(config, "debug_hints", False):
-        hints = "[G] Correct | [R] Incorrect | [H] Hints"
+        hints = "[G] Correct | [R] Incorrect"
+        if getattr(config.args, "mode", "") == "highlights":
+            hints += " | [P] Preview"
+        hints += " | [H] Hints"
         hint_surf = font_bold.render(hints, True, config.COLOR_TEXT)
         surface.blit(hint_surf, (config.OUTER_GAP, bar_rect.bottom - hint_surf.get_height() - 6))
 
@@ -260,7 +263,7 @@ def draw_panels(surface, mode="running"):
                 top_left = transform_to_projection_space(box["left"], box["top"], center)
                 bottom_right = transform_to_projection_space(box["left"] + box["width"], box["top"] + box["height"], center)
                 if top_left and bottom_right:
-                    pygame.draw.rect(surface, config.COLOR_AXIS, (top_left[0], top_left[1], bottom_right[0]-top_left[0], bottom_right[1]-top_left[1]), 2)
+                    pygame.draw.rect(surface, config.COLOR_BLUE, (top_left[0], top_left[1], bottom_right[0]-top_left[0], bottom_right[1]-top_left[1]))
         else:
             msg = font_bold.render("[ Align ArUco Markers to Project Guides ]", True, config.COLOR_TEXT)
             surface.blit(msg, msg.get_rect(center=center.center))

@@ -38,7 +38,8 @@ def paper_tracking_daemon():
                     last_state = True
                 continue
         with config.shared_frame_lock:
-            config.paper_detected = False
+            if not config.debug_preview:
+                config.paper_detected = False
         if last_state:
             log_message("Tracking Lock Lost: Target sheet missing or occluded.")
             last_state = False
