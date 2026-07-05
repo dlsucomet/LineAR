@@ -4,12 +4,20 @@ import config
 import math 
 from pipeline import transform_to_projection_space
 
-pygame.font.init()
-font_large = pygame.font.SysFont("segoeui", 24, bold=True)
-font_medium = pygame.font.SysFont("segoeui", 18)
-font_body = pygame.font.SysFont("segoeui", 15)
-font_bold = pygame.font.SysFont("segoeui", 15, bold=True)
-font_equation = pygame.font.SysFont("segoeui", 15, bold=True)
+font_large = None
+font_medium = None
+font_body = None
+font_bold = None
+font_equation = None
+
+def _init_fonts():
+    global font_large, font_medium, font_body, font_bold, font_equation
+    pygame.font.init()
+    font_large = pygame.font.SysFont("segoeui", 24, bold=True)
+    font_medium = pygame.font.SysFont("segoeui", 18)
+    font_body = pygame.font.SysFont("segoeui", 15)
+    font_bold = pygame.font.SysFont("segoeui", 15, bold=True)
+    font_equation = pygame.font.SysFont("segoeui", 15, bold=True)
 
 # Step-by-step guidance dictionary configuration
 STEP_GUIDANCE = {

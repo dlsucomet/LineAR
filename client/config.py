@@ -38,33 +38,40 @@ COLOR_WHITE = (255, 255, 255)
 
 BASE_DIR = os.path.dirname(os.path.abspath(__file__))
 LOGS_DIR = os.path.join(BASE_DIR, "logs")
-os.makedirs(LOGS_DIR, exist_ok=True)
 
-existing_folders = sorted(
-    (d for d in os.listdir(LOGS_DIR) if os.path.isdir(os.path.join(LOGS_DIR, d)) and re.match(r'^p\d+$', d)),
-    key=lambda x: int(re.search(r'p(\d+)', x).group(1))
-)
-p_num = (int(re.search(r'p(\d+)', existing_folders[-1]).group(1)) + 1) if existing_folders else 1
-PARTICIPANT_DIR = os.path.join(LOGS_DIR, f"p{p_num}")
-os.makedirs(PARTICIPANT_DIR, exist_ok=True)
+PARTICIPANT_DIR = None
+p_num = None
+LOG_FILE_PATH = None
+SESSION_PATH = None
 
-LOG_FILE_PATH = os.path.join(PARTICIPANT_DIR, f"p{p_num}_linear_session.log")
-SESSION_PATH = os.path.join(PARTICIPANT_DIR, f"p{p_num}.json")
+def init_config():
+    global PARTICIPANT_DIR, p_num, LOG_FILE_PATH, SESSION_PATH
+    os.makedirs(LOGS_DIR, exist_ok=True)
 
-# WRITE THE TARGET INITIALIZATION FILES IMMEDIATELY ON IMPORT
-with open(LOG_FILE_PATH, "w", encoding="utf-8") as f:
-    f.write(f"=== LineAR System Session Log Start: {datetime.now().strftime('%Y-%m-%d %H:%M:%S')} ===\n")
+    existing_folders = sorted(
+        (d for d in os.listdir(LOGS_DIR) if os.path.isdir(os.path.join(LOGS_DIR, d)) and re.match(r'^p\d+$', d)),
+        key=lambda x: int(re.search(r'p(\d+)', x).group(1))
+    )
+    p_num = (int(re.search(r'p(\d+)', existing_folders[-1]).group(1)) + 1) if existing_folders else 1
+    PARTICIPANT_DIR = os.path.join(LOGS_DIR, f"p{p_num}")
+    os.makedirs(PARTICIPANT_DIR, exist_ok=True)
 
-with open(SESSION_PATH, "w", encoding="utf-8") as f:
-    json.dump({
-        "date": datetime.now().strftime("%Y-%m-%d"),
-        "mode": getattr(args, 'mode', 'no_highlights'),
-        "time_started": None, 
-        "time_ended": None,
-        "end_task_pressed": False,
-        "green_count": 0,
-        "red_count": 0,
-    }, f, indent=2)
+    LOG_FILE_PATH = os.path.join(PARTICIPANT_DIR, f"p{p_num}_linear_session.log")
+    SESSION_PATH = os.path.join(PARTICIPANT_DIR, f"p{p_num}.json")
+
+    with open(LOG_FILE_PATH, "w", encoding="utf-8") as f:
+        f.write(f"=== LineAR System Session Log Start: {datetime.now().strftime('%Y-%m-%d %H:%M:%S')} ===\n")
+
+    with open(SESSION_PATH, "w", encoding="utf-8") as f:
+        json.dump({
+            "date": datetime.now().strftime("%Y-%m-%d"),
+            "mode": getattr(args, 'mode', 'no_highlights'),
+            "time_started": None, 
+            "time_ended": None,
+            "end_task_pressed": False,
+            "green_count": 0,
+            "red_count": 0,
+        }, f, indent=2)
 
 STEP_SEQUENCE = ["firstStepLeft", "firstStepRight", "secondStepLeft", "secondStepRight", "thirdStep", "complete"]
 current_step = "firstStepLeft"
