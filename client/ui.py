@@ -151,6 +151,9 @@ def draw_cartesian_plane(surface, area):
             surface.blit(font_bold.render(f'{vec["label"]} ({vec["x"]},{vec["y"]})', True, config.COLOR_TEXT), (tx + 8, ty - 4))
     surface.set_clip(clip_rect)
 
+    if config.current_step == "complete" and config.target_vector is not None:
+        draw_transformed_triangle(surface, area, ox, oy, scale)
+
 def draw_instruction_panel(surface, area):
     pad = 20
     cx, cy, mw = area.x + pad, area.y + pad, area.width - pad * 2
@@ -361,8 +364,9 @@ def draw_transformed_triangle(surface, area, ox, oy, scale):
         [2.0, 3.0]
     ]
     
-    step_info = STEP_GUIDANCE.get(config.current_step, STEP_GUIDANCE["complete"])
-    config.matrix_engine.parse_from_text(step_info["math"])
+    if config.target_vector:
+        tx, ty = config.target_vector
+        config.matrix_engine.set_target(tx, 0.0, 0.0, ty)
     
     current_progress = getattr(config, "transformation_progress", 0.0)
     vertices = config.matrix_engine.transform_shape(base_vertices, current_progress)

@@ -15,7 +15,7 @@ import easyocr
 import config
 import ui
 from logger import log_message, init_session_files
-from pipeline import paper_tracking_daemon, background_ocr_pipeline
+from pipeline import paper_tracking_daemon, background_ocr_pipeline, ocr_problem_data
 
 STEP_ORDER = ["firstStepLeft", "firstStepRight", "secondStepLeft", "secondStepRight", "thirdStep", "complete"]
 
@@ -211,6 +211,10 @@ def main(mode):
                 config.last_ocr_time = now
                 config.is_processing = True
                 threading.Thread(target=background_ocr_pipeline, daemon=True).start()
+
+        if config.app_phase == "running" and not config.problem_loaded and config.paper_detected and config.warped_document is not None and not config.is_processing:
+            config.is_processing = True
+            threading.Thread(target=ocr_problem_data, daemon=True).start()
 
         if config.current_step == "complete":
             if config.transformation_progress < 1.0:

@@ -111,6 +111,21 @@ PROJECTION_REGIONS = {
     "thirdStep": {"one": {"left": 300, "top": 600, "width": 250, "height": 210}}
 }
 
+problem_loaded = False
+expected_answers = {}
+target_vector = None
+
+PROBLEM_REGIONS = {
+    "vector_u": {"top": 40, "left": 80, "width": 120, "height": 40},
+    "vector_w": {"top": 40, "left": 250, "width": 120, "height": 40},
+    "target_v": {"top": 40, "left": 420, "width": 120, "height": 40},
+    "expected_firstStepLeft":   {"top": 750, "left": 80,  "width": 60,  "height": 40},
+    "expected_firstStepRight":  {"top": 750, "left": 200, "width": 60,  "height": 40},
+    "expected_secondStepLeft":  {"top": 750, "left": 320, "width": 130, "height": 60},
+    "expected_secondStepRight": {"top": 750, "left": 500, "width": 130, "height": 60},
+    "expected_thirdStep":       {"top": 750, "left": 680, "width": 130, "height": 60},
+}
+
 CROP_REGIONS = {
     "firstStepLeft": {"one": {"top": 210, "left": 160, "width": 100, "height": 40}},
     "firstStepRight": {"one": {"top": 210, "left": 460, "width": 100, "height": 40}},

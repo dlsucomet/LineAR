@@ -46,6 +46,66 @@ def paper_tracking_daemon():
             log_message("Tracking Lock Lost: Target sheet missing or occluded.")
             last_state = False
 
+def ocr_problem_data():
+    with config.shared_frame_lock:
+        if config.warped_document is None:
+            return
+        local_sheet = config.warped_document.copy()
+
+    log_message("Reading problem data from paper...")
+    regions = config.PROBLEM_REGIONS
+    raw = {}
+
+    for name, box in regions.items():
+        top, left, width, height = box["top"], box["left"], box["width"], box["height"]
+        img_h, img_w = local_sheet.shape[:2]
+        r_top = max(0, min(top, img_h - 1))
+        r_left = max(0, min(left, img_w - 1))
+        r_height = max(1, min(height, img_h - r_top))
+        r_width = max(1, min(width, img_w - r_left))
+        crop = local_sheet[r_top:r_top+r_height, r_left:r_left+r_width]
+        blue_channel = crop[:, :, 0]
+        thresh = cv2.adaptiveThreshold(blue_channel, 255, cv2.ADAPTIVE_THRESH_GAUSSIAN_C, cv2.THRESH_BINARY_INV, 15, 4)
+        processed = cv2.bitwise_not(thresh)
+        ocr_results = config.ocr_reader.readtext(processed, allowlist='0123456789,-', paragraph=False)
+        tokens = []
+        for (bbox, text, confidence) in ocr_results:
+            cleaned = text.replace(" ", "")
+            for match in re.finditer(r'-?\d+', cleaned):
+                token = match.group()
+                if token and token != "-":
+                    tokens.append(token)
+        raw[name] = tokens
+        log_message(f"Problem OCR [{name}] -> {tokens}")
+
+    try:
+        u_vals = raw.get("vector_u", [])
+        w_vals = raw.get("vector_w", [])
+        t_vals = raw.get("target_v", [])
+
+        if len(u_vals) >= 2:
+            config.active_vectors = [
+                {"x": int(u_vals[0]), "y": int(u_vals[1]), "label": "u"},
+                {"x": int(w_vals[0]) if len(w_vals) >= 2 else 0, "y": int(w_vals[1]) if len(w_vals) >= 2 else 1, "label": "w"},
+            ]
+        if len(t_vals) >= 2:
+            config.target_vector = (int(t_vals[0]), int(t_vals[1]))
+
+        config.expected_answers = {
+            "firstStepLeft":  {"one": raw.get("expected_firstStepLeft", [])},
+            "firstStepRight": {"one": raw.get("expected_firstStepRight", [])},
+            "secondStepLeft": {"one": raw.get("expected_secondStepLeft", [])},
+            "secondStepRight":{"one": raw.get("expected_secondStepRight", [])},
+            "thirdStep":      {"one": raw.get("expected_thirdStep", [])},
+        }
+        config.problem_loaded = True
+        log_message(f"Problem loaded: u={u_vals}, w={w_vals}, target={t_vals}")
+        log_message(f"Expected answers: {config.expected_answers}")
+    except Exception as e:
+        log_message(f"PROBLEM OCR FAILURE: {str(e)}")
+
+    config.is_processing = False
+
 def background_ocr_pipeline():
     with config.shared_frame_lock:
         if config.warped_document is None:
@@ -97,19 +157,14 @@ def background_ocr_pipeline():
             recognized_data[region_name] = [t for (_, t) in detected_tokens]
             log_message(f"Parsed region '{region_name}' values -> {recognized_data[region_name]}")
         
-        # Linear algebra step validation
+        # Linear algebra step validation (dynamic)
         is_valid = False
-        if config.current_step == "firstStepLeft" and recognized_data.get("one") == ["3"]:
+        expected = config.expected_answers.get(config.current_step, {})
+        if recognized_data == expected:
             is_valid = True
-        elif config.current_step == "firstStepRight" and recognized_data.get("one") == ["-2"]:
-            is_valid = True
-        elif config.current_step == "secondStepLeft" and recognized_data.get("one") == ["12", "-3"]:
-            is_valid = True
-        elif config.current_step == "secondStepRight" and recognized_data.get("one") == ["2", "-4"]:
-            is_valid = True
-        elif config.current_step == "thirdStep" and recognized_data.get("one") == ["14", "-7"]:
-            config.active_vectors.append({"x": 14, "y": -7, "label": "L(v)"})
-            is_valid = True
+            if config.current_step == "thirdStep" and config.target_vector:
+                tx, ty = config.target_vector
+                config.active_vectors.append({"x": tx, "y": ty, "label": "L(v)"})
 
         if is_valid:
             config.green_count += 1
