@@ -1,3 +1,4 @@
+import os
 import re
 import json
 import cv2
@@ -54,6 +55,14 @@ def background_ocr_pipeline():
         if not config.paper_detected:
             log_message("WARNING: Paper not currently in view — reusing last known warp.")
         local_sheet = config.warped_document.copy()
+
+    captures_dir = os.path.join(config.PARTICIPANT_DIR, "ocr_captures")
+    os.makedirs(captures_dir, exist_ok=True)
+    stamp = datetime.now().strftime("%H%M%S_%f")[:-3]
+    try:
+        cv2.imwrite(os.path.join(captures_dir, f"warped_{config.current_step}_{stamp}.png"), local_sheet)
+    except Exception:
+        pass
         
     log_message(f"Starting OCR evaluation routine for calculation phase: {config.current_step}")
     recognized_data = {}
@@ -71,6 +80,10 @@ def background_ocr_pipeline():
             blue_channel = crop[:, :, 0]
             thresh = cv2.adaptiveThreshold(blue_channel, 255, cv2.ADAPTIVE_THRESH_GAUSSIAN_C, cv2.THRESH_BINARY_INV, 15, 4)
             processed_crop = cv2.bitwise_not(thresh)
+            try:
+                cv2.imwrite(os.path.join(captures_dir, f"{config.current_step}_{region_name}_{stamp}.png"), processed_crop)
+            except Exception:
+                pass
             ocr_results = config.ocr_reader.readtext(processed_crop, allowlist='0123456789-', paragraph=False)
             detected_tokens = []
             for (bbox, text, confidence) in ocr_results:
