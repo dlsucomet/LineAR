@@ -205,6 +205,13 @@ def main(mode):
                 if not config.fullscreen:
                     screen = pygame.display.set_mode((event.w, event.h), pygame.RESIZABLE)
 
+        if config.app_phase == "running" and not config.is_processing:
+            now = pygame.time.get_ticks()
+            if now - config.last_ocr_time >= 5000:
+                config.last_ocr_time = now
+                config.is_processing = True
+                threading.Thread(target=background_ocr_pipeline, daemon=True).start()
+
         if config.current_step == "complete":
             if config.transformation_progress < 1.0:
                 config.transformation_progress += 0.05

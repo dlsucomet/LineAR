@@ -2,6 +2,7 @@ import re
 import json
 import cv2
 import numpy as np
+from datetime import datetime
 import config
 from logger import log_message
 
@@ -46,16 +47,18 @@ def paper_tracking_daemon():
 
 def background_ocr_pipeline():
     with config.shared_frame_lock:
-        if not config.paper_detected or config.warped_document is None:
-            log_message("Verification Failed: Paper target not in sight.")
+        if config.warped_document is None:
+            log_message("Verification Failed: No warped document data available yet.")
             config.is_processing = False
             return
+        if not config.paper_detected:
+            log_message("WARNING: Paper not currently in view — reusing last known warp.")
         local_sheet = config.warped_document.copy()
         
     log_message(f"Starting OCR evaluation routine for calculation phase: {config.current_step}")
+    recognized_data = {}
     try:
         regions = config.CROP_REGIONS.get(config.current_step, {})
-        recognized_data = {}
         for region_name, box in regions.items():
             top, left, width, height = box["top"], box["left"], box["width"], box["height"]
             img_h, img_w = local_sheet.shape[:2]
@@ -121,6 +124,12 @@ def background_ocr_pipeline():
             
     except Exception as e:
         log_message(f"CRITICAL OCR FAILURE: Exception thrown -> {str(e)}")
+
+    timestamp = datetime.now().strftime("%Y-%m-%d %H:%M:%S.%f")[:-3]
+    tracking_entry = f"[{timestamp}] OCR TRACK [{config.current_step}] regions -> {list(recognized_data.values())} paper_detected={config.paper_detected}\n"
+    with open(config.LOG_FILE_PATH, "a", encoding="utf-8") as f:
+        f.write(tracking_entry)
+
     config.is_processing = False
 
 def transform_to_projection_space(w_x, w_y, center_rect):

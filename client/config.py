@@ -76,6 +76,7 @@ def init_config():
 
 STEP_SEQUENCE = ["firstStepLeft", "firstStepRight", "secondStepLeft", "secondStepRight", "thirdStep", "complete"]
 current_step = "firstStepLeft"
+last_ocr_time = 0
 status_msg = "System Ready. Place paper to align ArUco markers."
 is_processing = False
 running = True
