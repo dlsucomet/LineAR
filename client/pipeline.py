@@ -23,7 +23,8 @@ def paper_tracking_daemon():
             continue
         corners, ids, _ = detector.detectMarkers(frame)
         if ids is not None and len(ids) >= 4:
-            corner_map = {int(ids[i][0]): corners[i][0] for i in range(len(ids))}
+            ids = ids.flatten()
+            corner_map = {int(ids[i]): corners[i][0] for i in range(len(ids))}
             if all(k in corner_map for k in [0, 1, 2, 3]):
                 src_pts = np.array([
                     corner_map[0][0], corner_map[1][0],
@@ -67,6 +68,16 @@ def ocr_problem_data():
         blue_channel = crop[:, :, 0]
         thresh = cv2.adaptiveThreshold(blue_channel, 255, cv2.ADAPTIVE_THRESH_GAUSSIAN_C, cv2.THRESH_BINARY_INV, 15, 4)
         processed = cv2.bitwise_not(thresh)
+
+        captures_dir = os.path.join(config.PARTICIPANT_DIR, "ocr_captures")
+        os.makedirs(captures_dir, exist_ok=True)
+        stamp = datetime.now().strftime("%H%M%S_%f")[:-3]
+        try:
+            cv2.imwrite(os.path.join(captures_dir, f"prob_{name}_raw_{stamp}.png"), crop)
+            cv2.imwrite(os.path.join(captures_dir, f"prob_{name}_proc_{stamp}.png"), processed)
+        except Exception:
+            pass
+
         ocr_results = config.ocr_reader.readtext(processed, allowlist='0123456789,-', paragraph=False)
         tokens = []
         for (bbox, text, confidence) in ocr_results:
@@ -98,9 +109,13 @@ def ocr_problem_data():
             "secondStepRight":{"one": raw.get("expected_secondStepRight", [])},
             "thirdStep":      {"one": raw.get("expected_thirdStep", [])},
         }
-        config.problem_loaded = True
-        log_message(f"Problem loaded: u={u_vals}, w={w_vals}, target={t_vals}")
-        log_message(f"Expected answers: {config.expected_answers}")
+        data_ok = any(len(v) > 0 for v in raw.values())
+        if data_ok:
+            config.problem_loaded = True
+            log_message(f"Problem loaded: u={u_vals}, w={w_vals}, target={t_vals}")
+            log_message(f"Expected answers: {config.expected_answers}")
+        else:
+            log_message(f"Problem OCR returned no usable data — will retry")
     except Exception as e:
         log_message(f"PROBLEM OCR FAILURE: {str(e)}")
 
@@ -160,7 +175,8 @@ def background_ocr_pipeline():
         # Linear algebra step validation (dynamic)
         is_valid = False
         expected = config.expected_answers.get(config.current_step, {})
-        if recognized_data == expected:
+        all_empty = all(len(v) == 0 for v in recognized_data.values())
+        if not all_empty and recognized_data == expected:
             is_valid = True
             if config.current_step == "thirdStep" and config.target_vector:
                 tx, ty = config.target_vector

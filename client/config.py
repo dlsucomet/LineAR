@@ -85,10 +85,7 @@ red_count = 0
 feedback_state = None
 feedback_timer = 0
 
-active_vectors = [
-    {"x": 1, "y": 2, "label": "u"},
-    {"x": 0, "y": 1, "label": "w"}
-]
+active_vectors = []
 
 warped_document = None
 tracking_matrix = None

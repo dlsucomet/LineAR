@@ -61,7 +61,8 @@ def start_session():
     config.ocr_reader = easyocr.Reader(['en'], gpu=False, verbose=False)
     log_message("OCR Engine Ready.")
     log_message("Initializing hardware camera capture access...")
-    config.cap = cv2.VideoCapture(0)
+    # config.cap = cv2.VideoCapture(0)  # Index 0 doesn't work; built-in webcam is index 1
+    config.cap = cv2.VideoCapture(2)  # External REDRAGON camera
     config.cap.set(cv2.CAP_PROP_FRAME_WIDTH, 1280)
     config.cap.set(cv2.CAP_PROP_FRAME_HEIGHT, 720)
     
