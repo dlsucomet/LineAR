@@ -397,3 +397,11 @@ def draw_transformed_triangle(surface, area, ox, oy, scale):
     surface.blit(poly_surf, (area.x, area.y))
     pygame.draw.polygon(surface, color, pixel_points, 3)
     surface.set_clip(clip_rect)
+
+
+def draw_pen_cursor(surface, pos):
+    cx, cy = pos
+    r = 12
+    pygame.draw.circle(surface, (30, 30, 30), (cx, cy), r)
+    pygame.draw.circle(surface, (255, 255, 255), (cx, cy), r, 2)
+    pygame.draw.circle(surface, (255, 255, 255), (cx, cy), 2)
