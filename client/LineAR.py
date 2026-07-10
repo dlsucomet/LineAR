@@ -9,6 +9,7 @@ import easyocr
 import argparse
 import json
 from datetime import datetime
+from questionnaires import draw_nasa_tlx, handle_nasa_tlx_click, draw_ueq_s, handle_ueq_s_click
 
 parser = argparse.ArgumentParser()
 parser.add_argument("--mode", choices=["highlights", "no_highlights"], default="no_highlights")
@@ -57,7 +58,16 @@ active_vectors = [
 warped_document = None
 tracking_matrix = None
 paper_detected = False
+proj_calib_matrix = None
+proj_calibrated = False
 shared_frame_lock = threading.Lock()
+
+CALIB_MARKER_SCREEN_POSITIONS = {
+    4: (0, 0),
+    5: (WINDOW_WIDTH - 1, 0),
+    6: (WINDOW_WIDTH - 1, WINDOW_HEIGHT - 1),
+    7: (0, WINDOW_HEIGHT - 1),
+}
 fullscreen = False
 app_phase = "start"
 
@@ -96,6 +106,9 @@ with open(SESSION_PATH, "w", encoding="utf-8") as f:
         "end_task_pressed": False,
         "green_count": 0,
         "red_count": 0,
+        "nasa_tlx": None,
+        "ueq_s": None,
+        "questionnaires_completed": False,
     }, f, indent=2)
 
 def log_message(message):
@@ -113,6 +126,9 @@ def log_message(message):
 with open(LOG_FILE_PATH, "w", encoding="utf-8") as f:
     f.write(f"=== LineAR System Session Log Start: {datetime.now().strftime('%Y-%m-%d %H:%M:%S')} ===\n")
 
+nasa_tlx_responses = [None] * 6
+ueq_s_responses = [None] * 8
+
 CROP_REGIONS = {
     "secondStepLeft": {
         "one": {"top": 400, "left": 200, "width": 90, "height": 190},
@@ -122,7 +138,7 @@ CROP_REGIONS = {
 
 
 def paper_tracking_daemon():
-    global tracking_matrix, paper_detected, warped_document
+    global tracking_matrix, paper_detected, warped_document, proj_calib_matrix, proj_calibrated
     aruco_dict = cv2.aruco.getPredefinedDictionary(cv2.aruco.DICT_4X4_50)
     aruco_params = cv2.aruco.DetectorParameters()
     detector = cv2.aruco.ArucoDetector(aruco_dict, aruco_params)
@@ -136,6 +152,18 @@ def paper_tracking_daemon():
         corners, ids, _ = detector.detectMarkers(frame)
         if ids is not None and len(ids) >= 4:
             corner_map = {int(ids[i][0]): corners[i][0] for i in range(len(ids))}
+
+            # Calibration: detect surface markers 4-7 (independent of paper tracking)
+            calib_ids = [4, 5, 6, 7]
+            if all(k in corner_map for k in calib_ids):
+                calib_src = np.array([corner_map[k][0] for k in calib_ids], dtype="float32")
+                calib_dst = np.array([CALIB_MARKER_SCREEN_POSITIONS[k] for k in calib_ids], dtype="float32")
+                calib_M, _ = cv2.findHomography(calib_src, calib_dst)
+                with shared_frame_lock:
+                    proj_calib_matrix = calib_M
+                    proj_calibrated = True
+
+            # Paper tracking: detect paper markers 0-3
             if all(k in corner_map for k in [0, 1, 2, 3]):
                 src_pts = np.array([
                     corner_map[0][0],
@@ -227,6 +255,17 @@ def start_session():
         json.dump(data, f, indent=2)
 
 
+def save_questionnaire_responses():
+    with open(SESSION_PATH) as f:
+        data = json.load(f)
+    data["nasa_tlx"] = nasa_tlx_responses
+    data["ueq_s"] = ueq_s_responses
+    data["questionnaires_completed"] = True
+    with open(SESSION_PATH, "w") as f:
+        json.dump(data, f, indent=2)
+    log_message("Questionnaire responses saved.")
+
+
 def handle_shutdown(from_button=False):
     global running
     running = False
@@ -245,6 +284,14 @@ def transform_to_projection_space(w_x, w_y):
     transformed = cv2.perspectiveTransform(src_point, tracking_matrix)
     cam_x = transformed[0][0][0]
     cam_y = transformed[0][0][1]
+    if proj_calib_matrix is not None:
+        cam_pt = np.array([[[cam_x, cam_y]]], dtype="float32")
+        screen_pt = cv2.perspectiveTransform(cam_pt, proj_calib_matrix)
+        calib_x, calib_y = screen_pt[0][0][0], screen_pt[0][0][1]
+        _, center_rect, _ = get_panel_rects()
+        p_x = center_rect.x + int((calib_x / WINDOW_WIDTH) * center_rect.width)
+        p_y = center_rect.y + int((calib_y / WINDOW_HEIGHT) * center_rect.height)
+        return int(p_x), int(p_y)
     _, center_rect, _ = get_panel_rects()
     p_x = center_rect.x + int((cam_x / 1280.0) * center_rect.width)
     p_y = center_rect.y + int((cam_y / 720.0) * center_rect.height)
@@ -305,7 +352,11 @@ def draw_top_bar(surface):
     W = surface.get_width()
     bar_rect = pygame.Rect(0, 0, W, TOP_BAR_HEIGHT)
     pygame.draw.rect(surface, COLOR_BLUE, bar_rect)
-    text = font_large.render("Place paper on the designated projection area", True, COLOR_WHITE)
+    if app_phase in ("nasa_tlx", "ueq_s"):
+        title = "NASA-TLX" if app_phase == "nasa_tlx" else "UEQ-S"
+        text = font_large.render(f"Questionnaire: {title}", True, COLOR_WHITE)
+    else:
+        text = font_large.render("Place paper on the designated projection area", True, COLOR_WHITE)
     text_rect = text.get_rect(center=(W // 2, TOP_BAR_HEIGHT // 2))
     surface.blit(text, text_rect)
     badge_text = font_body.render(status_msg, True, COLOR_WHITE)
@@ -316,6 +367,10 @@ def draw_top_bar(surface):
     badge_y = (TOP_BAR_HEIGHT - badge_h) // 2
     pygame.draw.rect(surface, COLOR_TEXT, (badge_x, badge_y, badge_w, badge_h))
     pygame.draw.rect(surface, COLOR_WHITE, (badge_x, badge_y, badge_w, badge_h), 1)
+    if proj_calibrated:
+        calib_text = font_body.render("CALIBRATED", True, (74, 222, 128))
+        calib_x = badge_x - calib_text.get_width() - 10
+        surface.blit(calib_text, (calib_x, (TOP_BAR_HEIGHT - calib_text.get_height()) // 2))
     surface.blit(badge_text, (badge_x + pad, badge_y + (badge_h - badge_text.get_height()) // 2))
 
 
@@ -509,16 +564,38 @@ while running:
         if event.type == pygame.QUIT:
             handle_shutdown(from_button=False)
         elif event.type == pygame.MOUSEBUTTONDOWN:
-            if app_phase == "start" and start_btn_rect and start_btn_rect.collidepoint(event.pos):
+            if app_phase == "nasa_tlx":
+                result = handle_nasa_tlx_click(event.pos)
+                if result == "next":
+                    app_phase = "ueq_s"
+                    log_message("NASA-TLX completed, proceeding to UEQ-S.")
+            elif app_phase == "ueq_s":
+                result = handle_ueq_s_click(event.pos)
+                if result == "submit":
+                    save_questionnaire_responses()
+                    handle_shutdown(from_button=False)
+            elif app_phase == "start" and start_btn_rect and start_btn_rect.collidepoint(event.pos):
                 start_session()
             elif app_phase == "running" and end_btn_rect and end_btn_rect.collidepoint(event.pos):
-                handle_shutdown(from_button=True)
+                with open(SESSION_PATH) as f:
+                    data = json.load(f)
+                data["end_task_pressed"] = True
+                with open(SESSION_PATH, "w") as f:
+                    json.dump(data, f, indent=2)
+                app_phase = "nasa_tlx"
+                log_message("Task ended early. Starting NASA-TLX questionnaire.")
         elif event.type == pygame.KEYDOWN:
             if event.key == pygame.K_ESCAPE:
                 handle_shutdown(from_button=False)
             elif event.key == pygame.K_RETURN:
                 if app_phase == "start":
                     start_session()
+                elif app_phase == "nasa_tlx":
+                    app_phase = "ueq_s"
+                    log_message("NASA-TLX completed, proceeding to UEQ-S.")
+                elif app_phase == "ueq_s":
+                    save_questionnaire_responses()
+                    handle_shutdown(from_button=False)
                 elif not is_processing:
                     is_processing = True
                     threading.Thread(target=background_ocr_pipeline, daemon=True).start()
@@ -531,6 +608,12 @@ while running:
         _, center_rect, _ = get_panel_rects()
         start_btn_rect = draw_start_button(screen, center_rect)
         draw_bottom_bar(screen)
+    elif app_phase == "nasa_tlx":
+        draw_top_bar(screen)
+        draw_nasa_tlx(screen)
+    elif app_phase == "ueq_s":
+        draw_top_bar(screen)
+        draw_ueq_s(screen)
     else:
         draw_top_bar(screen)
         draw_panels(screen)

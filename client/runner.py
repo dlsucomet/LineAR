@@ -16,6 +16,19 @@ import config
 import ui
 from logger import log_message, init_session_files
 from pipeline import paper_tracking_daemon, background_ocr_pipeline, ocr_problem_data
+from questionnaires import draw_nasa_tlx, handle_nasa_tlx_click, draw_ueq_s, handle_ueq_s_click
+
+
+
+def save_questionnaire_responses():
+    with open(config.SESSION_PATH) as f:
+        data = json.load(f)
+    data["nasa_tlx"] = config.nasa_tlx_responses
+    data["ueq_s"] = config.ueq_s_responses
+    data["questionnaires_completed"] = True
+    with open(config.SESSION_PATH, "w") as f:
+        json.dump(data, f, indent=2)
+    log_message("Questionnaire responses saved.")
 
 STEP_ORDER = ["firstStepLeft", "firstStepRight", "secondStepLeft", "secondStepRight", "thirdStep", "complete"]
 
@@ -62,7 +75,7 @@ def start_session():
     log_message("OCR Engine Ready.")
     log_message("Initializing hardware camera capture access...")
     # config.cap = cv2.VideoCapture(0)  # Index 0 doesn't work; built-in webcam is index 1
-    config.cap = cv2.VideoCapture(2)  # External REDRAGON camera
+    config.cap = cv2.VideoCapture(0)  # External REDRAGON camera
     config.cap.set(cv2.CAP_PROP_FRAME_WIDTH, 1280)
     config.cap.set(cv2.CAP_PROP_FRAME_HEIGHT, 720)
     
@@ -112,6 +125,10 @@ def main(mode):
     config.feedback_timer = 0
     config.is_processing = False
     config.debug_preview = False
+    config.proj_calib_matrix = None
+    config.proj_calibrated = False
+    config.nasa_tlx_responses = [None] * 6
+    config.ueq_s_responses = [None] * 8
     config.status_msg = "System Ready. Place paper to align ArUco markers."
     config.cap = None
     config.ocr_reader = None
@@ -157,12 +174,30 @@ def main(mode):
             if event.type == pygame.QUIT:
                 handle_shutdown(from_button=False)
             elif event.type == pygame.MOUSEBUTTONDOWN:
-                if config.app_phase == "start" and start_btn_rect.collidepoint(event.pos):
+                if config.app_phase == "nasa_tlx":
+                    result = handle_nasa_tlx_click(event.pos)
+                    if result == "next":
+                        config.app_phase = "ueq_s"
+                        log_message("NASA-TLX completed, proceeding to UEQ-S.")
+                elif config.app_phase == "ueq_s":
+                    result = handle_ueq_s_click(event.pos)
+                    if result == "submit":
+                        save_questionnaire_responses()
+                        return_to_launcher()
+                elif config.app_phase == "start" and start_btn_rect.collidepoint(event.pos):
                     start_session()
                 elif config.app_phase == "done" and done_btn_rect.collidepoint(event.pos):
-                    return_to_launcher()
+                    config.app_phase = "nasa_tlx"
+                    log_message("Task complete. Starting NASA-TLX questionnaire.")
                 elif config.app_phase == "running" and end_btn_rect.collidepoint(event.pos):
-                    handle_shutdown(from_button=True)
+                    if os.path.exists(config.SESSION_PATH):
+                        with open(config.SESSION_PATH) as f:
+                            data = json.load(f)
+                        data["end_task_pressed"] = True
+                        with open(config.SESSION_PATH, "w") as f:
+                            json.dump(data, f, indent=2)
+                    config.app_phase = "nasa_tlx"
+                    log_message("Task ended early. Starting NASA-TLX questionnaire.")
                 elif getattr(config, "debug_mode", False) and debug_btn_rect.collidepoint(event.pos):
                     advance_debug_state()
                     
@@ -194,6 +229,13 @@ def main(mode):
                     if config.app_phase == "start":
                         start_session()
                     elif config.app_phase == "done":
+                        config.app_phase = "nasa_tlx"
+                        log_message("Task complete. Starting NASA-TLX questionnaire.")
+                    elif config.app_phase == "nasa_tlx":
+                        config.app_phase = "ueq_s"
+                        log_message("NASA-TLX completed, proceeding to UEQ-S.")
+                    elif config.app_phase == "ueq_s":
+                        save_questionnaire_responses()
                         return_to_launcher()
                     elif not config.is_processing:
                         config.is_processing = True
@@ -237,6 +279,10 @@ def main(mode):
         elif config.app_phase == "done":
             center_rect = ui.draw_panels(screen, mode="done")
             done_btn_rect = ui.draw_done_button(screen, center_rect)
+        elif config.app_phase == "nasa_tlx":
+            draw_nasa_tlx(screen)
+        elif config.app_phase == "ueq_s":
+            draw_ueq_s(screen)
         else:
             center_rect = ui.draw_panels(screen, mode="running")
             end_btn_rect = ui.draw_end_task_button(screen, center_rect)

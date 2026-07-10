@@ -67,11 +67,14 @@ def init_config():
         json.dump({
             "date": datetime.now().strftime("%Y-%m-%d"),
             "mode": getattr(args, 'mode', 'no_highlights'),
-            "time_started": None, 
+            "time_started": None,
             "time_ended": None,
             "end_task_pressed": False,
             "green_count": 0,
             "red_count": 0,
+            "nasa_tlx": None,
+            "ueq_s": None,
+            "questionnaires_completed": False,
         }, f, indent=2)
 
 STEP_SEQUENCE = ["firstStepLeft", "firstStepRight", "secondStepLeft", "secondStepRight", "thirdStep", "complete"]
@@ -90,6 +93,16 @@ active_vectors = []
 warped_document = None
 tracking_matrix = None
 paper_detected = False
+
+proj_calib_matrix = None
+proj_calibrated = False
+
+CALIB_MARKER_SCREEN_POSITIONS = {
+    4: (0, 0),
+    5: (WINDOW_WIDTH - 1, 0),
+    6: (WINDOW_WIDTH - 1, WINDOW_HEIGHT - 1),
+    7: (0, WINDOW_HEIGHT - 1),
+}
 shared_frame_lock = threading.Lock()
 cap = None
 ocr_reader = None
@@ -112,29 +125,33 @@ problem_loaded = False
 expected_answers = {}
 target_vector = None
 
-PROBLEM_REGIONS = {
-    "vector_u": {"top": 40, "left": 80, "width": 120, "height": 40},
-    "vector_w": {"top": 40, "left": 250, "width": 120, "height": 40},
-    "target_v": {"top": 40, "left": 420, "width": 120, "height": 40},
-    "expected_firstStepLeft":   {"top": 750, "left": 80,  "width": 60,  "height": 40},
-    "expected_firstStepRight":  {"top": 750, "left": 200, "width": 60,  "height": 40},
-    "expected_secondStepLeft":  {"top": 750, "left": 320, "width": 130, "height": 60},
-    "expected_secondStepRight": {"top": 750, "left": 500, "width": 130, "height": 60},
-    "expected_thirdStep":       {"top": 750, "left": 680, "width": 130, "height": 60},
-}
+nasa_tlx_responses = [None] * 6
+ueq_s_responses = [None] * 8
+
+_questionnaire_nasa_next_btn = None
+_questionnaire_nasa_card = None
+_questionnaire_nasa_slider = None
+_questionnaire_nasa_row_h = 0
+_questionnaire_nasa_subtitle_bottom = 0
+
+_questionnaire_ueq_submit_btn = None
+_questionnaire_ueq_card = None
+_questionnaire_ueq_circles = None
+_questionnaire_ueq_row_h = 0
+_questionnaire_ueq_title_bottom = 0
 
 CROP_REGIONS = {
-    "firstStepLeft": {"one": {"top": 210, "left": 160, "width": 100, "height": 40}},
-    "firstStepRight": {"one": {"top": 210, "left": 460, "width": 100, "height": 40}},
+    "firstStepLeft": {"one": {"top": 420, "left": 320, "width": 200, "height": 80}},
+    "firstStepRight": {"one": {"top": 420, "left": 920, "width": 200, "height": 80}},
     "secondStepLeft": {
-        "one": {"top": 400, "left": 200, "width": 90, "height": 190},
-        "two": {"top": 380, "left": 350, "width": 90, "height": 190}
+        "one": {"top": 800, "left": 400, "width": 180, "height": 380},
+        "two": {"top": 760, "left": 700, "width": 180, "height": 380}
     },
     "secondStepRight": {
-        "one": {"top": 400, "left": 500, "width": 90, "height": 90},
-        "two": {"top": 380, "left": 635, "width": 90, "height": 190}
+        "one": {"top": 800, "left": 1000, "width": 180, "height": 180},
+        "two": {"top": 760, "left": 1270, "width": 180, "height": 380}
     },
-    "thirdStep": {"one": {"top": 600, "left": 300, "width": 90, "height": 190}}
+    "thirdStep": {"one": {"top": 1200, "left": 600, "width": 180, "height": 380}}
 }
 
 def get_panel_rects(surface_width, surface_height):

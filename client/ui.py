@@ -72,8 +72,15 @@ def wrap_text(text, font, max_width):
 def draw_top_bar(surface):
     bar_rect = pygame.Rect(0, 0, surface.get_width(), config.TOP_BAR_HEIGHT)
     pygame.draw.rect(surface, config.COLOR_BLUE, bar_rect)
-    text = font_large.render("Place paper on the designated projection area", True, config.COLOR_WHITE)
+    if config.app_phase in ("nasa_tlx", "ueq_s"):
+        title = "NASA-TLX" if config.app_phase == "nasa_tlx" else "UEQ-S"
+        text = font_large.render(f"Questionnaire: {title}", True, config.COLOR_WHITE)
+    else:
+        text = font_large.render("Place paper on the designated projection area", True, config.COLOR_WHITE)
     surface.blit(text, text.get_rect(center=(surface.get_width() // 2, config.TOP_BAR_HEIGHT // 2)))
+    if getattr(config, "proj_calibrated", False):
+        calib_text = font_body.render("CALIBRATED", True, (74, 222, 128))
+        surface.blit(calib_text, (surface.get_width() - calib_text.get_width() - 12, (config.TOP_BAR_HEIGHT - calib_text.get_height()) // 2))
 
 def draw_bottom_bar(surface, center_rect=None):
     H = surface.get_height()
