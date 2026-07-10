@@ -73,7 +73,12 @@ def draw_top_bar(surface):
     bar_rect = pygame.Rect(0, 0, surface.get_width(), config.TOP_BAR_HEIGHT)
     pygame.draw.rect(surface, config.COLOR_BLUE, bar_rect)
     if config.app_phase in ("nasa_tlx", "ueq_s"):
-        title = "NASA-TLX" if config.app_phase == "nasa_tlx" else "UEQ-S"
+        if config.app_phase == "nasa_tlx":
+            page = config.nasa_tlx_current_page + 1
+            total = 6
+            title = f"NASA-TLX ({page}/{total})"
+        else:
+            title = "UEQ-S"
         text = font_large.render(f"Questionnaire: {title}", True, config.COLOR_WHITE)
     else:
         text = font_large.render("Place paper on the designated projection area", True, config.COLOR_WHITE)

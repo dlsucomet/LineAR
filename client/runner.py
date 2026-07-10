@@ -129,6 +129,7 @@ def main(mode):
     config.proj_calibrated = False
     config.nasa_tlx_responses = [None] * 6
     config.ueq_s_responses = [None] * 8
+    config.nasa_tlx_current_page = 0
     config.status_msg = "System Ready. Place paper to align ArUco markers."
     config.cap = None
     config.ocr_reader = None
@@ -188,7 +189,7 @@ def main(mode):
             elif event.type == pygame.MOUSEBUTTONDOWN:
                 if config.app_phase == "nasa_tlx":
                     result = handle_nasa_tlx_click(event.pos)
-                    if result == "next":
+                    if result == "done":
                         config.app_phase = "ueq_s"
                         log_message("NASA-TLX completed, proceeding to UEQ-S.")
                 elif config.app_phase == "ueq_s":
@@ -199,6 +200,7 @@ def main(mode):
                 elif config.app_phase == "start" and start_btn_rect.collidepoint(event.pos):
                     start_session()
                 elif config.app_phase == "done" and done_btn_rect.collidepoint(event.pos):
+                    config.nasa_tlx_current_page = 0
                     config.app_phase = "nasa_tlx"
                     log_message("Task complete. Starting NASA-TLX questionnaire.")
                 elif config.app_phase == "running" and end_btn_rect.collidepoint(event.pos):
@@ -208,6 +210,7 @@ def main(mode):
                         data["end_task_pressed"] = True
                         with open(config.SESSION_PATH, "w") as f:
                             json.dump(data, f, indent=2)
+                    config.nasa_tlx_current_page = 0
                     config.app_phase = "nasa_tlx"
                     log_message("Task ended early. Starting NASA-TLX questionnaire.")
                 elif getattr(config, "debug_mode", False) and debug_btn_rect.collidepoint(event.pos):
@@ -241,11 +244,15 @@ def main(mode):
                     if config.app_phase == "start":
                         start_session()
                     elif config.app_phase == "done":
+                        config.nasa_tlx_current_page = 0
                         config.app_phase = "nasa_tlx"
                         log_message("Task complete. Starting NASA-TLX questionnaire.")
                     elif config.app_phase == "nasa_tlx":
-                        config.app_phase = "ueq_s"
-                        log_message("NASA-TLX completed, proceeding to UEQ-S.")
+                        if config.nasa_tlx_responses[config.nasa_tlx_current_page] is not None:
+                            config.nasa_tlx_current_page += 1
+                            if config.nasa_tlx_current_page >= len(config.nasa_tlx_responses):
+                                config.app_phase = "ueq_s"
+                                log_message("NASA-TLX completed, proceeding to UEQ-S.")
                     elif config.app_phase == "ueq_s":
                         save_questionnaire_responses()
                         return_to_launcher()
