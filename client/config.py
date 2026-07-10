@@ -145,7 +145,6 @@ nasa_tlx_current_page = 0
 
 _questionnaire_nasa_next_btn = None
 _questionnaire_nasa_slider_rect = None
-_questionnaire_nasa_item_area = None
 
 _questionnaire_ueq_submit_btn = None
 _questionnaire_ueq_circles = None

@@ -60,8 +60,6 @@ LABEL_COLOR = (100, 100, 100)
 BTN_BG = (26, 58, 107)
 BTN_TEXT = (255, 255, 255)
 BTN_HOVER_BG = (40, 85, 155)
-BTN_DISABLED_BG = (180, 185, 190)
-BTN_DISABLED_TEXT = (130, 135, 140)
 
 
 def draw_nasa_tlx(surface):
@@ -101,26 +99,25 @@ def draw_nasa_tlx(surface):
     pygame.draw.rect(surface, TRACK_COLOR, track_rect, border_radius=3)
 
     val = config.nasa_tlx_responses[page]
-    if val is not None:
-        frac = (val - 1) / (NASA_STEPS - 1) if NASA_STEPS > 1 else 0
-        fill_w = max(0, int(slider_w * frac))
-        if fill_w > 2:
-            fill_rect = pygame.Rect(slider_x, track_y, fill_w, track_h)
-            pygame.draw.rect(surface, TRACK_FILL, fill_rect, border_radius=3)
+    display_val = val if val is not None else 1
+
+    frac = (display_val - 1) / (NASA_STEPS - 1) if NASA_STEPS > 1 else 0
+    fill_w = max(0, int(slider_w * frac))
+    if fill_w > 2:
+        fill_rect = pygame.Rect(slider_x, track_y, fill_w, track_h)
+        pygame.draw.rect(surface, TRACK_FILL, fill_rect, border_radius=3)
 
     step_spacing = slider_w / (NASA_STEPS - 1) if NASA_STEPS > 1 else slider_w
     dot_cy = track_y + track_h // 2
     dot_r = 6
     for s in range(NASA_STEPS):
         dx = int(slider_x + s * step_spacing)
-        is_sel = (val is not None and s + 1 == val)
+        is_sel = (s + 1 == display_val)
         if is_sel:
             pygame.draw.circle(surface, DOT_SELECTED, (dx, dot_cy), dot_r + 2)
         else:
             pygame.draw.circle(surface, DOT_FILL, (dx, dot_cy), dot_r)
             pygame.draw.circle(surface, DOT_BORDER, (dx, dot_cy), dot_r, 2)
-
-    has_selection = val is not None
     btn_w = 120
     btn_h = 40
     btn_x = sw - pad - btn_w
@@ -128,13 +125,9 @@ def draw_nasa_tlx(surface):
     next_btn = pygame.Rect(btn_x, btn_y, btn_w, btn_h)
 
     mouse_pos = pygame.mouse.get_pos()
-    if has_selection:
-        hovered = next_btn.collidepoint(mouse_pos)
-        btn_color = BTN_HOVER_BG if hovered else BTN_BG
-        text_color = BTN_TEXT
-    else:
-        btn_color = BTN_DISABLED_BG
-        text_color = BTN_DISABLED_TEXT
+    hovered = next_btn.collidepoint(mouse_pos)
+    btn_color = BTN_HOVER_BG if hovered else BTN_BG
+    text_color = BTN_TEXT
 
     pygame.draw.rect(surface, btn_color, next_btn, border_radius=6)
     if page < len(NASA_TLX_ITEMS) - 1:
@@ -143,13 +136,14 @@ def draw_nasa_tlx(surface):
         btn_label = ui.font_bold.render("Finish", True, text_color)
     surface.blit(btn_label, btn_label.get_rect(center=next_btn.center))
 
-    config._questionnaire_nasa_next_btn = next_btn if has_selection else None
+    config._questionnaire_nasa_next_btn = next_btn
     config._questionnaire_nasa_slider_rect = pygame.Rect(slider_x, track_y - 20, slider_w, 60)
-    config._questionnaire_nasa_item_area = (top_y, cy)
 
 
 def handle_nasa_tlx_click(pos):
     if config._questionnaire_nasa_next_btn and config._questionnaire_nasa_next_btn.collidepoint(pos):
+        if config.nasa_tlx_responses[config.nasa_tlx_current_page] is None:
+            config.nasa_tlx_responses[config.nasa_tlx_current_page] = 1
         config.nasa_tlx_current_page += 1
         if config.nasa_tlx_current_page >= len(NASA_TLX_ITEMS):
             return "done"
