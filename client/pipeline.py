@@ -337,13 +337,13 @@ def transform_to_projection_space(w_x, w_y, center_rect):
 def track_pen_tip(frame, screen_w, screen_h):
     hsv = cv2.cvtColor(frame, cv2.COLOR_BGR2HSV)
     mask = cv2.inRange(hsv, config.pen_hsv_lower, config.pen_hsv_upper)
-    mask = cv2.erode(mask, None, iterations=3)
-    mask = cv2.dilate(mask, None, iterations=3)
+    mask = cv2.erode(mask, None, iterations=5)
+    mask = cv2.dilate(mask, None, iterations=5)
     contours, _ = cv2.findContours(mask, cv2.RETR_EXTERNAL, cv2.CHAIN_APPROX_SIMPLE)
     if not contours:
         return None
     largest = max(contours, key=cv2.contourArea)
-    if cv2.contourArea(largest) < 80:
+    if cv2.contourArea(largest) < 150:
         return None
     M = cv2.moments(largest)
     if M["m00"] == 0:
@@ -381,13 +381,56 @@ def track_pen_tip(frame, screen_w, screen_h):
     sx = int(cx / 1280 * screen_w)
     sy = int(cy / 720 * screen_h)
     raw = (sx, sy)
-    if config.pen_smooth_pos is None:
-        config.pen_smooth_pos = raw
+
+    smoothed = config.pen_smooth_pos
+    if smoothed is not None:
+        dx = raw[0] - smoothed[0]
+        dy = raw[1] - smoothed[1]
+        dist = (dx * dx + dy * dy) ** 0.5
+        max_jump = 80
+        if dist > max_jump:
+            ratio = max_jump / dist
+            raw = (int(smoothed[0] + dx * ratio), int(smoothed[1] + dy * ratio))
+            dist = max_jump
+
+    buf = config.pen_median_buffer
+    buf.append(raw)
+    if len(buf) > 3:
+        buf.pop(0)
+    if len(buf) >= 3:
+        xs = sorted(p[0] for p in buf)
+        ys = sorted(p[1] for p in buf)
+        cleaned = (xs[1], ys[1])
     else:
-        config.pen_smooth_pos = (
-            int(config.pen_smooth_pos[0] * 0.7 + raw[0] * 0.3),
-            int(config.pen_smooth_pos[1] * 0.7 + raw[1] * 0.3),
-        )
+        cleaned = raw
+
+    if smoothed is None:
+        config.pen_smooth_pos = cleaned
+        config.pen_median_buffer = buf
+        return config.pen_smooth_pos
+
+    sdx = cleaned[0] - smoothed[0]
+    sdy = cleaned[1] - smoothed[1]
+    velocity = (sdx * sdx + sdy * sdy) ** 0.5
+
+    alpha_slow = 0.15
+    alpha_fast = 0.5
+    vel_low = 5.0
+    vel_high = 40.0
+
+    if velocity <= vel_low:
+        alpha = alpha_slow
+    elif velocity >= vel_high:
+        alpha = alpha_fast
+    else:
+        t = (velocity - vel_low) / (vel_high - vel_low)
+        alpha = alpha_slow + t * (alpha_fast - alpha_slow)
+
+    config.pen_smooth_pos = (
+        int(smoothed[0] * (1 - alpha) + cleaned[0] * alpha),
+        int(smoothed[1] * (1 - alpha) + cleaned[1] * alpha),
+    )
+    config.pen_median_buffer = buf
     return config.pen_smooth_pos
 
 
@@ -406,12 +449,17 @@ def update_pen_state(screen_pos):
             dx = config.pen_track_last[0] - config.pen_track_start[0]
             dy = config.pen_track_last[1] - config.pen_track_start[1]
             dist = (dx * dx + dy * dy) ** 0.5
-            if elapsed < 0.5 and dist < 30:
+            click_cooldown = 0.3
+            if (elapsed < 0.5 and dist < 20
+                    and (now - config.pen_last_click_time) > click_cooldown):
                 click_pos = config.pen_track_last
                 config.pen_click_queue.append(click_pos)
+                config.pen_last_click_time = now
         config.pen_track_active = False
         config.pen_position = None
         config.pen_visible = False
+        config.pen_smooth_pos = None
+        config.pen_median_buffer = []
 
 
 def _save_pen_hsv_config(h_low, s_low, v_low, h_high, s_high, v_high):
