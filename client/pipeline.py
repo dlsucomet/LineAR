@@ -8,6 +8,8 @@ from datetime import datetime
 import config
 from logger import log_message
 
+from pyzbar.pyzbar import decode
+
 def paper_tracking_daemon():
     aruco_dict = cv2.aruco.getPredefinedDictionary(cv2.aruco.DICT_4X4_50)
     aruco_params = cv2.aruco.DetectorParameters()
@@ -141,105 +143,70 @@ def _ocr_region(region_img, reader):
             continue
     return best_tokens
 
-
 def ocr_problem_data():
     with config.shared_frame_lock:
         if config.warped_document is None:
             return
         local_sheet = config.warped_document.copy()
 
-    log_message("Reading problem data from paper using content band detection...")
-
-    captures_dir = os.path.join(config.PARTICIPANT_DIR, "ocr_captures")
-    os.makedirs(captures_dir, exist_ok=True)
-    stamp = datetime.now().strftime("%H%M%S_%f")[:-3]
-
-    bands = detect_content_bands(local_sheet)
-    log_message(f"Detected {len(bands)} content bands")
-
-    for i, (y0, y1, x0, x1) in enumerate(bands):
-        log_message(f"  Band {i}: rows {y0}-{y1}, cols {x0}-{x1}")
-
-    if len(bands) < 3:
-        log_message("Problem OCR: too few content bands, will retry")
-        try:
-            cv2.imwrite(os.path.join(captures_dir, f"prob_failed_{stamp}.png"), local_sheet)
-        except Exception:
-            pass
-        config.is_processing = False
-        return
-
-    content_bands = [b for b in bands if b[0] > 5 and b[1] < bands[-1][1] - 5]
-
-    merge_gap = int(50 * local_sheet.shape[0] / 1200)
-    merged = []
-    current = content_bands[0]
-    for band in content_bands[1:]:
-        if band[0] - current[1] < merge_gap:
-            current = (current[0], band[1], min(current[2], band[2]), max(current[3], band[3]))
-        else:
-            merged.append(current)
-            current = band
-    merged.append(current)
-
-    merged = [m for m in merged if m[1] - m[0] > 15]
-    log_message(f"Merged into {len(merged)} content regions")
-
-    if len(merged) < 1:
-        log_message("Problem OCR: no valid content regions after merge, will retry")
-        config.is_processing = False
-        return
-
-    prob_y0, prob_y1, prob_x0, prob_x1 = merged[0]
-    log_message(f"Problem region (merged): rows {prob_y0}-{prob_y1}, cols {prob_x0}-{prob_x1}")
-
-    third_w = (prob_x1 - prob_x0) // 3
-    thirds = [
-        ("u", prob_x0, prob_y0, third_w, prob_y1 - prob_y0),
-        ("w", prob_x0 + third_w, prob_y0, third_w, prob_y1 - prob_y0),
-        ("target", prob_x0 + 2 * third_w, prob_y0, prob_x1 - prob_x0 - 2 * third_w, prob_y1 - prob_y0),
-    ]
-
-    results = {}
-    for label, rx, ry, rw, rh in thirds:
-        crop = local_sheet[ry:ry + rh, rx:rx + rw]
-        if crop.size == 0:
-            continue
-        try:
-            cv2.imwrite(os.path.join(captures_dir, f"prob_{label}_raw_{stamp}.png"), crop)
-        except Exception:
-            pass
-        tokens = _ocr_region(crop, config.ocr_reader)
-        results[label] = tokens
-        log_message(f"Problem OCR [{label}] -> {tokens}")
+    log_message("Attempting to read problem configuration directly from QR code...")
 
     try:
-        u_vals = results.get("u", [])
-        w_vals = results.get("w", [])
-        t_vals = results.get("target", [])
+        # Decode any QR codes visible on the warped paper surface
+        qr_codes = decode(local_sheet)
+        
+        if not qr_codes:
+            log_message("Problem QR: No QR code detected on paper surface, will retry.")
+            config.is_processing = False
+            return
 
-        if len(u_vals) >= 2:
-            w_x = int(w_vals[0]) if len(w_vals) >= 2 else 0
-            w_y = int(w_vals[1]) if len(w_vals) >= 2 else 1
-            config.active_vectors = [
-                {"x": int(u_vals[0]), "y": int(u_vals[1]), "label": "u"},
-                {"x": w_x, "y": w_y, "label": "w"},
-            ]
-        if len(t_vals) >= 2:
-            tx, ty = int(t_vals[0]), int(t_vals[1])
-            config.target_vector = (tx, ty)
-            config.active_vectors.append({"x": tx, "y": ty, "label": "L(v)"})
-
-        config.expected_answers = {}
-
-        data_ok = len(u_vals) >= 2
-        if data_ok:
-            config.problem_loaded = True
-            log_message(f"Problem loaded: u={u_vals}, w={w_vals}, target={t_vals}")
-        else:
-            log_message(f"Problem OCR: vector data incomplete (u={u_vals}, w={w_vals}) — will retry")
+        for qr in qr_codes:
+            qr_string = qr.data.decode('utf-8')
+            log_message(f"QR payload discovered: {qr_string}")
+            
+            # Format expected: 1,3; 2,5|0,1; 4,-1|2,1; -16,15
+            if "|" in qr_string:
+                parts = qr_string.split("|")
+                if len(parts) == 3:
+                    # Parse Given Pair 1: "1,3; 2,5"
+                    u_part, w_part, target_part = parts[0], parts[1], parts[2]
+                    
+                    u_vals = [int(n) for n in re.findall(r'-?\d+', u_part)]
+                    w_vals = [int(n) for n in re.findall(r'-?\d+', w_part)]
+                    t_vals = [int(n) for n in re.findall(r'-?\d+', target_part)]
+                    
+                    if len(u_vals) >= 4 and len(w_vals) >= 4 and len(t_vals) >= 4:
+                        # Extract vectors out of the text groupings
+                        config.active_vectors = [
+                            {"x": u_vals[0], "y": u_vals[1], "label": "u"},
+                            {"x": w_vals[0], "y": w_vals[1], "label": "w"},
+                        ]
+                        
+                        tx, ty = t_vals[0], t_vals[1]
+                        config.target_vector = (tx, ty)
+                        config.active_vectors.append({"x": tx, "y": ty, "label": "L(v)"})
+                        
+                        # Set up the target milestones your background_ocr_pipeline validates against
+                        config.expected_answers = {
+                            "firstStepLeft": [str(u_vals[0]), str(u_vals[1])],    
+                            "firstStepRight": [str(u_vals[2]), str(u_vals[3])],   # expected transform values
+                            "secondStepLeft": [str(w_vals[0]), str(w_vals[1])],
+                            "secondStepRight": [str(w_vals[2]), str(w_vals[3])],
+                            "thirdStep": [str(t_vals[2]), str(t_vals[3])]        # final destination coordinates [-16, 15]
+                        }
+                        
+                        config.problem_loaded = True
+                        log_message(f"Problem safely initialized! Target set to: {config.target_vector}")
+                        break
+                    else:
+                        log_message("QR Content mismatch: Numerical values incomplete.")
+                else:
+                    log_message("QR Structural error: Pipe delimiters missing or malformed.")
+            else:
+                log_message("Scanned QR does not map to configuration schema rules.")
+                
     except Exception as e:
-        log_message(f"PROBLEM OCR FAILURE: {str(e)}")
+        log_message(f"PROBLEM QR INITIALIZATION FAILURE: {str(e)}")
 
     config.is_processing = False
 
