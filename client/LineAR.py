@@ -10,6 +10,7 @@ import argparse
 import json
 from datetime import datetime
 from questionnaires import draw_nasa_tlx, handle_nasa_tlx_click, draw_ueq_s, handle_ueq_s_click
+import config as cfg
 
 parser = argparse.ArgumentParser()
 parser.add_argument("--mode", choices=["highlights", "no_highlights"], default="no_highlights")
@@ -128,6 +129,8 @@ with open(LOG_FILE_PATH, "w", encoding="utf-8") as f:
 
 nasa_tlx_responses = [None] * 6
 ueq_s_responses = [None] * 8
+nasa_tlx_current_page = 0
+cfg.nasa_tlx_current_page = 0
 
 CROP_REGIONS = {
     "secondStepLeft": {
@@ -353,7 +356,12 @@ def draw_top_bar(surface):
     bar_rect = pygame.Rect(0, 0, W, TOP_BAR_HEIGHT)
     pygame.draw.rect(surface, COLOR_BLUE, bar_rect)
     if app_phase in ("nasa_tlx", "ueq_s"):
-        title = "NASA-TLX" if app_phase == "nasa_tlx" else "UEQ-S"
+        if app_phase == "nasa_tlx":
+            page = cfg.nasa_tlx_current_page + 1
+            total = 6
+            title = f"NASA-TLX ({page}/{total})"
+        else:
+            title = "UEQ-S"
         text = font_large.render(f"Questionnaire: {title}", True, COLOR_WHITE)
     else:
         text = font_large.render("Place paper on the designated projection area", True, COLOR_WHITE)
@@ -566,7 +574,7 @@ while running:
         elif event.type == pygame.MOUSEBUTTONDOWN:
             if app_phase == "nasa_tlx":
                 result = handle_nasa_tlx_click(event.pos)
-                if result == "next":
+                if result == "done":
                     app_phase = "ueq_s"
                     log_message("NASA-TLX completed, proceeding to UEQ-S.")
             elif app_phase == "ueq_s":
@@ -582,6 +590,8 @@ while running:
                 data["end_task_pressed"] = True
                 with open(SESSION_PATH, "w") as f:
                     json.dump(data, f, indent=2)
+                cfg.nasa_tlx_current_page = 0
+                nasa_tlx_current_page = 0
                 app_phase = "nasa_tlx"
                 log_message("Task ended early. Starting NASA-TLX questionnaire.")
         elif event.type == pygame.KEYDOWN:
@@ -591,8 +601,12 @@ while running:
                 if app_phase == "start":
                     start_session()
                 elif app_phase == "nasa_tlx":
-                    app_phase = "ueq_s"
-                    log_message("NASA-TLX completed, proceeding to UEQ-S.")
+                    if nasa_tlx_responses[cfg.nasa_tlx_current_page] is not None:
+                        cfg.nasa_tlx_current_page += 1
+                        nasa_tlx_current_page = cfg.nasa_tlx_current_page
+                        if cfg.nasa_tlx_current_page >= len(nasa_tlx_responses):
+                            app_phase = "ueq_s"
+                            log_message("NASA-TLX completed, proceeding to UEQ-S.")
                 elif app_phase == "ueq_s":
                     save_questionnaire_responses()
                     handle_shutdown(from_button=False)

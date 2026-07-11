@@ -1,6 +1,7 @@
 import os
 import re
 import json
+import time
 import cv2
 import numpy as np
 from datetime import datetime
@@ -23,6 +24,8 @@ def paper_tracking_daemon():
         ret, frame = config.cap.read()
         if not ret or frame is None:
             continue
+        with config.shared_frame_lock:
+            config.latest_frame = frame.copy()
         corners, ids, _ = detector.detectMarkers(frame)
         calib_ids = [4, 5, 6, 7]
         # Report which ArUco marker IDs are currently visible, only when the set changes
@@ -352,3 +355,150 @@ def transform_to_projection_space(w_x, w_y, center_rect):
     p_x = center_rect.x + int((cam_x / 1280.0) * center_rect.width)
     p_y = center_rect.y + int((cam_y / 720.0) * center_rect.height)
     return int(p_x), int(p_y)
+
+
+def track_pen_tip(frame, screen_w, screen_h):
+    hsv = cv2.cvtColor(frame, cv2.COLOR_BGR2HSV)
+    mask = cv2.inRange(hsv, config.pen_hsv_lower, config.pen_hsv_upper)
+    mask = cv2.erode(mask, None, iterations=5)
+    mask = cv2.dilate(mask, None, iterations=5)
+    contours, _ = cv2.findContours(mask, cv2.RETR_EXTERNAL, cv2.CHAIN_APPROX_SIMPLE)
+    if not contours:
+        return None
+    largest = max(contours, key=cv2.contourArea)
+    if cv2.contourArea(largest) < 150:
+        return None
+    M = cv2.moments(largest)
+    if M["m00"] == 0:
+        return None
+    cx = int(M["m10"] / M["m00"])
+    cy = int(M["m01"] / M["m00"])
+    if config.pen_calibrating:
+        h, s, v = hsv[cy, cx]
+        config.pen_calib_samples.append((h, s, v, cv2.contourArea(largest)))
+        have = len(config.pen_calib_samples)
+        print(f"[CALIB] {have}/30  H={h} S={s} V={v}  area={cv2.contourArea(largest):.0f}")
+        if have >= 30:
+            hs = [s[0] for s in config.pen_calib_samples]
+            ss = [s[1] for s in config.pen_calib_samples]
+            vs = [s[2] for s in config.pen_calib_samples]
+            h_low = max(0, min(hs) - 10)
+            h_high = min(179, max(hs) + 10)
+            s_low = max(0, min(ss) - 30)
+            s_high = min(255, max(ss) + 30)
+            v_low = max(0, min(vs) - 30)
+            v_high = min(255, max(vs) + 30)
+            print(f"\n>>> CALIBRATION DONE <<<")
+            print(f">>> pen_hsv_lower = ({h_low}, {s_low}, {v_low})")
+            print(f">>> pen_hsv_upper = ({h_high}, {s_high}, {v_high})")
+            print(f">>> Auto-saving to config.py ...")
+            config.pen_hsv_lower = (h_low, s_low, v_low)
+            config.pen_hsv_upper = (h_high, s_high, v_high)
+            _save_pen_hsv_config(h_low, s_low, v_low, h_high, s_high, v_high)
+            config.pen_calibrating = False
+            config.pen_calib_samples = []
+    elif config.pen_debug_hsv:
+        h, s, v = hsv[cy, cx]
+        print(f"[PEN HSV] H={h} S={s} V={v}  (area={cv2.contourArea(largest):.0f})")
+        config.pen_debug_hsv = False
+    sx = int(cx / 1280 * screen_w)
+    sy = int(cy / 720 * screen_h)
+    raw = (sx, sy)
+
+    smoothed = config.pen_smooth_pos
+    if smoothed is not None:
+        dx = raw[0] - smoothed[0]
+        dy = raw[1] - smoothed[1]
+        dist = (dx * dx + dy * dy) ** 0.5
+        max_jump = 80
+        if dist > max_jump:
+            ratio = max_jump / dist
+            raw = (int(smoothed[0] + dx * ratio), int(smoothed[1] + dy * ratio))
+            dist = max_jump
+
+    buf = config.pen_median_buffer
+    buf.append(raw)
+    if len(buf) > 3:
+        buf.pop(0)
+    if len(buf) >= 3:
+        xs = sorted(p[0] for p in buf)
+        ys = sorted(p[1] for p in buf)
+        cleaned = (xs[1], ys[1])
+    else:
+        cleaned = raw
+
+    if smoothed is None:
+        config.pen_smooth_pos = cleaned
+        config.pen_median_buffer = buf
+        return config.pen_smooth_pos
+
+    sdx = cleaned[0] - smoothed[0]
+    sdy = cleaned[1] - smoothed[1]
+    velocity = (sdx * sdx + sdy * sdy) ** 0.5
+
+    alpha_slow = 0.15
+    alpha_fast = 0.5
+    vel_low = 5.0
+    vel_high = 40.0
+
+    if velocity <= vel_low:
+        alpha = alpha_slow
+    elif velocity >= vel_high:
+        alpha = alpha_fast
+    else:
+        t = (velocity - vel_low) / (vel_high - vel_low)
+        alpha = alpha_slow + t * (alpha_fast - alpha_slow)
+
+    config.pen_smooth_pos = (
+        int(smoothed[0] * (1 - alpha) + cleaned[0] * alpha),
+        int(smoothed[1] * (1 - alpha) + cleaned[1] * alpha),
+    )
+    config.pen_median_buffer = buf
+    return config.pen_smooth_pos
+
+
+def update_pen_state(screen_pos):
+    now = time.time()
+    if screen_pos is not None:
+        if not config.pen_track_active:
+            config.pen_track_active = True
+            config.pen_track_start = (*screen_pos, now)
+        config.pen_track_last = screen_pos
+        config.pen_position = screen_pos
+        config.pen_visible = True
+    else:
+        if config.pen_track_active:
+            elapsed = now - config.pen_track_start[2]
+            dx = config.pen_track_last[0] - config.pen_track_start[0]
+            dy = config.pen_track_last[1] - config.pen_track_start[1]
+            dist = (dx * dx + dy * dy) ** 0.5
+            click_cooldown = 0.3
+            if (elapsed < 0.5 and dist < 20
+                    and (now - config.pen_last_click_time) > click_cooldown):
+                click_pos = config.pen_track_last
+                config.pen_click_queue.append(click_pos)
+                config.pen_last_click_time = now
+        config.pen_track_active = False
+        config.pen_position = None
+        config.pen_visible = False
+        config.pen_smooth_pos = None
+        config.pen_median_buffer = []
+
+
+def _save_pen_hsv_config(h_low, s_low, v_low, h_high, s_high, v_high):
+    path = os.path.join(os.path.dirname(__file__), "config.py")
+    with open(path) as f:
+        text = f.read()
+    text = re.sub(
+        r'pen_hsv_lower = \(\d+, \d+, \d+\)',
+        f'pen_hsv_lower = ({h_low}, {s_low}, {v_low})',
+        text
+    )
+    text = re.sub(
+        r'pen_hsv_upper = \(\d+, \d+, \d+\)',
+        f'pen_hsv_upper = ({h_high}, {s_high}, {v_high})',
+        text
+    )
+    with open(path, "w") as f:
+        f.write(text)
+    print(f">>> Saved to config.py permanently.")

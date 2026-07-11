@@ -73,7 +73,12 @@ def draw_top_bar(surface):
     bar_rect = pygame.Rect(0, 0, surface.get_width(), config.TOP_BAR_HEIGHT)
     pygame.draw.rect(surface, config.COLOR_BLUE, bar_rect)
     if config.app_phase in ("nasa_tlx", "ueq_s"):
-        title = "NASA-TLX" if config.app_phase == "nasa_tlx" else "UEQ-S"
+        if config.app_phase == "nasa_tlx":
+            page = config.nasa_tlx_current_page + 1
+            total = 6
+            title = f"NASA-TLX ({page}/{total})"
+        else:
+            title = "UEQ-S"
         text = font_large.render(f"Questionnaire: {title}", True, config.COLOR_WHITE)
     else:
         text = font_large.render("Place paper on the designated projection area", True, config.COLOR_WHITE)
@@ -397,3 +402,11 @@ def draw_transformed_triangle(surface, area, ox, oy, scale):
     surface.blit(poly_surf, (area.x, area.y))
     pygame.draw.polygon(surface, color, pixel_points, 3)
     surface.set_clip(clip_rect)
+
+
+def draw_pen_cursor(surface, pos):
+    cx, cy = pos
+    r = 12
+    pygame.draw.circle(surface, (30, 30, 30), (cx, cy), r)
+    pygame.draw.circle(surface, (255, 255, 255), (cx, cy), r, 2)
+    pygame.draw.circle(surface, (255, 255, 255), (cx, cy), 2)

@@ -107,6 +107,22 @@ shared_frame_lock = threading.Lock()
 cap = None
 ocr_reader = None
 
+latest_frame = None
+pen_position = None
+pen_visible = False
+pen_click_queue = []
+pen_hsv_lower = (140, 80, 80)
+pen_hsv_upper = (170, 255, 255)
+pen_track_active = False
+pen_track_start = None
+pen_track_last = None
+pen_smooth_pos = None
+pen_median_buffer = []
+pen_last_click_time = 0
+pen_debug_hsv = True
+pen_calibrating = False
+pen_calib_samples = []
+
 PROJECTION_REGIONS = {
     "firstStepLeft": {"one": {"left": 150, "top": 200, "width": 120, "height": 60}},
     "firstStepRight": {"one": {"left": 450, "top": 200, "width": 120, "height": 60}},
@@ -127,15 +143,12 @@ target_vector = None
 
 nasa_tlx_responses = [None] * 6
 ueq_s_responses = [None] * 8
+nasa_tlx_current_page = 0
 
 _questionnaire_nasa_next_btn = None
-_questionnaire_nasa_card = None
-_questionnaire_nasa_slider = None
-_questionnaire_nasa_row_h = 0
-_questionnaire_nasa_subtitle_bottom = 0
+_questionnaire_nasa_slider_rect = None
 
 _questionnaire_ueq_submit_btn = None
-_questionnaire_ueq_card = None
 _questionnaire_ueq_circles = None
 _questionnaire_ueq_row_h = 0
 _questionnaire_ueq_title_bottom = 0

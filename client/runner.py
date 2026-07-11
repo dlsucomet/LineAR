@@ -15,7 +15,7 @@ import easyocr
 import config
 import ui
 from logger import log_message, init_session_files
-from pipeline import paper_tracking_daemon, background_ocr_pipeline, ocr_problem_data
+from pipeline import paper_tracking_daemon, background_ocr_pipeline, ocr_problem_data, track_pen_tip, update_pen_state
 from questionnaires import draw_nasa_tlx, handle_nasa_tlx_click, draw_ueq_s, handle_ueq_s_click
 
 
@@ -129,6 +129,7 @@ def main(mode):
     config.proj_calibrated = False
     config.nasa_tlx_responses = [None] * 6
     config.ueq_s_responses = [None] * 8
+    config.nasa_tlx_current_page = 0
     config.status_msg = "System Ready. Place paper to align ArUco markers."
     config.cap = None
     config.ocr_reader = None
@@ -170,13 +171,25 @@ def main(mode):
             end_box_h
         )
         
+        # Pen tracking from camera feed
+        with config.shared_frame_lock:
+            frame = config.latest_frame
+        if frame is not None:
+            screen_w, screen_h = screen.get_size()
+            pos = track_pen_tip(frame, screen_w, screen_h)
+            update_pen_state(pos)
+            for click_pos in config.pen_click_queue:
+                pygame.event.post(pygame.event.Event(pygame.MOUSEBUTTONDOWN, {"pos": click_pos, "button": 1}))
+                pygame.event.post(pygame.event.Event(pygame.MOUSEBUTTONUP, {"pos": click_pos, "button": 1}))
+            config.pen_click_queue.clear()
+
         for event in pygame.event.get():
             if event.type == pygame.QUIT:
                 handle_shutdown(from_button=False)
             elif event.type == pygame.MOUSEBUTTONDOWN:
                 if config.app_phase == "nasa_tlx":
                     result = handle_nasa_tlx_click(event.pos)
-                    if result == "next":
+                    if result == "done":
                         config.app_phase = "ueq_s"
                         log_message("NASA-TLX completed, proceeding to UEQ-S.")
                 elif config.app_phase == "ueq_s":
@@ -187,6 +200,7 @@ def main(mode):
                 elif config.app_phase == "start" and start_btn_rect.collidepoint(event.pos):
                     start_session()
                 elif config.app_phase == "done" and done_btn_rect.collidepoint(event.pos):
+                    config.nasa_tlx_current_page = 0
                     config.app_phase = "nasa_tlx"
                     log_message("Task complete. Starting NASA-TLX questionnaire.")
                 elif config.app_phase == "running" and end_btn_rect.collidepoint(event.pos):
@@ -196,6 +210,7 @@ def main(mode):
                         data["end_task_pressed"] = True
                         with open(config.SESSION_PATH, "w") as f:
                             json.dump(data, f, indent=2)
+                    config.nasa_tlx_current_page = 0
                     config.app_phase = "nasa_tlx"
                     log_message("Task ended early. Starting NASA-TLX questionnaire.")
                 elif getattr(config, "debug_mode", False) and debug_btn_rect.collidepoint(event.pos):
@@ -229,11 +244,15 @@ def main(mode):
                     if config.app_phase == "start":
                         start_session()
                     elif config.app_phase == "done":
+                        config.nasa_tlx_current_page = 0
                         config.app_phase = "nasa_tlx"
                         log_message("Task complete. Starting NASA-TLX questionnaire.")
                     elif config.app_phase == "nasa_tlx":
-                        config.app_phase = "ueq_s"
-                        log_message("NASA-TLX completed, proceeding to UEQ-S.")
+                        if config.nasa_tlx_responses[config.nasa_tlx_current_page] is not None:
+                            config.nasa_tlx_current_page += 1
+                            if config.nasa_tlx_current_page >= len(config.nasa_tlx_responses):
+                                config.app_phase = "ueq_s"
+                                log_message("NASA-TLX completed, proceeding to UEQ-S.")
                     elif config.app_phase == "ueq_s":
                         save_questionnaire_responses()
                         return_to_launcher()
@@ -243,6 +262,11 @@ def main(mode):
                 elif event.key == pygame.K_F11:
                     config.fullscreen = not config.fullscreen
                     toggle_fullscreen()
+                elif event.key == pygame.K_c:
+                    if not config.pen_calibrating:
+                        config.pen_calibrating = True
+                        config.pen_calib_samples = []
+                        print("\n>>> PEN CALIBRATION STARTED — hold pen tip still in frame <<<")
 
             elif event.type == pygame.VIDEORESIZE:
                 if not config.fullscreen:
@@ -291,6 +315,9 @@ def main(mode):
             config.feedback_timer -= 1
             if config.feedback_timer == 0:
                 config.feedback_state = None
+
+        if config.pen_position is not None:
+            ui.draw_pen_cursor(screen, config.pen_position)
 
         pygame.display.flip()
         clock.tick(60)
