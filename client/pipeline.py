@@ -14,6 +14,8 @@ def paper_tracking_daemon():
     max_w, max_h = 2000, 2400
     dst_pts = np.array([[0, 0], [max_w - 1, 0], [max_w - 1, max_h - 1], [0, max_h - 1]], dtype="float32")
     last_state = False
+    last_calib_state = False
+    last_seen_ids = set()
     
     while config.running:
         if config.cap is None:
@@ -22,12 +24,22 @@ def paper_tracking_daemon():
         if not ret or frame is None:
             continue
         corners, ids, _ = detector.detectMarkers(frame)
+        calib_ids = [4, 5, 6, 7]
+        # Report which ArUco marker IDs are currently visible, only when the set changes
+        current_ids = set(int(i) for i in ids.flatten()) if ids is not None else set()
+        if current_ids != last_seen_ids:
+            if current_ids:
+                id_str = " ".join(str(i) for i in sorted(current_ids))
+                log_message(f"ArUco markers visible: {id_str}")
+            else:
+                log_message("ArUco markers visible: none")
+            last_seen_ids = current_ids
+
         if ids is not None and len(ids) >= 4:
             ids = ids.flatten()
             corner_map = {int(ids[i]): corners[i][0] for i in range(len(ids))}
 
             # Calibration: detect surface markers 4-7 (independent of paper tracking)
-            calib_ids = [4, 5, 6, 7]
             if all(k in corner_map for k in calib_ids):
                 calib_src = np.array([corner_map[k][0] for k in calib_ids], dtype="float32")
                 calib_dst = np.array([config.CALIB_MARKER_SCREEN_POSITIONS[k] for k in calib_ids], dtype="float32")
@@ -35,6 +47,14 @@ def paper_tracking_daemon():
                 with config.shared_frame_lock:
                     config.proj_calib_matrix = calib_M
                     config.proj_calibrated = True
+                if not last_calib_state:
+                    log_message("Calibration Lock Acquired: ArUco markers 4, 5, 6, 7 detected.")
+                    last_calib_state = True
+            else:
+                missing = [k for k in calib_ids if k not in corner_map]
+                if last_calib_state:
+                    log_message(f"Calibration Lock Lost: missing marker id(s) {missing}.")
+                    last_calib_state = False
 
             # Paper tracking: detect paper markers 0-3
             if all(k in corner_map for k in [0, 1, 2, 3]):
@@ -59,6 +79,9 @@ def paper_tracking_daemon():
         if last_state:
             log_message("Tracking Lock Lost: Target sheet missing or occluded.")
             last_state = False
+        if last_calib_state:
+            log_message("Calibration Lock Lost: fewer than 4 ArUco markers visible.")
+            last_calib_state = False
 
 def detect_content_bands(warped_img):
     gray = cv2.cvtColor(warped_img, cv2.COLOR_BGR2GRAY)
