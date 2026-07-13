@@ -153,9 +153,10 @@ _questionnaire_ueq_circles = None
 _questionnaire_ueq_row_h = 0
 _questionnaire_ueq_title_bottom = 0
 
+# "one": {"top": 940, "left": 150, "width": 1000, "height": 200}
 CROP_REGIONS = {
-    "firstStepLeft": {"one": {"top": 420, "left": 320, "width": 200, "height": 80}},
-    "firstStepRight": {"one": {"top": 420, "left": 920, "width": 200, "height": 80}},
+    "firstStepLeft": {"one": {"top": 1000, "left": 250, "width": 1800, "height": 440}},
+    "firstStepRight": {"one": {"top": 720, "left": 150, "width": 1000, "height": 200}},
     "secondStepLeft": {
         "one": {"top": 800, "left": 400, "width": 180, "height": 380},
         "two": {"top": 760, "left": 700, "width": 180, "height": 380}

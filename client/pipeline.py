@@ -143,70 +143,59 @@ def _ocr_region(region_img, reader):
             continue
     return best_tokens
 
+
 def ocr_problem_data():
     with config.shared_frame_lock:
         if config.warped_document is None:
             return
         local_sheet = config.warped_document.copy()
 
-    log_message("Attempting to read problem configuration directly from QR code...")
+    log_message("Scanning document surface for configuration codes (QR or Barcode)...")
 
     try:
-        # Decode any QR codes visible on the warped paper surface
-        qr_codes = decode(local_sheet)
+        # pyzbar scans for both 1D linear barcodes and 2D QR codes by default
+        detected_codes = decode(local_sheet)
         
-        if not qr_codes:
-            log_message("Problem QR: No QR code detected on paper surface, will retry.")
+        if not detected_codes:
+            log_message("Problem Code: No valid QR code or barcode detected, retrying.")
             config.is_processing = False
             return
 
-        for qr in qr_codes:
-            qr_string = qr.data.decode('utf-8')
-            log_message(f"QR payload discovered: {qr_string}")
+        for code in detected_codes:
+            raw_string = code.data.decode('utf-8').strip()
+            log_message(f"Code discovered! Type: {code.type} | Content: {raw_string}")
             
-            # Format expected: 1,3; 2,5|0,1; 4,-1|2,1; -16,15
-            if "|" in qr_string:
-                parts = qr_string.split("|")
-                if len(parts) == 3:
-                    # Parse Given Pair 1: "1,3; 2,5"
-                    u_part, w_part, target_part = parts[0], parts[1], parts[2]
-                    
-                    u_vals = [int(n) for n in re.findall(r'-?\d+', u_part)]
-                    w_vals = [int(n) for n in re.findall(r'-?\d+', w_part)]
-                    t_vals = [int(n) for n in re.findall(r'-?\d+', target_part)]
-                    
-                    if len(u_vals) >= 4 and len(w_vals) >= 4 and len(t_vals) >= 4:
-                        # Extract vectors out of the text groupings
-                        config.active_vectors = [
-                            {"x": u_vals[0], "y": u_vals[1], "label": "u"},
-                            {"x": w_vals[0], "y": w_vals[1], "label": "w"},
-                        ]
-                        
-                        tx, ty = t_vals[0], t_vals[1]
-                        config.target_vector = (tx, ty)
-                        config.active_vectors.append({"x": tx, "y": ty, "label": "L(v)"})
-                        
-                        # Set up the target milestones your background_ocr_pipeline validates against
-                        config.expected_answers = {
-                            "firstStepLeft": [str(u_vals[0]), str(u_vals[1])],    
-                            "firstStepRight": [str(u_vals[2]), str(u_vals[3])],   # expected transform values
-                            "secondStepLeft": [str(w_vals[0]), str(w_vals[1])],
-                            "secondStepRight": [str(w_vals[2]), str(w_vals[3])],
-                            "thirdStep": [str(t_vals[2]), str(t_vals[3])]        # final destination coordinates [-16, 15]
-                        }
-                        
-                        config.problem_loaded = True
-                        log_message(f"Problem safely initialized! Target set to: {config.target_vector}")
-                        break
-                    else:
-                        log_message("QR Content mismatch: Numerical values incomplete.")
-                else:
-                    log_message("QR Structural error: Pipe delimiters missing or malformed.")
+            # Using regex allows us to grab numbers regardless of the packaging format.
+            # Handles barcode strings: "1 2 3 4 5 6 7 8 9 10 11 12" 
+            # Handles legacy QR strings: "1,2,3,4|5,6,7,8|9,10,11,12"
+            vals = [int(n) for n in re.findall(r'-?\d+', raw_string)]
+            
+            if len(vals) >= 12:
+                config.active_vectors = [
+                    {"x": vals[0], "y": vals[1], "label": "u"},
+                    {"x": vals[4], "y": vals[5], "label": "w"},
+                ]
+                
+                tx, ty = vals[8], vals[9]
+                config.target_vector = (tx, ty)
+                config.active_vectors.append({"x": tx, "y": ty, "label": "L(v)"})
+                
+                config.expected_answers = {
+                    "firstStepLeft": [str(vals[0]), str(vals[1])],    
+                    "firstStepRight": [str(vals[2]), str(vals[3])],   
+                    "secondStepLeft": [str(vals[4]), str(vals[5])],
+                    "secondStepRight": [str(vals[6]), str(vals[7])],
+                    "thirdStep": [str(vals[10]), str(vals[11])]        
+                }
+                
+                config.problem_loaded = True
+                log_message(f"Problem successfully initialized via {code.type}! Target: {config.target_vector}")
+                break
             else:
-                log_message("Scanned QR does not map to configuration schema rules.")
+                log_message(f"Data validation error: Found {len(vals)} numbers, expected 12.")
                 
     except Exception as e:
-        log_message(f"PROBLEM QR INITIALIZATION FAILURE: {str(e)}")
+        log_message(f"CRITICAL CODE INITIALIZATION FAILURE: {str(e)}")
 
     config.is_processing = False
 
@@ -241,14 +230,28 @@ def background_ocr_pipeline():
             r_width = max(1, min(width, img_w - r_left))
             crop = local_sheet[r_top:r_top+r_height, r_left:r_left+r_width]
             
-            blue_channel = crop[:, :, 0]
-            thresh = cv2.adaptiveThreshold(blue_channel, 255, cv2.ADAPTIVE_THRESH_GAUSSIAN_C, cv2.THRESH_BINARY_INV, 15, 4)
-            processed_crop = cv2.bitwise_not(thresh)
+            # Grayscale channel conversion to remove color lens rolling banding
+            gray = cv2.cvtColor(crop, cv2.COLOR_BGR2GRAY)
+            
+            # Cubic up-scale by 2.0x to handle small text dimensions safely
+            resized = cv2.resize(gray, (0, 0), fx=2.0, fy=2.0, interpolation=cv2.INTER_CUBIC)
+            
+            # Localized grid normalization via CLAHE to erase overhead lighting glare
+            clahe = cv2.createCLAHE(clipLimit=4.0, tileGridSize=(16, 16))
+            enhanced = clahe.apply(resized)
+            
+            # Blur edge artifacts out of the compressed stream
+            blurred = cv2.GaussianBlur(enhanced, (3, 3), 0)
+            
+            # Binarize directly with Otsu thresholding for absolute print contrast
+            _, binary = cv2.threshold(blurred, 0, 255, cv2.THRESH_BINARY + cv2.THRESH_OTSU)
+            
             try:
-                cv2.imwrite(os.path.join(captures_dir, f"{config.current_step}_{region_name}_{stamp}.png"), processed_crop)
+                cv2.imwrite(os.path.join(captures_dir, f"{config.current_step}_{region_name}_{stamp}.png"), binary)
             except Exception:
                 pass
-            ocr_results = config.ocr_reader.readtext(processed_crop, allowlist='0123456789-', paragraph=False)
+                
+            ocr_results = config.ocr_reader.readtext(binary, allowlist='0123456789-', paragraph=False)
             detected_tokens = []
             for (bbox, text, confidence) in ocr_results:
                 cleaned = text.replace(" ", "")
@@ -261,7 +264,6 @@ def background_ocr_pipeline():
             recognized_data[region_name] = [t for (_, t) in detected_tokens]
             log_message(f"Parsed region '{region_name}' values -> {recognized_data[region_name]}")
         
-        # Linear algebra step validation (dynamic)
         is_valid = False
         expected = config.expected_answers.get(config.current_step, {})
         all_empty = all(len(v) == 0 for v in recognized_data.values())
@@ -323,6 +325,24 @@ def transform_to_projection_space(w_x, w_y, center_rect):
     p_y = center_rect.y + int((cam_y / 720.0) * center_rect.height)
     return int(p_x), int(p_y)
 
+def get_projector_box_points(box, center_rect):
+    """
+    Helper function to convert a bounding box configuration dict
+    from 2000x2400 document coordinates into a contour format usable by cv2.polylines
+    on your projection canvas screen space.
+    """
+    top, left, w, h = box["top"], box["left"], box["width"], box["height"]
+    paper_corners = [(left, top), (left + w, top), (left + w, top + h), (left, top + h)]
+    
+    projector_pts = []
+    for (px, py) in paper_corners:
+        screen_pt = transform_to_projection_space(px, py, center_rect)
+        if screen_pt is not None:
+            projector_pts.append(screen_pt)
+            
+    if len(projector_pts) == 4:
+        return np.array(projector_pts, dtype=np.int32).reshape((-1, 1, 2))
+    return None
 
 def track_pen_tip(frame, screen_w, screen_h):
     hsv = cv2.cvtColor(frame, cv2.COLOR_BGR2HSV)
