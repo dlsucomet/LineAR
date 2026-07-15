@@ -346,14 +346,60 @@ def get_projector_box_points(box, center_rect):
 
 def track_pen_tip(frame, screen_w, screen_h):
     hsv = cv2.cvtColor(frame, cv2.COLOR_BGR2HSV)
+
+    if config.pen_debug_collect > 0:
+        ch, cs, cv_val = hsv[360, 640]
+        config.pen_debug_samples.append((int(ch), int(cs), int(cv_val)))
+        config.pen_debug_collect -= 1
+        if config.pen_debug_collect == 0:
+            hs = [s[0] for s in config.pen_debug_samples]
+            ss = [s[1] for s in config.pen_debug_samples]
+            vs = [s[2] for s in config.pen_debug_samples]
+            print(f"\n>>> HSV DEBUG SUMMARY ({len(config.pen_debug_samples)} frames at center) <<<")
+            print(f">>>  H: min={min(hs)} max={max(hs)} avg={sum(hs)//len(hs)}")
+            print(f">>>  S: min={min(ss)} max={max(ss)} avg={sum(ss)//len(ss)}")
+            print(f">>>  V: min={min(vs)} max={max(vs)} avg={sum(vs)//len(vs)}")
+            print(f">>> Current config range: lower={config.pen_hsv_lower} upper={config.pen_hsv_upper}\n")
+
     mask = cv2.inRange(hsv, config.pen_hsv_lower, config.pen_hsv_upper)
     mask = cv2.erode(mask, None, iterations=5)
     mask = cv2.dilate(mask, None, iterations=5)
     contours, _ = cv2.findContours(mask, cv2.RETR_EXTERNAL, cv2.CHAIN_APPROX_SIMPLE)
+
+    if not contours and config.pen_calibrating:
+        b, g, r = cv2.split(frame)
+        diff_g = cv2.subtract(r, g)
+        diff_b = cv2.subtract(r, b)
+        pink_mask = cv2.bitwise_and(
+            cv2.threshold(diff_g, 25, 255, cv2.THRESH_BINARY)[1],
+            cv2.threshold(diff_b, 25, 255, cv2.THRESH_BINARY)[1]
+        )
+        pink_mask = cv2.erode(pink_mask, None, iterations=3)
+        pink_mask = cv2.dilate(pink_mask, None, iterations=3)
+        pink_contours, _ = cv2.findContours(pink_mask, cv2.RETR_EXTERNAL, cv2.CHAIN_APPROX_SIMPLE)
+        frame_cx, frame_cy = 640, 360
+        best = None
+        best_dist = float('inf')
+        for c in pink_contours:
+            area = cv2.contourArea(c)
+            if area < 500 or area > 50000:
+                continue
+            M_c = cv2.moments(c)
+            if M_c["m00"] == 0:
+                continue
+            c_cx = int(M_c["m10"] / M_c["m00"])
+            c_cy = int(M_c["m01"] / M_c["m00"])
+            dist = (c_cx - frame_cx) ** 2 + (c_cy - frame_cy) ** 2
+            if dist < best_dist:
+                best_dist = dist
+                best = c
+        if best is not None:
+            contours = [best]
+
     if not contours:
         return None
     largest = max(contours, key=cv2.contourArea)
-    if cv2.contourArea(largest) < 150:
+    if cv2.contourArea(largest) < 500:
         return None
     M = cv2.moments(largest)
     if M["m00"] == 0:
@@ -362,32 +408,42 @@ def track_pen_tip(frame, screen_w, screen_h):
     cy = int(M["m01"] / M["m00"])
     if config.pen_calibrating:
         h, s, v = hsv[cy, cx]
-        config.pen_calib_samples.append((h, s, v, cv2.contourArea(largest)))
+        config.pen_calib_samples.append((int(h), int(s), int(v), cv2.contourArea(largest)))
         have = len(config.pen_calib_samples)
-        print(f"[CALIB] {have}/30  H={h} S={s} V={v}  area={cv2.contourArea(largest):.0f}")
+        print(f"[CALIB] {have}/30  H={int(h)} S={int(s)} V={int(v)}  area={cv2.contourArea(largest):.0f}")
         if have >= 30:
             hs = [s[0] for s in config.pen_calib_samples]
             ss = [s[1] for s in config.pen_calib_samples]
             vs = [s[2] for s in config.pen_calib_samples]
-            h_low = max(0, min(hs) - 10)
-            h_high = min(179, max(hs) + 10)
-            s_low = max(0, min(ss) - 30)
-            s_high = min(255, max(ss) + 30)
-            v_low = max(0, min(vs) - 30)
-            v_high = min(255, max(vs) + 30)
-            print(f"\n>>> CALIBRATION DONE <<<")
-            print(f">>> pen_hsv_lower = ({h_low}, {s_low}, {v_low})")
-            print(f">>> pen_hsv_upper = ({h_high}, {s_high}, {v_high})")
-            print(f">>> Auto-saving to config.py ...")
-            config.pen_hsv_lower = (h_low, s_low, v_low)
-            config.pen_hsv_upper = (h_high, s_high, v_high)
-            _save_pen_hsv_config(h_low, s_low, v_low, h_high, s_high, v_high)
-            config.pen_calibrating = False
-            config.pen_calib_samples = []
-    elif config.pen_debug_hsv:
-        h, s, v = hsv[cy, cx]
-        print(f"[PEN HSV] H={h} S={s} V={v}  (area={cv2.contourArea(largest):.0f})")
-        config.pen_debug_hsv = False
+            avg_h = sum(hs) // len(hs)
+            avg_s = sum(ss) // len(ss)
+            avg_v = sum(vs) // len(vs)
+            print(f"\n>>> CALIBRATION SAMPLES <<<")
+            print(f">>>  Avg HSV: H={avg_h} S={avg_s} V={avg_v}")
+            print(f">>>  H range: {min(hs)}-{max(hs)}  S range: {min(ss)}-{max(ss)}  V range: {min(vs)}-{max(vs)}")
+            if max(hs) - min(hs) > 40:
+                print(f">>>  WARNING: H range too wide ({min(hs)}-{max(hs)}). Samples may be inconsistent.")
+                print(f">>>  Hold the pen steadier and calibrate again.")
+                config.pen_calibrating = False
+                config.pen_calib_samples = []
+            else:
+                h_low = max(0, min(hs) - 10)
+                h_high = min(179, max(hs) + 10)
+                s_low = max(0, min(ss) - 30)
+                s_high = min(255, max(ss) + 30)
+                v_low = max(0, min(vs) - 30)
+                v_high = min(255, max(vs) + 30)
+                h_low = min(h_low, h_high)
+                s_low = min(s_low, s_high)
+                v_low = min(v_low, v_high)
+                print(f">>> pen_hsv_lower = ({h_low}, {s_low}, {v_low})")
+                print(f">>> pen_hsv_upper = ({h_high}, {s_high}, {v_high})")
+                print(f">>> Auto-saving to config.py ...")
+                config.pen_hsv_lower = (h_low, s_low, v_low)
+                config.pen_hsv_upper = (h_high, s_high, v_high)
+                _save_pen_hsv_config(h_low, s_low, v_low, h_high, s_high, v_high)
+                config.pen_calibrating = False
+                config.pen_calib_samples = []
     sx = int(cx / 1280 * screen_w)
     sy = int(cy / 720 * screen_h)
     raw = (sx, sy)
@@ -446,24 +502,34 @@ def track_pen_tip(frame, screen_w, screen_h):
 
 def update_pen_state(screen_pos):
     now = time.time()
+    click_cooldown = 0.3
     if screen_pos is not None:
         if not config.pen_track_active:
             config.pen_track_active = True
             config.pen_track_start = (*screen_pos, now)
+            config.pen_has_clicked = False
         config.pen_track_last = screen_pos
         config.pen_position = screen_pos
         config.pen_visible = True
+        if not config.pen_has_clicked:
+            elapsed = now - config.pen_track_start[2]
+            dx = screen_pos[0] - config.pen_track_start[0]
+            dy = screen_pos[1] - config.pen_track_start[1]
+            dist = (dx * dx + dy * dy) ** 0.5
+            if (elapsed >= 0.4 and dist < 10
+                    and (now - config.pen_last_click_time) > click_cooldown):
+                config.pen_click_queue.append(screen_pos)
+                config.pen_last_click_time = now
+                config.pen_has_clicked = True
     else:
-        if config.pen_track_active:
+        if config.pen_track_active and not config.pen_has_clicked:
             elapsed = now - config.pen_track_start[2]
             dx = config.pen_track_last[0] - config.pen_track_start[0]
             dy = config.pen_track_last[1] - config.pen_track_start[1]
             dist = (dx * dx + dy * dy) ** 0.5
-            click_cooldown = 0.3
             if (elapsed < 0.5 and dist < 20
                     and (now - config.pen_last_click_time) > click_cooldown):
-                click_pos = config.pen_track_last
-                config.pen_click_queue.append(click_pos)
+                config.pen_click_queue.append(config.pen_track_last)
                 config.pen_last_click_time = now
         config.pen_track_active = False
         config.pen_position = None
