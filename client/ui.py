@@ -403,7 +403,7 @@ def draw_done_button(surface, center_rect, y_offset=0):
 
 def draw_new_problem_button(surface, center_rect, y_offset=0):
     btn_w = max(100, min(260, int(center_rect.width * 0.30)))
-    btn_h = max(28, min(70, int(btn_w * 70 / 260)))
+    btn_h = max(54, min(70, int(btn_w * 70 / 260)))
     btn_rect = pygame.Rect(
         center_rect.x + (center_rect.width - btn_w) // 2,
         center_rect.centery + y_offset - btn_h // 2,
@@ -412,15 +412,20 @@ def draw_new_problem_button(surface, center_rect, y_offset=0):
     )
     mx, my = pygame.mouse.get_pos()
     hovered = btn_rect.collidepoint(mx, my)
+    small_font = pygame.font.SysFont("segoeui", 20, bold=True)
+    color = config.COLOR_BLUE if hovered else config.COLOR_WHITE
+    line1 = small_font.render("NEW", True, color)
+    line2 = small_font.render("PROBLEM", True, color)
     if hovered:
         pygame.draw.rect(surface, config.COLOR_WHITE, btn_rect, border_radius=12)
         pygame.draw.rect(surface, config.COLOR_BLUE, btn_rect, 3, border_radius=12)
-        text = font_large.render("NEW PROBLEM", True, config.COLOR_BLUE)
     else:
         pygame.draw.rect(surface, config.COLOR_BLUE, btn_rect, border_radius=12)
-        text = font_large.render("NEW PROBLEM", True, config.COLOR_WHITE)
-    text_rect = text.get_rect(center=btn_rect.center)
-    surface.blit(text, text_rect)
+    gap = 2
+    total_h = line1.get_height() + gap + line2.get_height()
+    start_y = btn_rect.centery - total_h // 2
+    surface.blit(line1, line1.get_rect(centerx=btn_rect.centerx, top=start_y))
+    surface.blit(line2, line2.get_rect(centerx=btn_rect.centerx, top=start_y + line1.get_height() + gap))
     return btn_rect
 
 def draw_debug_button(surface):
