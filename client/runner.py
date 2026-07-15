@@ -1,5 +1,16 @@
-from questionnaires import draw_nasa_tlx, handle_nasa_tlx_click, draw_ueq_s, handle_ueq_s_click
-from pipeline import paper_tracking_daemon, background_ocr_pipeline, ocr_problem_data, track_pen_tip, update_pen_state
+from questionnaires import (
+    draw_nasa_tlx,
+    handle_nasa_tlx_click,
+    draw_ueq_s,
+    handle_ueq_s_click,
+)
+from pipeline import (
+    paper_tracking_daemon,
+    background_ocr_pipeline,
+    ocr_problem_data,
+    track_pen_tip,
+    update_pen_state,
+)
 from logger import log_message, init_session_files
 import ui
 import config
@@ -32,13 +43,13 @@ def save_questionnaire_responses():
 def save_problem_results():
     now = datetime.now().strftime("%H:%M:%S")
     duration = 0
-    if hasattr(config, '_problem_start_time') and config._problem_start_time:
+    if hasattr(config, "_problem_start_time") and config._problem_start_time:
         duration = int(time.time() - config._problem_start_time)
     problem = {
         "problem_number": config.problem_number,
         "green_count": config.green_count,
         "red_count": config.red_count,
-        "time_started": getattr(config, '_problem_start_str', None),
+        "time_started": getattr(config, "_problem_start_str", None),
         "time_ended": now,
         "duration_seconds": duration,
         "end_task_pressed": config.problem_ended_early,
@@ -48,7 +59,9 @@ def save_problem_results():
     data.setdefault("problems", []).append(problem)
     with open(config.SESSION_PATH, "w") as f:
         json.dump(data, indent=2, fp=f)
-    log_message(f"Problem {config.problem_number} results saved (green={config.green_count}, red={config.red_count}, duration={duration}s, ended_early={config.problem_ended_early})")
+    log_message(
+        f"Problem {config.problem_number} results saved (green={config.green_count}, red={config.red_count}, duration={duration}s, ended_early={config.problem_ended_early})"
+    )
 
 
 def reset_for_new_problem():
@@ -71,8 +84,14 @@ def reset_for_new_problem():
     log_message(f"=== Problem {config.problem_number} Ready ===")
 
 
-STEP_ORDER = ["firstStepLeft", "firstStepRight",
-              "secondStepLeft", "secondStepRight", "thirdStep", "complete"]
+STEP_ORDER = [
+    "firstStepLeft",
+    "firstStepRight",
+    "secondStepLeft",
+    "secondStepRight",
+    "thirdStep",
+    "complete",
+]
 
 
 def advance_debug_state():
@@ -105,7 +124,8 @@ def debug_simulate_correct():
     else:
         config.app_phase = "done"
         log_message(
-            "DEBUG: Simulated correct -> problem completed, entering done phase")
+            "DEBUG: Simulated correct -> problem completed, entering done phase"
+        )
     _write_session_counts()
 
 
@@ -120,7 +140,7 @@ def debug_simulate_incorrect():
 def start_session():
     if config.ocr_reader is None:
         log_message("Loading OCR Engine context...")
-        config.ocr_reader = easyocr.Reader(['en'], gpu=False, verbose=False)
+        config.ocr_reader = easyocr.Reader(["en"], gpu=False, verbose=False)
         log_message("OCR Engine Ready.")
     else:
         log_message("OCR Engine already loaded, reusing.")
@@ -149,7 +169,8 @@ def toggle_fullscreen():
     if config.fullscreen:
         info = pygame.display.Info()
         pygame.display.set_mode(
-            (info.current_w, info.current_h), pygame.FULLSCREEN | pygame.SCALED)
+            (info.current_w, info.current_h), pygame.FULLSCREEN | pygame.SCALED
+        )
     else:
         pygame.display.set_mode((1280, 720), pygame.RESIZABLE)
 
@@ -182,19 +203,19 @@ def main(mode):
     config._problem_start_time = None
 
     screen = pygame.display.set_mode(
-        (config.WINDOW_WIDTH, config.WINDOW_HEIGHT), pygame.RESIZABLE)
+        (config.WINDOW_WIDTH, config.WINDOW_HEIGHT), pygame.RESIZABLE
+    )
     pygame.display.set_caption("LineAR - Production Projector Space")
     clock = pygame.time.Clock()
     init_session_files()
     ui._init_fonts()
 
     log_message("Initializing hardware camera capture access...")
-    config.cap = cv2.VideoCapture(3)
+    config.cap = cv2.VideoCapture(0)
     config.cap.set(cv2.CAP_PROP_FRAME_WIDTH, 1280)
     config.cap.set(cv2.CAP_PROP_FRAME_HEIGHT, 720)
     if not config.cap.isOpened():
-        log_message(
-            "CRITICAL ERROR: Could not open the system video capture stream.")
+        log_message("CRITICAL ERROR: Could not open the system video capture stream.")
     log_message("Booting up backend real-time tracking daemon thread pass...")
     threading.Thread(target=paper_tracking_daemon, daemon=True).start()
 
@@ -210,7 +231,8 @@ def main(mode):
 
         # Pre-calculate UI geometry maps BEFORE running event checks
         left_rect, center_rect, right_rect = config.get_panel_rects(
-            screen.get_width(), screen.get_height())
+            screen.get_width(), screen.get_height()
+        )
 
         # Dynamically determine where the button rect boundaries are located on this frame
         start_btn_w = max(100, min(260, int(center_rect.width * 0.30)))
@@ -219,17 +241,18 @@ def main(mode):
             center_rect.x + (center_rect.width - start_btn_w) // 2,
             center_rect.y + (center_rect.height - start_btn_h) // 2,
             start_btn_w,
-            start_btn_h
+            start_btn_h,
         )
 
         end_box_w = max(80, min(160, int(center_rect.width * 0.18)))
         end_box_h = max(22, min(44, int(end_box_w * 44 / 160)))
         end_btn_rect = pygame.Rect(
             center_rect.centerx - end_box_w // 2,
-            screen.get_height() - config.BOTTOM_BAR_HEIGHT +
-            (config.BOTTOM_BAR_HEIGHT - end_box_h) // 2,
+            screen.get_height()
+            - config.BOTTOM_BAR_HEIGHT
+            + (config.BOTTOM_BAR_HEIGHT - end_box_h) // 2,
             end_box_w,
-            end_box_h
+            end_box_h,
         )
 
         # Pen tracking from camera feed
@@ -245,7 +268,9 @@ def main(mode):
                 hover_target = None
                 if config.app_phase == "start" and start_btn_rect.collidepoint(pos):
                     hover_target = "start"
-                elif config.app_phase == "done" and new_problem_btn_rect.collidepoint(pos):
+                elif config.app_phase == "done" and new_problem_btn_rect.collidepoint(
+                    pos
+                ):
                     hover_target = "new_problem"
                 elif config.app_phase == "done" and done_btn_rect.collidepoint(pos):
                     hover_target = "done"
@@ -258,12 +283,19 @@ def main(mode):
 
                 if hover_target is not None:
                     if hover_target == config.pen_hover_button:
-                        if ((now - config.pen_hover_start) >= 0.5
-                                and (now - config.pen_last_click_time) > 0.3):
-                            pygame.event.post(pygame.event.Event(
-                                pygame.MOUSEBUTTONDOWN, {"pos": pos, "button": 1}))
-                            pygame.event.post(pygame.event.Event(
-                                pygame.MOUSEBUTTONUP, {"pos": pos, "button": 1}))
+                        if (now - config.pen_hover_start) >= 0.5 and (
+                            now - config.pen_last_click_time
+                        ) > 0.3:
+                            pygame.event.post(
+                                pygame.event.Event(
+                                    pygame.MOUSEBUTTONDOWN, {"pos": pos, "button": 1}
+                                )
+                            )
+                            pygame.event.post(
+                                pygame.event.Event(
+                                    pygame.MOUSEBUTTONUP, {"pos": pos, "button": 1}
+                                )
+                            )
                             config.pen_last_click_time = now
                             config.pen_hover_button = None
                             config.pen_hover_start = now
@@ -289,18 +321,25 @@ def main(mode):
                     if result == "submit":
                         save_questionnaire_responses()
                         return_to_launcher()
-                elif config.app_phase == "start" and start_btn_rect.collidepoint(event.pos):
+                elif config.app_phase == "start" and start_btn_rect.collidepoint(
+                    event.pos
+                ):
                     start_session()
-                elif config.app_phase == "done" and new_problem_btn_rect.collidepoint(event.pos):
+                elif config.app_phase == "done" and new_problem_btn_rect.collidepoint(
+                    event.pos
+                ):
                     save_problem_results()
                     reset_for_new_problem()
-                elif config.app_phase == "done" and done_btn_rect.collidepoint(event.pos):
+                elif config.app_phase == "done" and done_btn_rect.collidepoint(
+                    event.pos
+                ):
                     save_problem_results()
                     config.nasa_tlx_current_page = 0
                     config.app_phase = "nasa_tlx"
-                    log_message(
-                        "Task complete. Starting NASA-TLX questionnaire.")
-                elif config.app_phase == "running" and end_btn_rect.collidepoint(event.pos):
+                    log_message("Task complete. Starting NASA-TLX questionnaire.")
+                elif config.app_phase == "running" and end_btn_rect.collidepoint(
+                    event.pos
+                ):
                     config.problem_ended_early = True
                     if os.path.exists(config.SESSION_PATH):
                         with open(config.SESSION_PATH) as f:
@@ -310,28 +349,40 @@ def main(mode):
                             json.dump(data, f, indent=2)
                     config.nasa_tlx_current_page = 0
                     config.app_phase = "nasa_tlx"
-                    log_message(
-                        "Task ended early. Starting NASA-TLX questionnaire.")
-                elif getattr(config, "debug_mode", False) and debug_btn_rect.collidepoint(event.pos):
+                    log_message("Task ended early. Starting NASA-TLX questionnaire.")
+                elif getattr(
+                    config, "debug_mode", False
+                ) and debug_btn_rect.collidepoint(event.pos):
                     advance_debug_state()
 
             elif event.type == pygame.KEYDOWN:
                 if event.key == pygame.K_d:
                     config.debug_mode = not config.debug_mode
-                    log_message(f"Debug interface display set to: {
-                                config.debug_mode}")
+                    log_message(f"Debug interface display set to: {config.debug_mode}")
                 elif event.key == pygame.K_h:
                     config.debug_hints = not config.debug_hints
-                    log_message(f"Debug hints display set to: {
-                                config.debug_hints}")
-                elif event.key == pygame.K_g and config.debug_mode and config.app_phase in ("running", "done"):
+                    log_message(f"Debug hints display set to: {config.debug_hints}")
+                elif (
+                    event.key == pygame.K_g
+                    and config.debug_mode
+                    and config.app_phase in ("running", "done")
+                ):
                     debug_simulate_correct()
-                elif event.key == pygame.K_r and config.debug_mode and config.app_phase == "running":
+                elif (
+                    event.key == pygame.K_r
+                    and config.debug_mode
+                    and config.app_phase == "running"
+                ):
                     debug_simulate_incorrect()
-                elif event.key == pygame.K_p and config.debug_mode and config.args.mode == "highlights":
+                elif (
+                    event.key == pygame.K_p
+                    and config.debug_mode
+                    and config.args.mode == "highlights"
+                ):
                     config.debug_preview = not config.debug_preview
                     if config.debug_preview:
                         import numpy as np
+
                         config.tracking_matrix = np.eye(3, dtype="float32")
                         config.paper_detected = True
                         log_message("DEBUG: Highlights preview ON")
@@ -348,22 +399,26 @@ def main(mode):
                         save_problem_results()
                         config.nasa_tlx_current_page = 0
                         config.app_phase = "nasa_tlx"
-                        log_message(
-                            "Task complete. Starting NASA-TLX questionnaire.")
+                        log_message("Task complete. Starting NASA-TLX questionnaire.")
                     elif config.app_phase == "nasa_tlx":
-                        if config.nasa_tlx_responses[config.nasa_tlx_current_page] is not None:
+                        if (
+                            config.nasa_tlx_responses[config.nasa_tlx_current_page]
+                            is not None
+                        ):
                             config.nasa_tlx_current_page += 1
-                            if config.nasa_tlx_current_page >= len(config.nasa_tlx_responses):
+                            if config.nasa_tlx_current_page >= len(
+                                config.nasa_tlx_responses
+                            ):
                                 config.app_phase = "ueq_s"
-                                log_message(
-                                    "NASA-TLX completed, proceeding to UEQ-S.")
+                                log_message("NASA-TLX completed, proceeding to UEQ-S.")
                     elif config.app_phase == "ueq_s":
                         save_questionnaire_responses()
                         return_to_launcher()
                     elif not config.is_processing:
                         config.is_processing = True
                         threading.Thread(
-                            target=background_ocr_pipeline, daemon=True).start()
+                            target=background_ocr_pipeline, daemon=True
+                        ).start()
                 elif event.key == pygame.K_F11:
                     config.fullscreen = not config.fullscreen
                     toggle_fullscreen()
@@ -372,7 +427,8 @@ def main(mode):
                         config.pen_calibrating = True
                         config.pen_calib_samples = []
                         print(
-                            "\n>>> PEN CALIBRATION STARTED — hold pen tip still in frame <<<")
+                            "\n>>> PEN CALIBRATION STARTED — hold pen tip still in frame <<<"
+                        )
                 elif event.key == pygame.K_v:
                     config.pen_debug_collect = 60
                     config.pen_debug_samples = []
@@ -381,19 +437,29 @@ def main(mode):
             elif event.type == pygame.VIDEORESIZE:
                 if not config.fullscreen:
                     screen = pygame.display.set_mode(
-                        (event.w, event.h), pygame.RESIZABLE)
+                        (event.w, event.h), pygame.RESIZABLE
+                    )
+
+        if (
+            config.app_phase == "running"
+            and not config.problem_loaded
+            and config.paper_detected
+            and config.warped_document is not None
+            and not config.is_processing
+            and time.time() - config.paper_stable_since >= 3.0
+        ):
+            config.is_processing = True
+            threading.Thread(target=ocr_problem_data, daemon=True).start()
 
         if config.app_phase == "running" and not config.is_processing:
             now = pygame.time.get_ticks()
-            if now - config.last_ocr_time >= 5000 and time.time() - config.paper_stable_since >= 3.0:
+            if (
+                now - config.last_ocr_time >= 5000
+                and time.time() - config.paper_stable_since >= 3.0
+            ):
                 config.last_ocr_time = now
                 config.is_processing = True
-                threading.Thread(
-                    target=background_ocr_pipeline, daemon=True).start()
-
-        if config.app_phase == "running" and not config.problem_loaded and config.paper_detected and config.warped_document is not None and not config.is_processing and time.time() - config.paper_stable_since >= 3.0:
-            config.is_processing = True
-            threading.Thread(target=ocr_problem_data, daemon=True).start()
+                threading.Thread(target=background_ocr_pipeline, daemon=True).start()
 
         if config.current_step == "complete":
             if config.transformation_progress < 1.0:
@@ -403,7 +469,8 @@ def main(mode):
                 config.transformation_progress -= 0.05
 
         config.transformation_progress = max(
-            0.0, min(1.0, config.transformation_progress))
+            0.0, min(1.0, config.transformation_progress)
+        )
 
         ui.draw_top_bar(screen)
         returned_debug_rect = ui.draw_bottom_bar(screen, center_rect)
@@ -415,7 +482,9 @@ def main(mode):
             start_btn_rect = ui.draw_start_button(screen, center_rect)
         elif config.app_phase == "done":
             center_rect = ui.draw_panels(screen, mode="done")
-            new_problem_btn_rect = ui.draw_new_problem_button(screen, center_rect, y_offset=-30)
+            new_problem_btn_rect = ui.draw_new_problem_button(
+                screen, center_rect, y_offset=-30
+            )
             done_btn_rect = ui.draw_done_button(screen, center_rect, y_offset=30)
         elif config.app_phase == "nasa_tlx":
             draw_nasa_tlx(screen)

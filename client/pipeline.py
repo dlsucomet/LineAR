@@ -82,7 +82,7 @@ def paper_tracking_daemon():
                 ], dtype="float32")
                 M = cv2.getPerspectiveTransform(src_pts, dst_pts)
                 _, M_inv = cv2.invert(M)
-                if last_matrix is None or not np.allclose(M_inv, last_matrix, atol=1e-4):
+                if last_matrix is None or not np.allclose(M_inv, last_matrix, atol=1e-2):
                     config.paper_stable_since = time.time()
                 last_matrix = M_inv.copy()
                 if smoothed_tracking is None:
