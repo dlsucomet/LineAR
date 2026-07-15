@@ -8,6 +8,7 @@ from pipeline import (
     paper_tracking_daemon,
     background_ocr_pipeline,
     ocr_problem_data,
+    scan_qr_from_camera,
     track_pen_tip,
     update_pen_state,
 )
@@ -80,6 +81,7 @@ def reset_for_new_problem():
     config.transformation_progress = 0.0
     config.last_ocr_time = 0
     config.problem_ended_early = False
+    config.flip_paper_lost = False
     config.app_phase = "start"
     log_message(f"=== Problem {config.problem_number} Ready ===")
 
@@ -144,10 +146,8 @@ def start_session():
         log_message("OCR Engine Ready.")
     else:
         log_message("OCR Engine already loaded, reusing.")
-    config._problem_start_str = datetime.now().strftime("%H:%M:%S")
-    config._problem_start_time = time.time()
-    config.app_phase = "running"
-    log_message(f"=== Problem {config.problem_number} Started ===")
+    config.app_phase = "scan_qr"
+    log_message(f"=== Problem {config.problem_number} — Scanning QR code ===")
 
 
 def handle_shutdown(from_button=False):
@@ -441,15 +441,44 @@ def main(mode):
                     )
 
         if (
-            config.app_phase == "running"
+            config.app_phase == "scan_qr"
             and not config.problem_loaded
-            and config.paper_detected
-            and config.warped_document is not None
             and not config.is_processing
-            and time.time() - config.paper_stable_since >= 3.0
+            and config.latest_frame is not None
         ):
-            config.is_processing = True
-            threading.Thread(target=ocr_problem_data, daemon=True).start()
+            now_scan = time.time()
+            if now_scan - config.last_ocr_time >= 2.0:
+                config.last_ocr_time = now_scan
+                config.is_processing = True
+                threading.Thread(target=scan_qr_from_camera, daemon=True).start()
+
+        if (
+            config.app_phase == "scan_qr"
+            and config.problem_loaded
+            and not config.is_processing
+        ):
+            config.app_phase = "qr_confirm"
+            config.qr_confirm_start = time.time()
+            log_message("Problem loaded successfully!")
+
+        if config.app_phase == "qr_confirm":
+            if time.time() - config.qr_confirm_start >= 2.0:
+                config.app_phase = "flip_prompt"
+                config.flip_paper_lost = False
+                log_message("Please flip your paper to the problem side.")
+
+        if config.app_phase == "flip_prompt":
+            if not config.paper_detected:
+                config.flip_paper_lost = True
+            if (
+                config.flip_paper_lost
+                and config.paper_detected
+                and time.time() - config.paper_stable_since >= 1.0
+            ):
+                config.app_phase = "running"
+                config._problem_start_str = datetime.now().strftime("%H:%M:%S")
+                config._problem_start_time = time.time()
+                log_message(f"=== Problem {config.problem_number} Started ===")
 
         if config.app_phase == "running" and not config.is_processing:
             now = pygame.time.get_ticks()
@@ -480,6 +509,12 @@ def main(mode):
         if config.app_phase == "start":
             center_rect = ui.draw_panels(screen, mode="start")
             start_btn_rect = ui.draw_start_button(screen, center_rect)
+        elif config.app_phase == "scan_qr":
+            center_rect = ui.draw_panels(screen, mode="scan_qr")
+        elif config.app_phase == "qr_confirm":
+            center_rect = ui.draw_panels(screen, mode="qr_confirm")
+        elif config.app_phase == "flip_prompt":
+            center_rect = ui.draw_panels(screen, mode="flip_prompt")
         elif config.app_phase == "done":
             center_rect = ui.draw_panels(screen, mode="done")
             new_problem_btn_rect = ui.draw_new_problem_button(

@@ -74,6 +74,12 @@ def draw_top_bar(surface):
     pygame.draw.rect(surface, config.COLOR_BLUE, bar_rect)
     if config.app_phase == "start":
         text = font_large.render("Use the pen to click Start", True, config.COLOR_WHITE)
+    elif config.app_phase == "scan_qr":
+        text = font_large.render("Show the QR code side of your paper to the camera", True, config.COLOR_WHITE)
+    elif config.app_phase == "qr_confirm":
+        text = font_large.render("Problem loaded successfully!", True, config.COLOR_WHITE)
+    elif config.app_phase == "flip_prompt":
+        text = font_large.render("Please flip your paper to the problem side", True, config.COLOR_WHITE)
     elif config.app_phase == "done":
         text = font_large.render("Use the pen to click Done", True, config.COLOR_WHITE)
     elif config.app_phase == "nasa_tlx":
@@ -275,6 +281,28 @@ def draw_panels(surface, mode="running"):
         pygame.draw.rect(surface, config.COLOR_BLUE, rect, 3)
 
     if mode == "start":
+        return center
+
+    if mode == "scan_qr":
+        draw_cartesian_plane(surface, left)
+        pygame.draw.rect(surface, config.COLOR_BLUE, left, 3)
+        msg = font_bold.render("[ Scanning for QR code... ]", True, config.COLOR_TEXT)
+        surface.blit(msg, msg.get_rect(center=center.center))
+        draw_instruction_panel(surface, right)
+        return center
+
+    if mode == "qr_confirm":
+        draw_cartesian_plane(surface, left)
+        pygame.draw.rect(surface, config.COLOR_BLUE, left, 3)
+        msg = font_bold.render("[ Problem loaded! ]", True, (34, 197, 94))
+        surface.blit(msg, msg.get_rect(center=center.center))
+        draw_instruction_panel(surface, right)
+        return center
+
+    if mode == "flip_prompt":
+        draw_cartesian_plane(surface, left)
+        pygame.draw.rect(surface, config.COLOR_BLUE, left, 3)
+        draw_instruction_panel(surface, right)
         return center
 
     draw_cartesian_plane(surface, left)

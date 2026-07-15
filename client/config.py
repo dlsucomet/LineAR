@@ -156,6 +156,9 @@ problem_loaded = False
 expected_answers = {}
 target_vector = None
 
+flip_paper_lost = False
+qr_confirm_start = 0
+
 nasa_tlx_responses = [None] * 6
 ueq_s_responses = [None] * 8
 nasa_tlx_current_page = 0

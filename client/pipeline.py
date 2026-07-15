@@ -166,6 +166,69 @@ def _ocr_region(region_img, reader):
     return best_tokens
 
 
+def scan_qr_from_camera():
+    with config.shared_frame_lock:
+        if config.latest_frame is None:
+            config.is_processing = False
+            return
+        local_frame = config.latest_frame.copy()
+
+    log_message("Scanning raw camera frame for QR code...")
+
+    try:
+        data = None
+        code_type = None
+
+        detector = cv2.QRCodeDetector()
+        decoded, _, _ = detector.detectAndDecode(local_frame)
+        if decoded:
+            data = decoded.strip()
+            code_type = "QRCODE"
+
+        if not data:
+            codes = decode(local_frame)
+            if codes:
+                data = codes[0].data.decode('utf-8').strip()
+                code_type = codes[0].type
+
+        if not data:
+            log_message("QR Code: No code detected in camera frame, retrying.")
+            config.is_processing = False
+            return
+
+        log_message(f"Code discovered! Type: {code_type} | Content: {data}")
+
+        vals = [int(n) for n in re.findall(r'-?\d+', data)]
+
+        if len(vals) >= 12:
+            config.active_vectors = [
+                {"x": vals[0], "y": vals[1], "label": "u"},
+                {"x": vals[4], "y": vals[5], "label": "w"},
+            ]
+
+            tx, ty = vals[8], vals[9]
+            config.target_vector = (tx, ty)
+            config.active_vectors.append({"x": tx, "y": ty, "label": "L(v)"})
+
+            config.expected_answers = {
+                "firstStepLeft": [str(vals[0]), str(vals[1])],
+                "firstStepRight": [str(vals[2]), str(vals[3])],
+                "secondStepLeft": [str(vals[4]), str(vals[5])],
+                "secondStepRight": [str(vals[6]), str(vals[7])],
+                "thirdStep": [str(vals[10]), str(vals[11])]
+            }
+
+            config.problem_loaded = True
+            log_message(f"Problem successfully initialized via {code_type}! Target: {config.target_vector}")
+        else:
+            log_message(f"Data validation error: Found {len(vals)} numbers, expected 12.")
+
+    except Exception as e:
+        log_message(f"CRITICAL QR SCAN FAILURE: {str(e)}")
+
+    config.is_processing = False
+
+
 def ocr_problem_data():
     with config.shared_frame_lock:
         if config.warped_document is None:
