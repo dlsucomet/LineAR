@@ -197,6 +197,9 @@ def main(mode):
     config.cap = None
     config.ocr_reader = None
     config.problem_loaded = False
+    config.active_vectors = []
+    config.target_vector = None
+    config.expected_answers = {}
     config.problem_number = 1
     config.problem_ended_early = False
     config._problem_start_str = None
