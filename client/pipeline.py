@@ -10,18 +10,29 @@ from logger import log_message
 
 from pyzbar.pyzbar import decode
 
+_last_qr_capture_time = 0.0
+
 def paper_tracking_daemon():
     aruco_dict = cv2.aruco.getPredefinedDictionary(cv2.aruco.DICT_4X4_50)
     aruco_params = cv2.aruco.DetectorParameters()
     detector = cv2.aruco.ArucoDetector(aruco_dict, aruco_params)
-    max_w, max_h = 2200, 2600
+    max_w, max_h = 2200, 2600  # marker-corner mapping — DO NOT change, existing crop regions are calibrated against this
     pad = 100
     dst_pts = np.array([[pad, pad], [max_w - 1 - pad, pad], [max_w - 1 - pad, max_h - 1 - pad], [pad, max_h - 1 - pad]], dtype="float32")
+    # The output canvas can be larger than the marker-mapped area without affecting where markers/existing
+    # regions land — it just reveals more of whatever the perspective transform maps beyond the old edges.
+    # The QR/barcode sits below the bottom markers and was getting clipped by the old max_h boundary.
+    canvas_w, canvas_h = max_w, max_h + 600
     last_state = False
     last_seen_ids = set()
     last_matrix = None
+    last_src_pts = None
     smoothed_tracking = None
-    ema_alpha = 0.15
+    smoothed_calib = None
+    ema_alpha = 0.3
+    STABILITY_PIXEL_TOLERANCE = 3.0  # max per-corner movement (px) to still count as "stable"
+    last_full_detect_time = 0.0
+    MARKER_DROPOUT_GRACE = 0.5  # seconds to tolerate a brief marker dropout before declaring lock lost
     
     while config.running:
         if config.cap is None:
@@ -56,16 +67,22 @@ def paper_tracking_daemon():
                 ], dtype="float32")
                 M = cv2.getPerspectiveTransform(src_pts, dst_pts)
                 _, M_inv = cv2.invert(M)
-                if last_matrix is None or not np.allclose(M_inv, last_matrix, atol=1e-2):
+                if last_src_pts is None:
                     config.paper_stable_since = time.time()
+                else:
+                    max_corner_shift = np.max(np.linalg.norm(src_pts - last_src_pts, axis=1))
+                    if max_corner_shift > STABILITY_PIXEL_TOLERANCE:
+                        config.paper_stable_since = time.time()
+                last_src_pts = src_pts.copy()
                 last_matrix = M_inv.copy()
+                last_full_detect_time = time.time()
                 if smoothed_tracking is None:
                     smoothed_tracking = M_inv.copy()
                 else:
                     smoothed_tracking = ema_alpha * M_inv + (1 - ema_alpha) * smoothed_tracking
                 with config.shared_frame_lock:
                     config.tracking_matrix = smoothed_tracking
-                    config.warped_document = cv2.warpPerspective(frame, M, (max_w, max_h), flags=cv2.INTER_CUBIC)
+                    config.warped_document = cv2.warpPerspective(frame, M, (canvas_w, canvas_h), flags=cv2.INTER_CUBIC)
                     config.paper_detected = True
                 if not last_state:
                     log_message("Tracking Lock Acquired: Target sheet anchors located.")
@@ -87,15 +104,24 @@ def paper_tracking_daemon():
                         pass
                 continue
 
-        with config.shared_frame_lock:
-            if not config.debug_preview:
-                config.paper_detected = False
-        last_matrix = None
-        smoothed_tracking = None
-        last_capture_time = 0  # reset so the next lock starts its own capture cadence
-        if last_state:
-            log_message("Tracking Lock Lost: Target sheet missing or occluded.")
-            last_state = False
+        now = time.time()
+        if last_state and last_full_detect_time and (now - last_full_detect_time) < MARKER_DROPOUT_GRACE:
+            # Brief single-frame marker dropout (motion blur, glare, angle) — keep the existing
+            # lock, tracking matrix, and stability timer intact rather than resetting everything.
+            pass
+        else:
+            with config.shared_frame_lock:
+                if not config.debug_preview:
+                    config.paper_detected = False
+            last_matrix = None
+            last_src_pts = None
+            smoothed_tracking = None
+            if last_state:
+                log_message("Tracking Lock Lost: Target sheet missing or occluded.")
+                last_state = False
+        if last_calib_state:
+            log_message("Calibration Lock Lost: fewer than 4 ArUco markers visible.")
+            last_calib_state = False
 
 def detect_content_bands(warped_img):
     gray = cv2.cvtColor(warped_img, cv2.COLOR_BGR2GRAY)
@@ -250,6 +276,18 @@ def ocr_problem_data():
         local_sheet = config.warped_document.copy()
 
     log_message("Scanning document surface for configuration codes (QR or Barcode)...")
+
+    global _last_qr_capture_time
+    now = time.time()
+    if now - _last_qr_capture_time >= 2.0:
+        _last_qr_capture_time = now
+        try:
+            captures_dir = os.path.join(config.PARTICIPANT_DIR, "qr_scan_captures")
+            os.makedirs(captures_dir, exist_ok=True)
+            stamp = datetime.now().strftime("%H%M%S_%f")[:-3]
+            cv2.imwrite(os.path.join(captures_dir, f"qr_scan_{stamp}.png"), local_sheet)
+        except Exception:
+            pass
 
     try:
         # pyzbar scans for both 1D linear barcodes and 2D QR codes by default

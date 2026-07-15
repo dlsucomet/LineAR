@@ -219,7 +219,7 @@ def main(mode):
     ui._init_fonts()
 
     log_message("Initializing hardware camera capture access...")
-    config.cap = cv2.VideoCapture(3)
+    config.cap = cv2.VideoCapture(1)
     config.cap.set(cv2.CAP_PROP_FRAME_WIDTH, 1280)
     config.cap.set(cv2.CAP_PROP_FRAME_HEIGHT, 720)
     if not config.cap.isOpened():
@@ -485,7 +485,7 @@ def main(mode):
             config._problem_start_time = time.time()
             log_message(f"=== Problem {config.problem_number} Started ===")
 
-        if config.app_phase == "running" and not config.is_processing:
+        if config.app_phase == "running" and config.problem_loaded and not config.is_processing:
             now = pygame.time.get_ticks()
             if (
                 now - config.last_ocr_time >= 5000
