@@ -316,7 +316,7 @@ def main(mode):
             if config.feedback_timer == 0:
                 config.feedback_state = None
 
-        if config.pen_position is not None:
+        if config.pen_position is not None and config.app_phase != "running":
             ui.draw_pen_cursor(screen, config.pen_position)
 
         pygame.display.flip()

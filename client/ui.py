@@ -72,14 +72,17 @@ def wrap_text(text, font, max_width):
 def draw_top_bar(surface):
     bar_rect = pygame.Rect(0, 0, surface.get_width(), config.TOP_BAR_HEIGHT)
     pygame.draw.rect(surface, config.COLOR_BLUE, bar_rect)
-    if config.app_phase in ("nasa_tlx", "ueq_s"):
-        if config.app_phase == "nasa_tlx":
-            page = config.nasa_tlx_current_page + 1
-            total = 6
-            title = f"NASA-TLX ({page}/{total})"
-        else:
-            title = "UEQ-S"
-        text = font_large.render(f"Questionnaire: {title}", True, config.COLOR_WHITE)
+    if config.app_phase == "start":
+        text = font_large.render("Use the pen to click Start", True, config.COLOR_WHITE)
+    elif config.app_phase == "done":
+        text = font_large.render("Use the pen to click Done", True, config.COLOR_WHITE)
+    elif config.app_phase == "nasa_tlx":
+        page = config.nasa_tlx_current_page + 1
+        total = 6
+        title = f"NASA-TLX ({page}/{total})"
+        text = font_large.render(f"Questionnaire: {title} — Use the pen to interact", True, config.COLOR_WHITE)
+    elif config.app_phase == "ueq_s":
+        text = font_large.render("Questionnaire: UEQ-S — Use the pen to interact", True, config.COLOR_WHITE)
     else:
         text = font_large.render("Place paper on the designated projection area", True, config.COLOR_WHITE)
     surface.blit(text, text.get_rect(center=(surface.get_width() // 2, config.TOP_BAR_HEIGHT // 2)))
@@ -159,8 +162,19 @@ def draw_cartesian_plane(surface, area):
         tx, ty = ox + int(vec["x"] * scale), oy - int(vec["y"] * scale)
         if area.x <= tx <= area.x + area.width and area.y <= ty <= area.y + area.height:
             pygame.draw.line(surface, config.COLOR_TEXT, (ox, oy), (tx, ty), 4)
-            pygame.draw.circle(surface, config.COLOR_TEXT, (tx, ty), 5)
-            surface.blit(font_bold.render(f'{vec["label"]} ({vec["x"]},{vec["y"]})', True, config.COLOR_TEXT), (tx + 8, ty - 4))
+            angle = math.atan2(oy - ty, tx - ox)
+            arrow_len = 14
+            arrow_w = 6
+            base_lx = tx - arrow_len * math.cos(angle) + arrow_w * math.sin(angle)
+            base_ly = ty + arrow_len * math.sin(angle) + arrow_w * math.cos(angle)
+            base_rx = tx - arrow_len * math.cos(angle) - arrow_w * math.sin(angle)
+            base_ry = ty + arrow_len * math.sin(angle) - arrow_w * math.cos(angle)
+            pygame.draw.polygon(surface, config.COLOR_TEXT, [
+                (tx, ty),
+                (int(base_lx), int(base_ly)),
+                (int(base_rx), int(base_ry))
+            ])
+            surface.blit(font_bold.render(f'{vec["label"]} ({vec["x"]},{vec["y"]})', True, config.COLOR_TEXT), (tx + 16, ty - 4))
     surface.set_clip(clip_rect)
 
     if config.current_step == "complete" and config.target_vector is not None:
