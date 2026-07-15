@@ -189,7 +189,7 @@ def main(mode):
     ui._init_fonts()
 
     log_message("Initializing hardware camera capture access...")
-    config.cap = cv2.VideoCapture(3)
+    config.cap = cv2.VideoCapture(1)
     config.cap.set(cv2.CAP_PROP_FRAME_WIDTH, 1280)
     config.cap.set(cv2.CAP_PROP_FRAME_HEIGHT, 720)
     if not config.cap.isOpened():
@@ -383,7 +383,7 @@ def main(mode):
                     screen = pygame.display.set_mode(
                         (event.w, event.h), pygame.RESIZABLE)
 
-        if config.app_phase == "running" and not config.is_processing:
+        if config.app_phase == "running" and config.problem_loaded and not config.is_processing:
             now = pygame.time.get_ticks()
             if now - config.last_ocr_time >= 5000 and time.time() - config.paper_stable_since >= 3.0:
                 config.last_ocr_time = now
