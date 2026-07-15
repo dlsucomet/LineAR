@@ -98,6 +98,7 @@ warped_document = None
 tracking_matrix = None
 paper_detected = False
 paper_stable_since = 0
+flip_detected = False
 
 proj_calib_matrix = None
 proj_calibrated = False

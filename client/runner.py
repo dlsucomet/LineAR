@@ -9,6 +9,7 @@ from pipeline import (
     background_ocr_pipeline,
     ocr_problem_data,
     scan_qr_from_camera,
+    detect_flip_by_qr,
     track_pen_tip,
     update_pen_state,
 )
@@ -82,6 +83,7 @@ def reset_for_new_problem():
     config.last_ocr_time = 0
     config.problem_ended_early = False
     config.flip_paper_lost = False
+    config.flip_detected = False
     config.app_phase = "start"
     log_message(f"=== Problem {config.problem_number} Ready ===")
 
@@ -119,15 +121,18 @@ def debug_simulate_correct():
     config.green_count += 1
     config.feedback_state = "green"
     config.feedback_timer = 60
-    idx = config.STEP_SEQUENCE.index(config.current_step)
-    if idx < len(config.STEP_SEQUENCE) - 1:
-        config.current_step = config.STEP_SEQUENCE[idx + 1]
-        log_message(f"DEBUG: Simulated correct -> step {config.current_step}")
+    if config.app_phase in ("running", "done"):
+        idx = config.STEP_SEQUENCE.index(config.current_step)
+        if idx < len(config.STEP_SEQUENCE) - 1:
+            config.current_step = config.STEP_SEQUENCE[idx + 1]
+            log_message(f"DEBUG: Simulated correct -> step {config.current_step}")
+        else:
+            config.app_phase = "done"
+            log_message(
+                "DEBUG: Simulated correct -> problem completed, entering done phase"
+            )
     else:
-        config.app_phase = "done"
-        log_message(
-            "DEBUG: Simulated correct -> problem completed, entering done phase"
-        )
+        log_message(f"DEBUG: Correct recorded (green={config.green_count})")
     _write_session_counts()
 
 
@@ -135,7 +140,7 @@ def debug_simulate_incorrect():
     config.red_count += 1
     config.feedback_state = "red"
     config.feedback_timer = 60
-    log_message("DEBUG: Simulated incorrect")
+    log_message(f"DEBUG: Incorrect recorded (red={config.red_count})")
     _write_session_counts()
 
 
@@ -365,17 +370,9 @@ def main(mode):
                 elif event.key == pygame.K_h:
                     config.debug_hints = not config.debug_hints
                     log_message(f"Debug hints display set to: {config.debug_hints}")
-                elif (
-                    event.key == pygame.K_g
-                    and config.debug_mode
-                    and config.app_phase in ("running", "done")
-                ):
+                elif event.key == pygame.K_g and config.debug_mode:
                     debug_simulate_correct()
-                elif (
-                    event.key == pygame.K_r
-                    and config.debug_mode
-                    and config.app_phase == "running"
-                ):
+                elif event.key == pygame.K_r and config.debug_mode:
                     debug_simulate_incorrect()
                 elif (
                     event.key == pygame.K_p
@@ -468,20 +465,15 @@ def main(mode):
             if time.time() - config.qr_confirm_start >= 2.0:
                 config.app_phase = "flip_prompt"
                 config.flip_paper_lost = False
+                config.flip_detected = False
                 log_message("Please flip your paper to the problem side.")
+                threading.Thread(target=detect_flip_by_qr, daemon=True).start()
 
-        if config.app_phase == "flip_prompt":
-            if not config.paper_detected:
-                config.flip_paper_lost = True
-            if (
-                config.flip_paper_lost
-                and config.paper_detected
-                and time.time() - config.paper_stable_since >= 1.0
-            ):
-                config.app_phase = "running"
-                config._problem_start_str = datetime.now().strftime("%H:%M:%S")
-                config._problem_start_time = time.time()
-                log_message(f"=== Problem {config.problem_number} Started ===")
+        if config.app_phase == "flip_prompt" and config.flip_detected:
+            config.app_phase = "running"
+            config._problem_start_str = datetime.now().strftime("%H:%M:%S")
+            config._problem_start_time = time.time()
+            log_message(f"=== Problem {config.problem_number} Started ===")
 
         if config.app_phase == "running" and not config.is_processing:
             now = pygame.time.get_ticks()

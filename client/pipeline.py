@@ -229,6 +229,32 @@ def scan_qr_from_camera():
     config.is_processing = False
 
 
+def detect_flip_by_qr():
+    log_message("Flip detection: scanning camera for QR absence...")
+    detector = cv2.QRCodeDetector()
+    while config.running and config.app_phase == "flip_prompt":
+        with config.shared_frame_lock:
+            if config.latest_frame is None:
+                time.sleep(0.3)
+                continue
+            local_frame = config.latest_frame.copy()
+
+        decoded, _, _ = detector.detectAndDecode(local_frame)
+        if not decoded:
+            qr_visible = False
+        else:
+            qr_visible = any(d.strip() for d in decoded)
+
+        if not qr_visible:
+            config.flip_detected = True
+            log_message("Flip detected: QR code no longer visible.")
+            return
+
+        time.sleep(0.5)
+
+    log_message("Flip detection: exited (phase changed or shutdown).")
+
+
 def ocr_problem_data():
     with config.shared_frame_lock:
         if config.warped_document is None:
