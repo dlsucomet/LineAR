@@ -294,8 +294,6 @@ def draw_panels(surface, mode="running"):
     if mode == "qr_confirm":
         draw_cartesian_plane(surface, left)
         pygame.draw.rect(surface, config.COLOR_BLUE, left, 3)
-        msg = font_bold.render("[ Problem loaded! ]", True, (34, 197, 94))
-        surface.blit(msg, msg.get_rect(center=center.center))
         draw_instruction_panel(surface, right)
         return center
 
