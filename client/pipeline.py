@@ -14,11 +14,16 @@ def paper_tracking_daemon():
     aruco_dict = cv2.aruco.getPredefinedDictionary(cv2.aruco.DICT_4X4_50)
     aruco_params = cv2.aruco.DetectorParameters()
     detector = cv2.aruco.ArucoDetector(aruco_dict, aruco_params)
-    max_w, max_h = 2000, 2400
-    dst_pts = np.array([[0, 0], [max_w - 1, 0], [max_w - 1, max_h - 1], [0, max_h - 1]], dtype="float32")
+    max_w, max_h = 2200, 2600
+    pad = 100
+    dst_pts = np.array([[pad, pad], [max_w - 1 - pad, pad], [max_w - 1 - pad, max_h - 1 - pad], [pad, max_h - 1 - pad]], dtype="float32")
     last_state = False
     last_calib_state = False
     last_seen_ids = set()
+    last_matrix = None
+    smoothed_tracking = None
+    smoothed_calib = None
+    ema_alpha = 0.3
     
     while config.running:
         if config.cap is None:
@@ -26,6 +31,8 @@ def paper_tracking_daemon():
         ret, frame = config.cap.read()
         if not ret or frame is None:
             continue
+        # flipped
+        frame = cv2.flip(frame, -1)
         with config.shared_frame_lock:
             config.latest_frame = frame.copy()
         corners, ids, _ = detector.detectMarkers(frame)
@@ -49,9 +56,14 @@ def paper_tracking_daemon():
                 calib_src = np.array([corner_map[k][0] for k in calib_ids], dtype="float32")
                 calib_dst = np.array([config.CALIB_MARKER_SCREEN_POSITIONS[k] for k in calib_ids], dtype="float32")
                 calib_M, _ = cv2.findHomography(calib_src, calib_dst)
+                if calib_M is not None:
+                    if smoothed_calib is None:
+                        smoothed_calib = calib_M.copy()
+                    else:
+                        smoothed_calib = ema_alpha * calib_M + (1 - ema_alpha) * smoothed_calib
                 with config.shared_frame_lock:
-                    config.proj_calib_matrix = calib_M
-                    config.proj_calibrated = True
+                    config.proj_calib_matrix = smoothed_calib if calib_M is not None else calib_M
+                    # config.proj_calibrated = True
                 if not last_calib_state:
                     log_message("Calibration Lock Acquired: ArUco markers 4, 5, 6, 7 detected.")
                     last_calib_state = True
@@ -60,6 +72,7 @@ def paper_tracking_daemon():
                 if last_calib_state:
                     log_message(f"Calibration Lock Lost: missing marker id(s) {missing}.")
                     last_calib_state = False
+                smoothed_calib = None
 
             # Paper tracking: detect paper markers 0-3
             if all(k in corner_map for k in [0, 1, 2, 3]):
@@ -69,8 +82,15 @@ def paper_tracking_daemon():
                 ], dtype="float32")
                 M = cv2.getPerspectiveTransform(src_pts, dst_pts)
                 _, M_inv = cv2.invert(M)
+                if last_matrix is None or not np.allclose(M_inv, last_matrix, atol=1e-4):
+                    config.paper_stable_since = time.time()
+                last_matrix = M_inv.copy()
+                if smoothed_tracking is None:
+                    smoothed_tracking = M_inv.copy()
+                else:
+                    smoothed_tracking = ema_alpha * M_inv + (1 - ema_alpha) * smoothed_tracking
                 with config.shared_frame_lock:
-                    config.tracking_matrix = M_inv
+                    config.tracking_matrix = smoothed_tracking
                     config.warped_document = cv2.warpPerspective(frame, M, (max_w, max_h), flags=cv2.INTER_CUBIC)
                     config.paper_detected = True
                 if not last_state:
@@ -81,6 +101,8 @@ def paper_tracking_daemon():
         with config.shared_frame_lock:
             if not config.debug_preview:
                 config.paper_detected = False
+        last_matrix = None
+        smoothed_tracking = None
         if last_state:
             log_message("Tracking Lock Lost: Target sheet missing or occluded.")
             last_state = False
@@ -213,7 +235,7 @@ def background_ocr_pipeline():
     os.makedirs(captures_dir, exist_ok=True)
     stamp = datetime.now().strftime("%H%M%S_%f")[:-3]
     try:
-        cv2.imwrite(os.path.join(captures_dir, f"warped_{config.current_step}_{stamp}.png"), local_sheet)
+        cv2.imwrite(os.path.join(captures_dir, f"p{config.problem_number}_warped_{config.current_step}_{stamp}.png"), local_sheet)
     except Exception:
         pass
         
@@ -247,7 +269,7 @@ def background_ocr_pipeline():
             _, binary = cv2.threshold(blurred, 0, 255, cv2.THRESH_BINARY + cv2.THRESH_OTSU)
             
             try:
-                cv2.imwrite(os.path.join(captures_dir, f"{config.current_step}_{region_name}_{stamp}.png"), binary)
+                cv2.imwrite(os.path.join(captures_dir, f"p{config.problem_number}_{config.current_step}_{region_name}_{stamp}.png"), binary)
             except Exception:
                 pass
                 
@@ -275,6 +297,7 @@ def background_ocr_pipeline():
 
         if is_valid:
             config.green_count += 1
+            config.feedback_step = config.current_step
             config.feedback_state = "green"
             config.feedback_timer = 60
             idx = config.STEP_SEQUENCE.index(config.current_step)
@@ -286,6 +309,7 @@ def background_ocr_pipeline():
                 log_message("SUCCESS: Problem completed. Entering done phase.")
         else:
             config.red_count += 1
+            config.feedback_step = config.current_step
             config.feedback_state = "red"
             config.feedback_timer = 60
             log_message(f"REJECTED: Submission mismatch. Got: {list(recognized_data.values())}")
@@ -318,12 +342,12 @@ def transform_to_projection_space(w_x, w_y, center_rect):
         cam_pt = np.array([[[cam_x, cam_y]]], dtype="float32")
         screen_pt = cv2.perspectiveTransform(cam_pt, config.proj_calib_matrix)
         calib_x, calib_y = screen_pt[0][0][0], screen_pt[0][0][1]
-        p_x = center_rect.x + int((calib_x / config.WINDOW_WIDTH) * center_rect.width)
-        p_y = center_rect.y + int((calib_y / config.WINDOW_HEIGHT) * center_rect.height)
-        return int(p_x), int(p_y)
-    p_x = center_rect.x + int((cam_x / 1280.0) * center_rect.width)
-    p_y = center_rect.y + int((cam_y / 720.0) * center_rect.height)
-    return int(p_x), int(p_y)
+        p_x = center_rect.x + round((calib_x / config.WINDOW_WIDTH) * center_rect.width)
+        p_y = center_rect.y + round((calib_y / config.WINDOW_HEIGHT) * center_rect.height)
+        return p_x, p_y
+    p_x = center_rect.x + round((cam_x / 1280.0) * center_rect.width)
+    p_y = center_rect.y + round((cam_y / 720.0) * center_rect.height)
+    return p_x, p_y
 
 def get_projector_box_points(box, center_rect):
     """
@@ -444,8 +468,10 @@ def track_pen_tip(frame, screen_w, screen_h):
                 _save_pen_hsv_config(h_low, s_low, v_low, h_high, s_high, v_high)
                 config.pen_calibrating = False
                 config.pen_calib_samples = []
-    sx = int(cx / 1280 * screen_w)
-    sy = int(cy / 720 * screen_h)
+    sx = int(((cx / 1280.0 - 0.5) * config.pen_accel + 0.5) * screen_w)
+    sx = max(0, min(screen_w - 1, sx))
+    sy = int(((cy / 720.0 - 0.5) * config.pen_accel + 0.5) * screen_h)
+    sy = max(0, min(screen_h - 1, sy))
     raw = (sx, sy)
 
     smoothed = config.pen_smooth_pos
@@ -501,41 +527,17 @@ def track_pen_tip(frame, screen_w, screen_h):
 
 
 def update_pen_state(screen_pos):
-    now = time.time()
-    click_cooldown = 0.3
     if screen_pos is not None:
-        if not config.pen_track_active:
-            config.pen_track_active = True
-            config.pen_track_start = (*screen_pos, now)
-            config.pen_has_clicked = False
         config.pen_track_last = screen_pos
         config.pen_position = screen_pos
         config.pen_visible = True
-        if not config.pen_has_clicked:
-            elapsed = now - config.pen_track_start[2]
-            dx = screen_pos[0] - config.pen_track_start[0]
-            dy = screen_pos[1] - config.pen_track_start[1]
-            dist = (dx * dx + dy * dy) ** 0.5
-            if (elapsed >= 0.4 and dist < 10
-                    and (now - config.pen_last_click_time) > click_cooldown):
-                config.pen_click_queue.append(screen_pos)
-                config.pen_last_click_time = now
-                config.pen_has_clicked = True
     else:
-        if config.pen_track_active and not config.pen_has_clicked:
-            elapsed = now - config.pen_track_start[2]
-            dx = config.pen_track_last[0] - config.pen_track_start[0]
-            dy = config.pen_track_last[1] - config.pen_track_start[1]
-            dist = (dx * dx + dy * dy) ** 0.5
-            if (elapsed < 0.5 and dist < 20
-                    and (now - config.pen_last_click_time) > click_cooldown):
-                config.pen_click_queue.append(config.pen_track_last)
-                config.pen_last_click_time = now
         config.pen_track_active = False
         config.pen_position = None
         config.pen_visible = False
         config.pen_smooth_pos = None
         config.pen_median_buffer = []
+        config.pen_hover_button = None
 
 
 def _save_pen_hsv_config(h_low, s_low, v_low, h_high, s_high, v_high):

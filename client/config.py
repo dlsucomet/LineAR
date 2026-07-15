@@ -75,6 +75,7 @@ def init_config():
             "nasa_tlx": None,
             "ueq_s": None,
             "questionnaires_completed": False,
+            "problems": [],
         }, f, indent=2)
 
 STEP_SEQUENCE = ["firstStepLeft", "firstStepRight", "secondStepLeft", "secondStepRight", "thirdStep", "complete"]
@@ -87,12 +88,16 @@ green_count = 0
 red_count = 0
 feedback_state = None
 feedback_timer = 0
+feedback_step = None
+problem_number = 1
+problem_ended_early = False
 
 active_vectors = []
 
 warped_document = None
 tracking_matrix = None
 paper_detected = False
+paper_stable_since = 0
 
 proj_calib_matrix = None
 proj_calibrated = False
@@ -113,6 +118,7 @@ pen_visible = False
 pen_click_queue = []
 pen_hsv_lower = (90, 80, 80)
 pen_hsv_upper = (130, 255, 255)
+pen_accel = 2.0
 pen_track_active = False
 pen_track_start = None
 pen_track_last = None
@@ -120,6 +126,8 @@ pen_smooth_pos = None
 pen_median_buffer = []
 pen_last_click_time = 0
 pen_has_clicked = False
+pen_hover_button = None
+pen_hover_start = 0
 pen_debug_hsv = False
 pen_debug_collect = 0
 pen_debug_samples = []
@@ -127,17 +135,21 @@ pen_calibrating = False
 pen_calib_samples = []
 
 PROJECTION_REGIONS = {
-    "firstStepLeft": {"one": {"left": 150, "top": 200, "width": 120, "height": 60}},
-    "firstStepRight": {"one": {"left": 450, "top": 200, "width": 120, "height": 60}},
+    "firstStepLeft": {"one": {"left": 500, "top": 300, "width": 500, "height": 300},
+                      "two": {"left": 400, "top": 800, "width": 300, "height": 150},
+                      "three": {"left": 800, "top": 1200, "width": 500, "height": 300},
+                      "four": {"left": 400, "top": 1250, "width": 300, "height": 150}
+                      },
+    "firstStepRight": {"one": {"left": 550, "top": 300, "width": 120, "height": 60}},
     "secondStepLeft": {
-        "one": {"left": 200, "top": 400, "width": 110, "height": 210},
-        "two": {"left": 350, "top": 380, "width": 110, "height": 210}
+        "one": {"left": 300, "top": 500, "width": 110, "height": 210},
+        "two": {"left": 450, "top": 480, "width": 110, "height": 210}
     },
     "secondStepRight": {
-        "one": {"left": 500, "top": 400, "width": 110, "height": 110},
-        "two": {"left": 635, "top": 380, "width": 110, "height": 210}
+        "one": {"left": 600, "top": 500, "width": 110, "height": 110},
+        "two": {"left": 735, "top": 480, "width": 110, "height": 210}
     },
-    "thirdStep": {"one": {"left": 300, "top": 600, "width": 250, "height": 210}}
+    "thirdStep": {"one": {"left": 400, "top": 700, "width": 250, "height": 210}}
 }
 
 problem_loaded = False
@@ -158,17 +170,17 @@ _questionnaire_ueq_title_bottom = 0
 
 # "one": {"top": 940, "left": 150, "width": 1000, "height": 200}
 CROP_REGIONS = {
-    "firstStepLeft": {"one": {"top": 1000, "left": 250, "width": 1800, "height": 440}},
-    "firstStepRight": {"one": {"top": 720, "left": 150, "width": 1000, "height": 200}},
+    "firstStepLeft": {"one": {"top": 1100, "left": 350, "width": 1800, "height": 440}},
+    "firstStepRight": {"one": {"top": 820, "left": 250, "width": 1000, "height": 200}},
     "secondStepLeft": {
-        "one": {"top": 800, "left": 400, "width": 180, "height": 380},
-        "two": {"top": 760, "left": 700, "width": 180, "height": 380}
+        "one": {"top": 900, "left": 500, "width": 180, "height": 380},
+        "two": {"top": 860, "left": 800, "width": 180, "height": 380}
     },
     "secondStepRight": {
-        "one": {"top": 800, "left": 1000, "width": 180, "height": 180},
-        "two": {"top": 760, "left": 1270, "width": 180, "height": 380}
+        "one": {"top": 900, "left": 1100, "width": 180, "height": 180},
+        "two": {"top": 860, "left": 1370, "width": 180, "height": 380}
     },
-    "thirdStep": {"one": {"top": 1200, "left": 600, "width": 180, "height": 380}}
+    "thirdStep": {"one": {"top": 1300, "left": 700, "width": 180, "height": 380}}
 }
 
 def get_panel_rects(surface_width, surface_height):

@@ -8,6 +8,7 @@ import pygame
 import cv2
 import sys
 import os
+import time
 import json
 import warnings
 import threading
@@ -24,8 +25,50 @@ def save_questionnaire_responses():
     data["ueq_s"] = config.ueq_s_responses
     data["questionnaires_completed"] = True
     with open(config.SESSION_PATH, "w") as f:
-        json.dump(data, f, indent=2)
+        json.dump(data, indent=2, fp=f)
     log_message("Questionnaire responses saved.")
+
+
+def save_problem_results():
+    now = datetime.now().strftime("%H:%M:%S")
+    duration = 0
+    if hasattr(config, '_problem_start_time') and config._problem_start_time:
+        duration = int(time.time() - config._problem_start_time)
+    problem = {
+        "problem_number": config.problem_number,
+        "green_count": config.green_count,
+        "red_count": config.red_count,
+        "time_started": getattr(config, '_problem_start_str', None),
+        "time_ended": now,
+        "duration_seconds": duration,
+        "end_task_pressed": config.problem_ended_early,
+    }
+    with open(config.SESSION_PATH) as f:
+        data = json.load(f)
+    data.setdefault("problems", []).append(problem)
+    with open(config.SESSION_PATH, "w") as f:
+        json.dump(data, indent=2, fp=f)
+    log_message(f"Problem {config.problem_number} results saved (green={config.green_count}, red={config.red_count}, duration={duration}s, ended_early={config.problem_ended_early})")
+
+
+def reset_for_new_problem():
+    config.problem_number += 1
+    config.current_step = "firstStepLeft"
+    config.problem_loaded = False
+    config.expected_answers = {}
+    config.target_vector = None
+    config.active_vectors = []
+    config.feedback_state = None
+    config.feedback_timer = 0
+    config.feedback_step = None
+    config.green_count = 0
+    config.red_count = 0
+    config.is_processing = False
+    config.transformation_progress = 0.0
+    config.last_ocr_time = 0
+    config.problem_ended_early = False
+    config.app_phase = "start"
+    log_message(f"=== Problem {config.problem_number} Ready ===")
 
 
 STEP_ORDER = ["firstStepLeft", "firstStepRight",
@@ -75,16 +118,16 @@ def debug_simulate_incorrect():
 
 
 def start_session():
-    log_message("Loading OCR Engine context...")
-    config.ocr_reader = easyocr.Reader(['en'], gpu=False, verbose=False)
-    log_message("OCR Engine Ready.")
+    if config.ocr_reader is None:
+        log_message("Loading OCR Engine context...")
+        config.ocr_reader = easyocr.Reader(['en'], gpu=False, verbose=False)
+        log_message("OCR Engine Ready.")
+    else:
+        log_message("OCR Engine already loaded, reusing.")
+    config._problem_start_str = datetime.now().strftime("%H:%M:%S")
+    config._problem_start_time = time.time()
     config.app_phase = "running"
-
-    with open(config.SESSION_PATH) as f:
-        data = json.load(f)
-    data["time_started"] = datetime.now().strftime("%H:%M:%S")
-    with open(config.SESSION_PATH, "w") as f:
-        json.dump(data, f, indent=2)
+    log_message(f"=== Problem {config.problem_number} Started ===")
 
 
 def handle_shutdown(from_button=False):
@@ -133,6 +176,10 @@ def main(mode):
     config.cap = None
     config.ocr_reader = None
     config.problem_loaded = False
+    config.problem_number = 1
+    config.problem_ended_early = False
+    config._problem_start_str = None
+    config._problem_start_time = None
 
     screen = pygame.display.set_mode(
         (config.WINDOW_WIDTH, config.WINDOW_HEIGHT), pygame.RESIZABLE)
@@ -156,6 +203,7 @@ def main(mode):
     start_btn_rect = pygame.Rect(0, 0, 0, 0)
     end_btn_rect = pygame.Rect(0, 0, 0, 0)
     done_btn_rect = pygame.Rect(0, 0, 0, 0)
+    new_problem_btn_rect = pygame.Rect(0, 0, 0, 0)
 
     while config.running:
         screen.fill(config.COLOR_BG)
@@ -191,12 +239,41 @@ def main(mode):
             screen_w, screen_h = screen.get_size()
             pos = track_pen_tip(frame, screen_w, screen_h)
             update_pen_state(pos)
-            for click_pos in config.pen_click_queue:
-                pygame.event.post(pygame.event.Event(
-                    pygame.MOUSEBUTTONDOWN, {"pos": click_pos, "button": 1}))
-                pygame.event.post(pygame.event.Event(
-                    pygame.MOUSEBUTTONUP, {"pos": click_pos, "button": 1}))
-            config.pen_click_queue.clear()
+
+            if pos is not None:
+                now = time.time()
+                hover_target = None
+                if config.app_phase == "start" and start_btn_rect.collidepoint(pos):
+                    hover_target = "start"
+                elif config.app_phase == "done" and new_problem_btn_rect.collidepoint(pos):
+                    hover_target = "new_problem"
+                elif config.app_phase == "done" and done_btn_rect.collidepoint(pos):
+                    hover_target = "done"
+                elif config.app_phase == "running" and end_btn_rect.collidepoint(pos):
+                    hover_target = "end"
+                elif config.app_phase == "nasa_tlx":
+                    hover_target = "nasa"
+                elif config.app_phase == "ueq_s":
+                    hover_target = "ueq"
+
+                if hover_target is not None:
+                    if hover_target == config.pen_hover_button:
+                        if ((now - config.pen_hover_start) >= 0.5
+                                and (now - config.pen_last_click_time) > 0.3):
+                            pygame.event.post(pygame.event.Event(
+                                pygame.MOUSEBUTTONDOWN, {"pos": pos, "button": 1}))
+                            pygame.event.post(pygame.event.Event(
+                                pygame.MOUSEBUTTONUP, {"pos": pos, "button": 1}))
+                            config.pen_last_click_time = now
+                            config.pen_hover_button = None
+                            config.pen_hover_start = now
+                    else:
+                        config.pen_hover_button = hover_target
+                        config.pen_hover_start = now
+                else:
+                    config.pen_hover_button = None
+            else:
+                config.pen_hover_button = None
 
         for event in pygame.event.get():
             if event.type == pygame.QUIT:
@@ -214,12 +291,17 @@ def main(mode):
                         return_to_launcher()
                 elif config.app_phase == "start" and start_btn_rect.collidepoint(event.pos):
                     start_session()
+                elif config.app_phase == "done" and new_problem_btn_rect.collidepoint(event.pos):
+                    save_problem_results()
+                    reset_for_new_problem()
                 elif config.app_phase == "done" and done_btn_rect.collidepoint(event.pos):
+                    save_problem_results()
                     config.nasa_tlx_current_page = 0
                     config.app_phase = "nasa_tlx"
                     log_message(
                         "Task complete. Starting NASA-TLX questionnaire.")
                 elif config.app_phase == "running" and end_btn_rect.collidepoint(event.pos):
+                    config.problem_ended_early = True
                     if os.path.exists(config.SESSION_PATH):
                         with open(config.SESSION_PATH) as f:
                             data = json.load(f)
@@ -263,6 +345,7 @@ def main(mode):
                     if config.app_phase == "start":
                         start_session()
                     elif config.app_phase == "done":
+                        save_problem_results()
                         config.nasa_tlx_current_page = 0
                         config.app_phase = "nasa_tlx"
                         log_message(
@@ -302,13 +385,13 @@ def main(mode):
 
         if config.app_phase == "running" and not config.is_processing:
             now = pygame.time.get_ticks()
-            if now - config.last_ocr_time >= 5000:
+            if now - config.last_ocr_time >= 5000 and time.time() - config.paper_stable_since >= 3.0:
                 config.last_ocr_time = now
                 config.is_processing = True
                 threading.Thread(
                     target=background_ocr_pipeline, daemon=True).start()
 
-        if config.app_phase == "running" and not config.problem_loaded and config.paper_detected and config.warped_document is not None and not config.is_processing:
+        if config.app_phase == "running" and not config.problem_loaded and config.paper_detected and config.warped_document is not None and not config.is_processing and time.time() - config.paper_stable_since >= 3.0:
             config.is_processing = True
             threading.Thread(target=ocr_problem_data, daemon=True).start()
 
@@ -332,7 +415,8 @@ def main(mode):
             start_btn_rect = ui.draw_start_button(screen, center_rect)
         elif config.app_phase == "done":
             center_rect = ui.draw_panels(screen, mode="done")
-            done_btn_rect = ui.draw_done_button(screen, center_rect)
+            new_problem_btn_rect = ui.draw_new_problem_button(screen, center_rect, y_offset=-30)
+            done_btn_rect = ui.draw_done_button(screen, center_rect, y_offset=30)
         elif config.app_phase == "nasa_tlx":
             draw_nasa_tlx(screen)
         elif config.app_phase == "ueq_s":

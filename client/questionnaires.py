@@ -64,39 +64,46 @@ BTN_HOVER_BG = (40, 85, 155)
 
 def draw_nasa_tlx(surface):
     sw, sh = surface.get_size()
-    pad = 40
-    top_y = config.TOP_BAR_HEIGHT + pad
+    pad = 28
     content_w = sw - pad * 2
+    avail_h = sh - config.TOP_BAR_HEIGHT - config.BOTTOM_BAR_HEIGHT - pad * 2
+
+    title_font = ui.pygame.font.SysFont("segoeui", 28, bold=True)
+    desc_font = ui.pygame.font.SysFont("segoeui", 20)
+    label_font = ui.pygame.font.SysFont("segoeui", 18)
+    btn_font = ui.pygame.font.SysFont("segoeui", 20, bold=True)
 
     page = config.nasa_tlx_current_page
     item = NASA_TLX_ITEMS[page]
 
-    page_label = ui.font_body.render(f"{page + 1} of {len(NASA_TLX_ITEMS)}", True, LABEL_COLOR)
-    surface.blit(page_label, (sw - pad - page_label.get_width(), top_y))
+    desc_lines = ui.wrap_text(item["desc"], desc_font, content_w)
+    content_h = 40 + len(desc_lines) * 24 + 30 + 8 + 10 + 20
+    start_y = config.TOP_BAR_HEIGHT + pad + max(0, (avail_h - content_h) // 2)
 
-    name_surf = ui.font_large.render(item["name"], True, TEXT_COLOR)
-    surface.blit(name_surf, (pad, top_y))
-    cy = top_y + 50
+    page_label = label_font.render(f"{page + 1} of {len(NASA_TLX_ITEMS)}", True, LABEL_COLOR)
+    surface.blit(page_label, (sw - pad - page_label.get_width(), start_y))
 
-    desc_max_w = content_w
-    desc_lines = ui.wrap_text(item["desc"], ui.font_body, desc_max_w)
+    name_surf = title_font.render(item["name"], True, TEXT_COLOR)
+    surface.blit(name_surf, (pad, start_y))
+    cy = start_y + 40
+
     for li, line in enumerate(desc_lines):
-        ds = ui.font_body.render(line, True, DESC_COLOR)
-        surface.blit(ds, (pad, cy + li * 22))
-    cy += len(desc_lines) * 22 + 50
+        ds = desc_font.render(line, True, DESC_COLOR)
+        surface.blit(ds, (pad, cy + li * 24))
+    cy += len(desc_lines) * 24 + 30
 
     slider_x = pad
     slider_w = content_w
     track_y = cy
-    track_h = 6
+    track_h = 8
 
-    left_lbl = ui.font_body.render(item["left"], True, LABEL_COLOR)
-    right_lbl = ui.font_body.render(item["right"], True, LABEL_COLOR)
-    surface.blit(left_lbl, (slider_x, track_y + track_h + 10))
-    surface.blit(right_lbl, (slider_x + slider_w - right_lbl.get_width(), track_y + track_h + 10))
+    left_lbl = label_font.render(item["left"], True, LABEL_COLOR)
+    right_lbl = label_font.render(item["right"], True, LABEL_COLOR)
+    surface.blit(left_lbl, (slider_x, track_y + track_h + 8))
+    surface.blit(right_lbl, (slider_x + slider_w - right_lbl.get_width(), track_y + track_h + 8))
 
     track_rect = pygame.Rect(slider_x, track_y, slider_w, track_h)
-    pygame.draw.rect(surface, TRACK_COLOR, track_rect, border_radius=3)
+    pygame.draw.rect(surface, TRACK_COLOR, track_rect, border_radius=4)
 
     val = config.nasa_tlx_responses[page]
     display_val = val if val is not None else 1
@@ -105,11 +112,11 @@ def draw_nasa_tlx(surface):
     fill_w = max(0, int(slider_w * frac))
     if fill_w > 2:
         fill_rect = pygame.Rect(slider_x, track_y, fill_w, track_h)
-        pygame.draw.rect(surface, TRACK_FILL, fill_rect, border_radius=3)
+        pygame.draw.rect(surface, TRACK_FILL, fill_rect, border_radius=4)
 
     step_spacing = slider_w / (NASA_STEPS - 1) if NASA_STEPS > 1 else slider_w
     dot_cy = track_y + track_h // 2
-    dot_r = 6
+    dot_r = 9
     for s in range(NASA_STEPS):
         dx = int(slider_x + s * step_spacing)
         is_sel = (s + 1 == display_val)
@@ -118,8 +125,8 @@ def draw_nasa_tlx(surface):
         else:
             pygame.draw.circle(surface, DOT_FILL, (dx, dot_cy), dot_r)
             pygame.draw.circle(surface, DOT_BORDER, (dx, dot_cy), dot_r, 2)
-    btn_w = 120
-    btn_h = 40
+    btn_w = 160
+    btn_h = 50
     btn_x = sw - pad - btn_w
     btn_y = sh - config.BOTTOM_BAR_HEIGHT - pad - btn_h
     next_btn = pygame.Rect(btn_x, btn_y, btn_w, btn_h)
@@ -131,9 +138,9 @@ def draw_nasa_tlx(surface):
 
     pygame.draw.rect(surface, btn_color, next_btn, border_radius=6)
     if page < len(NASA_TLX_ITEMS) - 1:
-        btn_label = ui.font_bold.render("Next", True, text_color)
+        btn_label = btn_font.render("Next", True, text_color)
     else:
-        btn_label = ui.font_bold.render("Finish", True, text_color)
+        btn_label = btn_font.render("Finish", True, text_color)
     surface.blit(btn_label, btn_label.get_rect(center=next_btn.center))
 
     config._questionnaire_nasa_next_btn = next_btn
@@ -175,10 +182,10 @@ def draw_ueq_s(surface):
     adj_circle_pad = 28
     circle_area_w = content_w - col_w * 2 - adj_circle_pad * 2
     circle_spacing = circle_area_w / (UEQ_STEPS - 1) if UEQ_STEPS > 1 else circle_area_w
-    circle_r = 11
+    circle_r = 16
     circle_cx_start = pad + col_w + adj_circle_pad
 
-    row_h = 56
+    row_h = 64
 
     for i, (left_adj, right_adj) in enumerate(UEQ_S_ITEMS):
         row_y = cy + i * row_h
@@ -233,7 +240,7 @@ def handle_ueq_s_click(pos):
         for s in range(UEQ_STEPS):
             sx = circle_cx_start + int(s * circle_spacing)
             dist = ((pos[0] - sx) ** 2 + (pos[1] - center_y) ** 2) ** 0.5
-            if dist < 20:
+            if dist < 25:
                 config.ueq_s_responses[i] = s + 1
                 return "updated"
     return None

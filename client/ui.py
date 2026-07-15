@@ -284,29 +284,35 @@ def draw_panels(surface, mode="running"):
         draw_instruction_panel(surface, right)
         return center
 
-    if config.args.mode == "highlights" and config.current_step in config.PROJECTION_REGIONS:
-        with config.shared_frame_lock:
-            tracking = config.paper_detected
+    with config.shared_frame_lock:
+        tracking = config.paper_detected
+
+    highlight_step = config.current_step
+    if config.feedback_timer > 0 and config.feedback_step:
+        highlight_step = config.feedback_step
+
+    # Guide boxes (PROJECTION_REGIONS) — blue in highlights mode
+    if highlight_step in config.PROJECTION_REGIONS:
         if tracking:
-            for _, box in config.PROJECTION_REGIONS[config.current_step].items():
-                top_left = transform_to_projection_space(box["left"], box["top"], center)
-                bottom_right = transform_to_projection_space(box["left"] + box["width"], box["top"] + box["height"], center)
-                if top_left and bottom_right:
-                    pygame.draw.rect(surface, config.COLOR_BLUE, (top_left[0], top_left[1], bottom_right[0]-top_left[0], bottom_right[1]-top_left[1]))
+            if config.args.mode == "highlights" and not config.is_processing:
+                for _, box in config.PROJECTION_REGIONS[highlight_step].items():
+                    tl = transform_to_projection_space(box["left"], box["top"], center)
+                    br = transform_to_projection_space(box["left"] + box["width"], box["top"] + box["height"], center)
+                    if tl and br:
+                        pygame.draw.rect(surface, config.COLOR_BLUE, (tl[0], tl[1], br[0]-tl[0], br[1]-tl[1]))
         else:
             msg = font_bold.render("[ Align ArUco Markers to Project Guides ]", True, config.COLOR_TEXT)
             surface.blit(msg, msg.get_rect(center=center.center))
 
-    if config.feedback_timer > 0 and config.feedback_state == "green":
-        green = (34, 197, 94)
-        pygame.draw.rect(surface, green, center, 8)
-        label = font_large.render("CORRECT", True, green)
-        surface.blit(label, label.get_rect(center=(center.centerx, center.y + 30)))
-    elif config.feedback_timer > 0 and config.feedback_state == "red":
-        red = (239, 68, 68)
-        pygame.draw.rect(surface, red, center, 8)
-        label = font_large.render("INCORRECT", True, red)
-        surface.blit(label, label.get_rect(center=(center.centerx, center.y + 30)))
+    # Feedback boxes (CROP_REGIONS) — green/red on answer areas when feedback active
+    if config.feedback_timer > 0 and config.feedback_step and config.feedback_step in config.CROP_REGIONS:
+        if tracking:
+            feedback_color = (34, 197, 94) if config.feedback_state == "green" else (239, 68, 68)
+            for _, box in config.CROP_REGIONS[config.feedback_step].items():
+                tl = transform_to_projection_space(box["left"], box["top"], center)
+                br = transform_to_projection_space(box["left"] + box["width"], box["top"] + box["height"], center)
+                if tl and br:
+                    pygame.draw.rect(surface, feedback_color, (tl[0], tl[1], br[0]-tl[0], br[1]-tl[1]))
 
     draw_instruction_panel(surface, right)
     return center
@@ -346,12 +352,12 @@ def draw_end_task_button(surface, center_rect):
     surface.blit(t, t.get_rect(center=rect.center))
     return rect
 
-def draw_done_button(surface, center_rect):
+def draw_done_button(surface, center_rect, y_offset=0):
     btn_w = max(100, min(260, int(center_rect.width * 0.30)))
     btn_h = max(28, min(70, int(btn_w * 70 / 260)))
     btn_rect = pygame.Rect(
         center_rect.x + (center_rect.width - btn_w) // 2,
-        center_rect.y + (center_rect.height - btn_h) // 2,
+        center_rect.centery + y_offset - btn_h // 2,
         btn_w,
         btn_h
     )
@@ -365,6 +371,28 @@ def draw_done_button(surface, center_rect):
     else:
         pygame.draw.rect(surface, green, btn_rect, border_radius=12)
         text = font_large.render("DONE", True, config.COLOR_WHITE)
+    text_rect = text.get_rect(center=btn_rect.center)
+    surface.blit(text, text_rect)
+    return btn_rect
+
+def draw_new_problem_button(surface, center_rect, y_offset=0):
+    btn_w = max(100, min(260, int(center_rect.width * 0.30)))
+    btn_h = max(28, min(70, int(btn_w * 70 / 260)))
+    btn_rect = pygame.Rect(
+        center_rect.x + (center_rect.width - btn_w) // 2,
+        center_rect.centery + y_offset - btn_h // 2,
+        btn_w,
+        btn_h
+    )
+    mx, my = pygame.mouse.get_pos()
+    hovered = btn_rect.collidepoint(mx, my)
+    if hovered:
+        pygame.draw.rect(surface, config.COLOR_WHITE, btn_rect, border_radius=12)
+        pygame.draw.rect(surface, config.COLOR_BLUE, btn_rect, 3, border_radius=12)
+        text = font_large.render("NEW PROBLEM", True, config.COLOR_BLUE)
+    else:
+        pygame.draw.rect(surface, config.COLOR_BLUE, btn_rect, border_radius=12)
+        text = font_large.render("NEW PROBLEM", True, config.COLOR_WHITE)
     text_rect = text.get_rect(center=btn_rect.center)
     surface.blit(text, text_rect)
     return btn_rect
