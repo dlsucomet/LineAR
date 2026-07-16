@@ -24,7 +24,6 @@ def paper_tracking_daemon():
     smoothed_tracking = None
     smoothed_calib = None
     ema_alpha = 0.3
-    last_capture_time = 0
     
     while config.running:
         if config.cap is None:
@@ -97,21 +96,6 @@ def paper_tracking_daemon():
                 if not last_state:
                     log_message("Tracking Lock Acquired: Target sheet anchors located.")
                     last_state = True
-                    last_capture_time = 0  # force an immediate capture on fresh lock
-
-                now_capture = time.time()
-                if config.PARTICIPANT_DIR and now_capture - last_capture_time >= 3.0:
-                    last_capture_time = now_capture
-                    captures_dir = os.path.join(config.PARTICIPANT_DIR, "ocr_captures")
-                    os.makedirs(captures_dir, exist_ok=True)
-                    stamp = datetime.now().strftime("%H%M%S_%f")[:-3]
-                    try:
-                        cv2.imwrite(
-                            os.path.join(captures_dir, f"p{config.problem_number}_track_{config.current_step}_{stamp}.png"),
-                            config.warped_document,
-                        )
-                    except Exception:
-                        pass
                 continue
 
         with config.shared_frame_lock:
@@ -119,7 +103,6 @@ def paper_tracking_daemon():
                 config.paper_detected = False
         last_matrix = None
         smoothed_tracking = None
-        last_capture_time = 0  # so re-acquiring the lock later captures right away
         if last_state:
             log_message("Tracking Lock Lost: Target sheet missing or occluded.")
             last_state = False
@@ -397,10 +380,6 @@ def background_ocr_pipeline():
         all_empty = all(len(v) == 0 for v in recognized_data.values())
         if not all_empty and recognized_data == expected:
             is_valid = True
-            if config.current_step == "thirdStep" and config.target_vector:
-                tx, ty = config.target_vector
-                config.active_vectors.append({"x": tx, "y": ty, "label": "L(v)"})
-
         if is_valid:
             config.green_count += 1
             config.feedback_step = config.current_step

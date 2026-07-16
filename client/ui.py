@@ -190,6 +190,9 @@ def draw_instruction_panel(surface, area):
     pad = 20
     cx, cy, mw = area.x + pad, area.y + pad, area.width - pad * 2
     step_info = STEP_GUIDANCE.get(config.current_step, STEP_GUIDANCE["complete"])
+    if config.current_step == "complete" and config.target_vector:
+        tx, ty = config.target_vector
+        step_info = dict(step_info, math=f"L(v) = [{tx} / {ty}]")
 
     default_panel_h = 572
     scale_y = max(0.5, area.height / default_panel_h)
