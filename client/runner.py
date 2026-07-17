@@ -62,7 +62,8 @@ def save_problem_results():
     with open(config.SESSION_PATH, "w") as f:
         json.dump(data, indent=2, fp=f)
     log_message(
-        f"Problem {config.problem_number} results saved (green={config.green_count}, red={config.red_count}, duration={duration}s, ended_early={config.problem_ended_early})"
+        f"Problem {config.problem_number} results saved (green={config.green_count}, red={
+            config.red_count}, duration={duration}s, ended_early={config.problem_ended_early})"
     )
 
 
@@ -125,7 +126,8 @@ def debug_simulate_correct():
         idx = config.STEP_SEQUENCE.index(config.current_step)
         if idx < len(config.STEP_SEQUENCE) - 1:
             config.current_step = config.STEP_SEQUENCE[idx + 1]
-            log_message(f"DEBUG: Simulated correct -> step {config.current_step}")
+            log_message(
+                f"DEBUG: Simulated correct -> step {config.current_step}")
         else:
             config.app_phase = "done"
             log_message(
@@ -219,11 +221,12 @@ def main(mode):
     ui._init_fonts()
 
     log_message("Initializing hardware camera capture access...")
-    config.cap = cv2.VideoCapture(0)
+    config.cap = cv2.VideoCapture(3)
     config.cap.set(cv2.CAP_PROP_FRAME_WIDTH, 1280)
     config.cap.set(cv2.CAP_PROP_FRAME_HEIGHT, 720)
     if not config.cap.isOpened():
-        log_message("CRITICAL ERROR: Could not open the system video capture stream.")
+        log_message(
+            "CRITICAL ERROR: Could not open the system video capture stream.")
     log_message("Booting up backend real-time tracking daemon thread pass...")
     threading.Thread(target=paper_tracking_daemon, daemon=True).start()
 
@@ -296,12 +299,14 @@ def main(mode):
                         ) > 0.3:
                             pygame.event.post(
                                 pygame.event.Event(
-                                    pygame.MOUSEBUTTONDOWN, {"pos": pos, "button": 1}
+                                    pygame.MOUSEBUTTONDOWN, {
+                                        "pos": pos, "button": 1}
                                 )
                             )
                             pygame.event.post(
                                 pygame.event.Event(
-                                    pygame.MOUSEBUTTONUP, {"pos": pos, "button": 1}
+                                    pygame.MOUSEBUTTONUP, {
+                                        "pos": pos, "button": 1}
                                 )
                             )
                             config.pen_last_click_time = now
@@ -344,7 +349,8 @@ def main(mode):
                     save_problem_results()
                     config.nasa_tlx_current_page = 0
                     config.app_phase = "nasa_tlx"
-                    log_message("Task complete. Starting NASA-TLX questionnaire.")
+                    log_message(
+                        "Task complete. Starting NASA-TLX questionnaire.")
                 elif config.app_phase == "running" and end_btn_rect.collidepoint(
                     event.pos
                 ):
@@ -357,7 +363,8 @@ def main(mode):
                             json.dump(data, f, indent=2)
                     config.nasa_tlx_current_page = 0
                     config.app_phase = "nasa_tlx"
-                    log_message("Task ended early. Starting NASA-TLX questionnaire.")
+                    log_message(
+                        "Task ended early. Starting NASA-TLX questionnaire.")
                 elif getattr(
                     config, "debug_mode", False
                 ) and debug_btn_rect.collidepoint(event.pos):
@@ -366,10 +373,12 @@ def main(mode):
             elif event.type == pygame.KEYDOWN:
                 if event.key == pygame.K_d:
                     config.debug_mode = not config.debug_mode
-                    log_message(f"Debug interface display set to: {config.debug_mode}")
+                    log_message(f"Debug interface display set to: {
+                                config.debug_mode}")
                 elif event.key == pygame.K_h:
                     config.debug_hints = not config.debug_hints
-                    log_message(f"Debug hints display set to: {config.debug_hints}")
+                    log_message(f"Debug hints display set to: {
+                                config.debug_hints}")
                 elif event.key == pygame.K_g and config.debug_mode:
                     debug_simulate_correct()
                 elif event.key == pygame.K_r and config.debug_mode:
@@ -399,7 +408,8 @@ def main(mode):
                         save_problem_results()
                         config.nasa_tlx_current_page = 0
                         config.app_phase = "nasa_tlx"
-                        log_message("Task complete. Starting NASA-TLX questionnaire.")
+                        log_message(
+                            "Task complete. Starting NASA-TLX questionnaire.")
                     elif config.app_phase == "nasa_tlx":
                         if (
                             config.nasa_tlx_responses[config.nasa_tlx_current_page]
@@ -410,7 +420,8 @@ def main(mode):
                                 config.nasa_tlx_responses
                             ):
                                 config.app_phase = "ueq_s"
-                                log_message("NASA-TLX completed, proceeding to UEQ-S.")
+                                log_message(
+                                    "NASA-TLX completed, proceeding to UEQ-S.")
                     elif config.app_phase == "ueq_s":
                         save_questionnaire_responses()
                         return_to_launcher()
@@ -450,7 +461,8 @@ def main(mode):
             if now_scan - config.last_ocr_time >= 2.0:
                 config.last_ocr_time = now_scan
                 config.is_processing = True
-                threading.Thread(target=scan_qr_from_camera, daemon=True).start()
+                threading.Thread(target=scan_qr_from_camera,
+                                 daemon=True).start()
 
         if (
             config.app_phase == "scan_qr"
@@ -483,14 +495,12 @@ def main(mode):
             ):
                 config.last_ocr_time = now
                 config.is_processing = True
-                threading.Thread(target=background_ocr_pipeline, daemon=True).start()
+                threading.Thread(
+                    target=background_ocr_pipeline, daemon=True).start()
 
         if config.current_step == "complete":
             if config.transformation_progress < 1.0:
                 config.transformation_progress += 0.05
-        else:
-            if config.transformation_progress > 0.0:
-                config.transformation_progress -= 0.05
 
         config.transformation_progress = max(
             0.0, min(1.0, config.transformation_progress)
@@ -515,7 +525,8 @@ def main(mode):
             new_problem_btn_rect = ui.draw_new_problem_button(
                 screen, center_rect, y_offset=-30
             )
-            done_btn_rect = ui.draw_done_button(screen, center_rect, y_offset=30)
+            done_btn_rect = ui.draw_done_button(
+                screen, center_rect, y_offset=30)
         elif config.app_phase == "nasa_tlx":
             draw_nasa_tlx(screen)
         elif config.app_phase == "ueq_s":

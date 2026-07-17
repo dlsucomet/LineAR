@@ -63,7 +63,7 @@ def paper_tracking_daemon():
                         smoothed_calib = ema_alpha * calib_M + (1 - ema_alpha) * smoothed_calib
                 with config.shared_frame_lock:
                     config.proj_calib_matrix = smoothed_calib if calib_M is not None else calib_M
-                    # config.proj_calibrated = True
+                    config.proj_calibrated = True
                 if not last_calib_state:
                     log_message("Calibration Lock Acquired: ArUco markers 4, 5, 6, 7 detected.")
                     last_calib_state = True
@@ -409,10 +409,13 @@ def background_ocr_pipeline():
     except Exception as e:
         log_message(f"CRITICAL OCR FAILURE: Exception thrown -> {str(e)}")
 
-    timestamp = datetime.now().strftime("%Y-%m-%d %H:%M:%S.%f")[:-3]
-    tracking_entry = f"[{timestamp}] OCR TRACK [{config.current_step}] regions -> {list(recognized_data.values())} paper_detected={config.paper_detected}\n"
-    with open(config.LOG_FILE_PATH, "a", encoding="utf-8") as f:
-        f.write(tracking_entry)
+    try:
+        timestamp = datetime.now().strftime("%Y-%m-%d %H:%M:%S.%f")[:-3]
+        tracking_entry = f"[{timestamp}] OCR TRACK [{config.current_step}] regions -> {list(recognized_data.values())} paper_detected={config.paper_detected}\n"
+        with open(config.LOG_FILE_PATH, "a", encoding="utf-8") as f:
+            f.write(tracking_entry)
+    except Exception:
+        pass
 
     config.is_processing = False
 

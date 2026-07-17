@@ -183,7 +183,7 @@ def draw_cartesian_plane(surface, area):
             surface.blit(font_bold.render(f'{vec["label"]} ({vec["x"]},{vec["y"]})', True, config.COLOR_TEXT), (tx + 16, ty - 4))
     surface.set_clip(clip_rect)
 
-    if config.current_step == "complete" and config.target_vector is not None:
+    if config.problem_loaded and config.target_vector is not None:
         draw_transformed_triangle(surface, area, ox, oy, scale)
 
 def draw_instruction_panel(surface, area):
@@ -277,6 +277,35 @@ def draw_instruction_panel(surface, area):
 
                 current_x = right_x
 
+def draw_projection_boxes(surface, center):
+    with config.shared_frame_lock:
+        tracking = config.paper_detected
+
+    highlight_step = config.current_step
+    if config.feedback_timer > 0 and config.feedback_step:
+        highlight_step = config.feedback_step
+
+    if highlight_step in config.PROJECTION_REGIONS:
+        if tracking:
+            if config.args.mode == "highlights":
+                for _, box in config.PROJECTION_REGIONS[highlight_step].items():
+                    tl = transform_to_projection_space(box["left"], box["top"], center)
+                    br = transform_to_projection_space(box["left"] + box["width"], box["top"] + box["height"], center)
+                    if tl and br:
+                        pygame.draw.rect(surface, config.COLOR_BLUE, (tl[0], tl[1], br[0]-tl[0], br[1]-tl[1]))
+        else:
+            msg = font_bold.render("[ Align ArUco Markers to Project Guides ]", True, config.COLOR_TEXT)
+            surface.blit(msg, msg.get_rect(center=center.center))
+
+    if config.feedback_timer > 0 and config.feedback_step and config.feedback_step in config.CROP_REGIONS:
+        if tracking:
+            feedback_color = (34, 197, 94) if config.feedback_state == "green" else (239, 68, 68)
+            for _, box in config.CROP_REGIONS[config.feedback_step].items():
+                tl = transform_to_projection_space(box["left"], box["top"], center)
+                br = transform_to_projection_space(box["left"] + box["width"], box["top"] + box["height"], center)
+                if tl and br:
+                    pygame.draw.rect(surface, feedback_color, (tl[0], tl[1], br[0]-tl[0], br[1]-tl[1]))
+
 def draw_panels(surface, mode="running"):
     left, center, right = config.get_panel_rects(surface.get_width(), surface.get_height())
     for rect in [left, center, right]:
@@ -297,12 +326,14 @@ def draw_panels(surface, mode="running"):
     if mode == "qr_confirm":
         draw_cartesian_plane(surface, left)
         pygame.draw.rect(surface, config.COLOR_BLUE, left, 3)
+        draw_projection_boxes(surface, center)
         draw_instruction_panel(surface, right)
         return center
 
     if mode == "flip_prompt":
         draw_cartesian_plane(surface, left)
         pygame.draw.rect(surface, config.COLOR_BLUE, left, 3)
+        draw_projection_boxes(surface, center)
         draw_instruction_panel(surface, right)
         return center
 
@@ -313,35 +344,7 @@ def draw_panels(surface, mode="running"):
         draw_instruction_panel(surface, right)
         return center
 
-    with config.shared_frame_lock:
-        tracking = config.paper_detected
-
-    highlight_step = config.current_step
-    if config.feedback_timer > 0 and config.feedback_step:
-        highlight_step = config.feedback_step
-
-    # Guide boxes (PROJECTION_REGIONS) — blue in highlights mode
-    if highlight_step in config.PROJECTION_REGIONS:
-        if tracking:
-            if config.args.mode == "highlights" and not config.is_processing:
-                for _, box in config.PROJECTION_REGIONS[highlight_step].items():
-                    tl = transform_to_projection_space(box["left"], box["top"], center)
-                    br = transform_to_projection_space(box["left"] + box["width"], box["top"] + box["height"], center)
-                    if tl and br:
-                        pygame.draw.rect(surface, config.COLOR_BLUE, (tl[0], tl[1], br[0]-tl[0], br[1]-tl[1]))
-        else:
-            msg = font_bold.render("[ Align ArUco Markers to Project Guides ]", True, config.COLOR_TEXT)
-            surface.blit(msg, msg.get_rect(center=center.center))
-
-    # Feedback boxes (CROP_REGIONS) — green/red on answer areas when feedback active
-    if config.feedback_timer > 0 and config.feedback_step and config.feedback_step in config.CROP_REGIONS:
-        if tracking:
-            feedback_color = (34, 197, 94) if config.feedback_state == "green" else (239, 68, 68)
-            for _, box in config.CROP_REGIONS[config.feedback_step].items():
-                tl = transform_to_projection_space(box["left"], box["top"], center)
-                br = transform_to_projection_space(box["left"] + box["width"], box["top"] + box["height"], center)
-                if tl and br:
-                    pygame.draw.rect(surface, feedback_color, (tl[0], tl[1], br[0]-tl[0], br[1]-tl[1]))
+    draw_projection_boxes(surface, center)
 
     draw_instruction_panel(surface, right)
     return center
