@@ -70,12 +70,29 @@ def paper_tracking_daemon():
                 if not last_state:
                     log_message("Tracking Lock Acquired: Target sheet anchors located.")
                     last_state = True
+
+                now_capture = time.time()
+                is_settled = now_capture - config.paper_stable_since >= 1.0  # matrix hasn't moved in the last 1s
+                if config.PARTICIPANT_DIR and is_settled and now_capture - last_capture_time >= 3.0:
+                    last_capture_time = now_capture
+                    captures_dir = os.path.join(config.PARTICIPANT_DIR, "ocr_captures")
+                    os.makedirs(captures_dir, exist_ok=True)
+                    stamp = datetime.now().strftime("%H%M%S_%f")[:-3]
+                    try:
+                        cv2.imwrite(
+                            os.path.join(captures_dir, f"p{config.problem_number}_track_{config.current_step}_{stamp}.png"),
+                            config.warped_document,
+                        )
+                    except Exception:
+                        pass
                 continue
 
         with config.shared_frame_lock:
             if not config.debug_preview:
                 config.paper_detected = False
         last_matrix = None
+        smoothed_tracking = None
+        last_capture_time = 0  # reset so the next lock starts its own capture cadence
         if last_state:
             log_message("Tracking Lock Lost: Target sheet missing or occluded.")
             last_state = False
