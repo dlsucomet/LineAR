@@ -246,6 +246,10 @@ def draw_instruction_panel(surface, area):
     cy += int(10 * scale_y)
 
     bottom_limit = area.y + area.height - pad
+    legend_reserve = 0
+    if getattr(config.args, "mode", "") == "highlights":
+        legend_reserve = 80
+        bottom_limit -= legend_reserve
     eq_card_h = max(20, min(int(70 * scale_y), bottom_limit - cy))
 
     if eq_card_h > 20:
@@ -315,6 +319,23 @@ def draw_instruction_panel(surface, area):
                 pygame.draw.line(surface, config.COLOR_TEXT, (right_x, bracket_bottom), (right_x - 4, bracket_bottom), 2)
 
                 current_x = right_x
+
+    if getattr(config.args, "mode", "") == "highlights":
+        legend_items = [
+            (config.COLOR_BLUE,   "copy"),
+            ((34, 197, 94),       "correct"),
+            ((239, 68, 68),       "incorrect"),
+        ]
+        sq = 12
+        line_h = 24
+        total_legend_h = len(legend_items) * line_h
+        legend_x = cx
+        legend_y = area.bottom - pad - total_legend_h
+        for color, label in legend_items:
+            pygame.draw.rect(surface, color, (legend_x, legend_y, sq, sq))
+            txt = font_bold.render(label, True, color)
+            surface.blit(txt, (legend_x + sq + 6, legend_y - 2))
+            legend_y += line_h
 
 def draw_projection_boxes(surface, center):
     with config.shared_frame_lock:
