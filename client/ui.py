@@ -341,7 +341,7 @@ def draw_instruction_panel(surface, area):
         vx += 16
         _draw_paren(surface, vx, vy, vec_h, "left")
         vx += 10
-        vx = _draw_vvec(surface, vx, vy, [lu[0], lu[1]], colors=hl_u) + 10
+        vx = _draw_vvec(surface, vx, vy, [lu[0], lu[1]]) + 10
         vx += _draw_paren(surface, vx, vy, vec_h, "right")
         vx += 16
         vx = _draw_text(surface, vx, vy, ",  L", center_h=vec_h)
@@ -355,7 +355,7 @@ def draw_instruction_panel(surface, area):
         vx += 16
         _draw_paren(surface, vx, vy, vec_h, "left")
         vx += 10
-        vx = _draw_vvec(surface, vx, vy, [lw[0], lw[1]], colors=hl_w) + 10
+        vx = _draw_vvec(surface, vx, vy, [lw[0], lw[1]]) + 10
         vx += _draw_paren(surface, vx, vy, vec_h, "right")
         cy += int(50 * scale_y)
 
