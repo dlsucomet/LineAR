@@ -327,7 +327,7 @@ def draw_instruction_panel(surface, area):
 
         vec_h = 2 * pf.get_height() + 2
 
-        step_colors = {None: None, "firstStep": None, "firstStepOne": [config.COLOR_BLUE, config.COLOR_POINT_LIGHT], "firstStepTwo": [config.COLOR_BLUE, config.COLOR_POINT_LIGHT], "firstStepThree": [config.COLOR_BLUE, config.COLOR_POINT_LIGHT]}
+        step_colors = {None: None, "firstStep": None, "firstStepOne": [config.COLOR_HIGHLIGHT_BLUE, config.COLOR_POINT_LIGHT], "firstStepTwo": [config.COLOR_HIGHLIGHT_BLUE, config.COLOR_POINT_LIGHT], "firstStepThree": [config.COLOR_HIGHLIGHT_BLUE, config.COLOR_POINT_LIGHT]}
         hl_u = step_colors.get(config.current_step)
         hl_w = step_colors.get(config.current_step) if config.current_step == "firstStepThree" else None
         hl_v = step_colors.get(config.current_step) if config.current_step == "firstStepOne" else None
@@ -465,7 +465,7 @@ def draw_instruction_panel(surface, area):
 
     if getattr(config.args, "mode", "") == "highlights":
         legend_items = [
-            (config.COLOR_BLUE,   "copy"),
+            (config.COLOR_COPY_BLUE,   "copy"),
             ((34, 197, 94),       "correct"),
             ((239, 68, 68),       "incorrect"),
         ]
