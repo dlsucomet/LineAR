@@ -322,6 +322,8 @@ def draw_instruction_panel(surface, area):
 def draw_projection_boxes(surface, center):
     with config.shared_frame_lock:
         tracking = config.paper_detected
+        track_mat = config.tracking_matrix
+        calib_mat = config.proj_calib_matrix
 
     highlight_step = config.current_step
     if config.feedback_timer > 0 and config.feedback_step:
@@ -331,8 +333,8 @@ def draw_projection_boxes(surface, center):
         if tracking:
             if config.args.mode == "highlights":
                 for _, box in config.PROJECTION_REGIONS[highlight_step].items():
-                    tl = transform_to_projection_space(box["left"], box["top"], center)
-                    br = transform_to_projection_space(box["left"] + box["width"], box["top"] + box["height"], center)
+                    tl = transform_to_projection_space(box["left"], box["top"], center, track_mat, calib_mat)
+                    br = transform_to_projection_space(box["left"] + box["width"], box["top"] + box["height"], center, track_mat, calib_mat)
                     if tl and br:
                         pygame.draw.rect(surface, config.COLOR_BLUE, (tl[0], tl[1], br[0]-tl[0], br[1]-tl[1]))
         else:
@@ -343,8 +345,8 @@ def draw_projection_boxes(surface, center):
         if tracking:
             feedback_color = (34, 197, 94) if config.feedback_state == "green" else (239, 68, 68)
             for _, box in config.CROP_REGIONS[config.feedback_step].items():
-                tl = transform_to_projection_space(box["left"], box["top"], center)
-                br = transform_to_projection_space(box["left"] + box["width"], box["top"] + box["height"], center)
+                tl = transform_to_projection_space(box["left"], box["top"], center, track_mat, calib_mat)
+                br = transform_to_projection_space(box["left"] + box["width"], box["top"] + box["height"], center, track_mat, calib_mat)
                 if tl and br:
                     pygame.draw.rect(surface, feedback_color, (tl[0], tl[1], br[0]-tl[0], br[1]-tl[1]))
 
