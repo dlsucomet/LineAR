@@ -30,6 +30,7 @@ def paper_tracking_daemon():
     smoothed_tracking = None
     smoothed_calib = None
     ema_alpha = 0.3
+    last_capture_time = 0
     STABILITY_PIXEL_TOLERANCE = 3.0  # max per-corner movement (px) to still count as "stable"
     last_full_detect_time = 0.0
     MARKER_DROPOUT_GRACE = 0.5  # seconds to tolerate a brief marker dropout before declaring lock lost
@@ -116,6 +117,7 @@ def paper_tracking_daemon():
             last_matrix = None
             last_src_pts = None
             smoothed_tracking = None
+            last_capture_time = 0  # reset so the next lock starts its own capture cadence
             if last_state:
                 log_message("Tracking Lock Lost: Target sheet missing or occluded.")
                 last_state = False
