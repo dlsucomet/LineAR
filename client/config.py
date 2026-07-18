@@ -132,9 +132,73 @@ pen_debug_samples = []
 pen_calibrating = False
 pen_calib_samples = []
 
+
+STEP_GUIDANCE = {
+    "firstStep": {
+        "title": "Linear Combination Setup",
+        "desc": "Express the input vector as a linear combination of the given basis vectors.",
+        "math": "L(c1*v1 + c2*v2) = c1*L(v1) + c2*L(v2)"
+    },
+    "firstStepOne": {
+        "title": "Identify the Target",
+        "desc": "The vector you need to find is highlighted below.",
+        "math": "L(v) = ?"
+    },
+    "firstStepTwo": {
+        "title": "First Basis Vector",
+        "desc": "Review the first basis vector and its transformation.",
+        "math": "L(u) = ?"
+    },
+    "firstStepThree": {
+        "title": "Second Basis Vector",
+        "desc": "Review the second basis vector and its transformation.",
+        "math": "L(w) = ?"
+    },
+    "secondStepLeft": {
+        "title": "Transformation Property Expansion",
+        "desc": "Substitute the known transformed vector definitions into your linear combination equation.",
+        "math": "c1 * [x1 / y1] + c2 * [x2 / y2]"
+    },
+    "secondStepRight": {
+        "title": "Transformation Property Expansion",
+        "desc": "Substitute the known transformed vector definitions into your linear combination equation.",
+        "math": "c1 * [x1 / y1] + c2 * [x2 / y2]"
+    },
+    "thirdStepLeft": {
+        "title": "Scalar Multiplication",
+        "desc": "Distribute the first scalar coefficient into the left vector component elements.",
+        "math": "a * [b / c] = [a * b / a * c]"
+    },
+    "thirdStepRight": {
+        "title": "Scalar Multiplication",
+        "desc": "Distribute the second scalar coefficient into the right vector component elements.",
+        "math": "a * [b / c] = [a * b / a * c]"
+    },
+    "fourthStep": {
+        "title": "Vector Addition",
+        "desc": "Perform row-by-row matrix addition on your scaled vector elements to solve.",
+        "math": "[a / b] + [c / d] = [a + c / b + d]"
+    },
+    "complete": {
+        "title": "Problem Completed!",
+        "desc": "The linear transformation mapping operations match the coordinate target state vector space outputs.",
+        "math": "L(v) = [14 / -7]"
+    }
+}
+
 PROJECTION_REGIONS = {
-    "firstStep": {"one": {"left": 300, "top": 170, "width": 300, "height": 150},
-                  "two": {"left": 300, "top": 170, "width": 300, "height": 150},
+    "firstStep": {},
+    "firstStepOne": {
+        "one": {"left": 300, "top": 170, "width": 300, "height": 150},
+        "two": {"left": 300, "top": 170, "width": 300, "height": 150},
+    },
+    "firstStepTwo": {
+        "one": {"left": 300, "top": 170, "width": 300, "height": 150},
+        "two": {"left": 300, "top": 170, "width": 300, "height": 150},
+    },
+    "firstStepThree": {
+        "one": {"left": 300, "top": 170, "width": 300, "height": 150},
+        "two": {"left": 300, "top": 170, "width": 300, "height": 150},
     },
     "secondStepLeft": {"one": {"left": 300, "top": 170, "width": 300, "height": 150},
                       "two": {"left": 250, "top": 570, "width": 150, "height": 100},
@@ -180,11 +244,23 @@ CROP_REGIONS = {
     "firstStep": {"one": {"top": 100, "left": 350, "width": 1000, "height": 500},
                   "two": {"top": 100, "left": 350, "width": 1000, "height": 500}
     },
-    "firstStepLeft": {"one": {"top": 1030, "left": 220, "width": 1500, "height": 400}},
-    "firstStepRight": {"one": {"top": 1030, "left": 220, "width": 1500, "height": 400}},
-    "secondStepLeft": {"one": {"top": 1530, "left": 220, "width": 1500, "height": 400}},
-    "secondStepRight": {"one": {"top": 1530, "left": 220, "width": 1500, "height": 400}},
-    "thirdStep": {"one": {"top": 1930, "left": 220, "width": 1500, "height": 400}},
+    "firstStepOne": {
+        "one": {"left": 300, "top": 170, "width": 300, "height": 150},
+        "two": {"left": 300, "top": 170, "width": 300, "height": 150},
+    },
+    "firstStepTwo": {
+        "one": {"left": 300, "top": 170, "width": 300, "height": 150},
+        "two": {"left": 300, "top": 170, "width": 300, "height": 150},
+    },
+    "firstStepThree": {
+        "one": {"left": 300, "top": 170, "width": 300, "height": 150},
+        "two": {"left": 300, "top": 170, "width": 300, "height": 150},
+    },
+    "secondStepLeft": {"one": {"top": 1030, "left": 220, "width": 1500, "height": 400}},
+    "secondStepRight": {"one": {"top": 1030, "left": 220, "width": 1500, "height": 400}},
+    "thirdStepLeft": {"one": {"top": 1530, "left": 220, "width": 1500, "height": 400}},
+    "thirdStepRight": {"one": {"top": 1530, "left": 220, "width": 1500, "height": 400}},
+    "fourthStep": {"one": {"top": 1930, "left": 220, "width": 1500, "height": 400}},
 }
 
 def get_panel_rects(surface_width, surface_height):
