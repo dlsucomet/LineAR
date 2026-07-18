@@ -304,6 +304,9 @@ def scan_qr_from_camera():
         config.problem_loaded = True
         log_message(f"Problem successfully initialized via {code_type}! Target: {config.target_vector}")
 
+        # Adding a 3-second delay after the QR code has successfully scanned
+        time.sleep(3.0)
+
     except Exception as e:
         log_message(f"CRITICAL QR SCAN FAILURE: {str(e)}")
 

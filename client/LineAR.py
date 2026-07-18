@@ -19,9 +19,7 @@ args = parser.parse_args()
 pygame.init()
 pygame.font.init()
 
-# 1920 x 1080
-# 1600 x 900
-# 1280 x 720
+# Window Dimensions
 WINDOW_WIDTH = 1600
 WINDOW_HEIGHT = 900
 TOP_BAR_HEIGHT = 50
@@ -29,6 +27,7 @@ BOTTOM_BAR_HEIGHT = 70
 OUTER_GAP = 14
 INNER_GAP = 14
 
+# Color Palette
 COLOR_BG = (248, 250, 252)
 COLOR_TEXT = (0, 0, 0)
 COLOR_AXIS = (0, 0, 0)
@@ -46,23 +45,27 @@ font_body = pygame.font.SysFont("segoeui", 15)
 font_bold = pygame.font.SysFont("segoeui", 15, bold=True)
 font_equation = pygame.font.SysFont("segoeui", 22, bold=True)
 
+# State Variables
 current_step = "secondStepLeft"
-
 status_msg = "System Ready. Place paper to align ArUco markers."
 is_processing = False
+fullscreen = False
+app_phase = "start"
 
 active_vectors = [
     {"x": 1, "y": 2, "label": "u"},
     {"x": 0, "y": 1, "label": "w"}
 ]
 
+# Tracking Variables
 warped_document = None
 tracking_matrix = None
 paper_detected = False
 shared_frame_lock = threading.Lock()
-fullscreen = False
-app_phase = "start"
+cap = None
+ocr_reader = None
 
+# Logging & File Setup
 BASE_DIR = os.path.dirname(os.path.abspath(__file__))
 LOGS_DIR = os.path.join(BASE_DIR, "logs")
 os.makedirs(LOGS_DIR, exist_ok=True)
@@ -74,8 +77,10 @@ existing_folders = sorted(
 p_num = (int(re.search(r'p(\d+)', existing_folders[-1]).group(1)) + 1) if existing_folders else 1
 PARTICIPANT_DIR = os.path.join(LOGS_DIR, f"p{p_num}")
 os.makedirs(PARTICIPANT_DIR, exist_ok=True)
+
 LOG_FILE_PATH = os.path.join(PARTICIPANT_DIR, "linear_session.log")
 SESSION_PATH = os.path.join(PARTICIPANT_DIR, f"p{p_num}.json")
+
 def log_message(message):
     """Updates the internal UI status and safely writes the entry into the local text log file."""
     global status_msg
@@ -87,13 +92,16 @@ def log_message(message):
             f.write(log_entry)
     except Exception as e:
         print(f"Failed writing to file log: {str(e)}", file=sys.stderr)
+
+# Initialize Session Logs
 with open(LOG_FILE_PATH, "w", encoding="utf-8") as f:
     f.write(f"=== LineAR System Session Log Start: {datetime.now().strftime('%Y-%m-%d %H:%M:%S')} ===\n")
+    
 with open(SESSION_PATH, "w", encoding="utf-8") as f:
     json.dump({
         "date": datetime.now().strftime("%Y-%m-%d"),
         "mode": getattr(args, 'mode', 'projector'),
-        "time_started": datetime.now().strftime("%H:%M:%S"),
+        "time_started": None,
         "time_ended": None,
         "end_task_pressed": False,
         "green_count": 0,
@@ -102,21 +110,6 @@ with open(SESSION_PATH, "w", encoding="utf-8") as f:
         "ueq_s": None,
         "questionnaires_completed": False,
     }, f, indent=2)
-
-def log_message(message):
-    global status_msg
-    status_msg = message
-    timestamp = datetime.now().strftime("%Y-%m-%d %H:%M:%S.%f")[:-3]
-    log_entry = f"[{timestamp}] {message}\n"
-    try:
-        with open(LOG_FILE_PATH, "a", encoding="utf-8") as f:
-            f.write(log_entry)
-    except Exception as e:
-        print(f"Failed writing to file log: {str(e)}", file=sys.stderr)
-
-
-with open(LOG_FILE_PATH, "w", encoding="utf-8") as f:
-    f.write(f"=== LineAR System Session Log Start: {datetime.now().strftime('%Y-%m-%d %H:%M:%S')} ===\n")
 
 nasa_tlx_responses = [None] * 6
 ueq_s_responses = [None] * 8
@@ -130,7 +123,6 @@ CROP_REGIONS = {
     }
 }
 
-
 def paper_tracking_daemon():
     global tracking_matrix, paper_detected, warped_document
     aruco_dict = cv2.aruco.getPredefinedDictionary(cv2.aruco.DICT_4X4_50)
@@ -139,7 +131,10 @@ def paper_tracking_daemon():
     max_w, max_h = 1000, 1200
     dst_pts = np.array([[0, 0], [max_w - 1, 0], [max_w - 1, max_h - 1], [0, max_h - 1]], dtype="float32")
     last_state = False
+    
     while running:
+        if cap is None:
+            continue
         ret, frame = cap.read()
         if not ret or frame is None:
             continue
@@ -147,7 +142,6 @@ def paper_tracking_daemon():
         if ids is not None and len(ids) >= 4:
             corner_map = {int(ids[i][0]): corners[i][0] for i in range(len(ids))}
 
-            # Paper tracking: detect paper markers 0-3
             if all(k in corner_map for k in [0, 1, 2, 3]):
                 src_pts = np.array([
                     corner_map[0][0],
@@ -165,12 +159,12 @@ def paper_tracking_daemon():
                     log_message("Tracking Lock Acquired: Target sheet anchors located.")
                     last_state = True
                 continue
+                
         with shared_frame_lock:
             paper_detected = False
         if last_state:
             log_message("Tracking Lock Lost: Target sheet missing or occluded.")
             last_state = False
-
 
 def background_ocr_pipeline():
     global is_processing, current_step, active_vectors
@@ -180,6 +174,7 @@ def background_ocr_pipeline():
             is_processing = False
             return
         local_sheet = warped_document.copy()
+        
     log_message(f"Starting OCR evaluation routine for calculation phase: {current_step}")
     try:
         regions = CROP_REGIONS.get(current_step, {})
@@ -192,10 +187,12 @@ def background_ocr_pipeline():
             r_height = max(1, min(height, img_h - r_top))
             r_width = max(1, min(width, img_w - r_left))
             crop = local_sheet[r_top:r_top+r_height, r_left:r_left+r_width]
+            
             blue_channel = crop[:, :, 0]
             thresh = cv2.adaptiveThreshold(blue_channel, 255, cv2.ADAPTIVE_THRESH_GAUSSIAN_C, cv2.THRESH_BINARY_INV, 15, 4)
             processed_crop = cv2.bitwise_not(thresh)
             ocr_results = ocr_reader.readtext(processed_crop, allowlist='0123456789-', paragraph=False)
+            
             detected_tokens = []
             for (bbox, text, confidence) in ocr_results:
                 cleaned = text.replace(" ", "")
@@ -207,6 +204,7 @@ def background_ocr_pipeline():
             detected_tokens.sort(key=lambda item: item[0])
             recognized_data[region_name] = [t for (_, t) in detected_tokens]
             log_message(f"Parsed region '{region_name}' values -> {recognized_data[region_name]}")
+            
         if recognized_data.get("one") == ["12", "-3"] and recognized_data.get("two") == ["2", "-4"]:
             active_vectors.append({"x": 14, "y": -7, "label": "Final Proj"})
             log_message("SUCCESS: Student calculations verified as mathematically valid.")
@@ -217,27 +215,28 @@ def background_ocr_pipeline():
         log_message(f"CRITICAL OCR FAILURE: Exception thrown -> {str(e)}")
     is_processing = False
 
-
 def start_session():
     global app_phase, ocr_reader, cap
     log_message("Loading OCR Engine context...")
     ocr_reader = easyocr.Reader(['en'], gpu=False, verbose=False)
     log_message("OCR Engine Ready.")
+    
     log_message("Initializing hardware camera capture access...")
     cap = cv2.VideoCapture(0)
     cap.set(cv2.CAP_PROP_FRAME_WIDTH, 1280)
     cap.set(cv2.CAP_PROP_FRAME_HEIGHT, 720)
     if not cap.isOpened():
         log_message("CRITICAL ERROR: Could not open the system video capture stream.")
+        
     log_message("Booting up backend real-time tracking daemon thread pass...")
     threading.Thread(target=paper_tracking_daemon, daemon=True).start()
     app_phase = "running"
+    
     with open(SESSION_PATH) as f:
         data = json.load(f)
     data["time_started"] = datetime.now().strftime("%H:%M:%S")
     with open(SESSION_PATH, "w") as f:
         json.dump(data, f, indent=2)
-
 
 def save_questionnaire_responses():
     with open(SESSION_PATH) as f:
@@ -249,7 +248,6 @@ def save_questionnaire_responses():
         json.dump(data, f, indent=2)
     log_message("Questionnaire responses saved.")
 
-
 def handle_shutdown(from_button=False):
     global running
     running = False
@@ -259,7 +257,6 @@ def handle_shutdown(from_button=False):
         data["end_task_pressed"] = True
         with open(SESSION_PATH, "w") as f:
             json.dump(data, f, indent=2)
-
 
 def transform_to_projection_space(w_x, w_y):
     if tracking_matrix is None:
@@ -273,7 +270,6 @@ def transform_to_projection_space(w_x, w_y):
     p_y = center_rect.y + int((cam_y / 720.0) * center_rect.height)
     return int(p_x), int(p_y)
 
-
 def get_panel_rects():
     W = screen.get_width()
     H = screen.get_height()
@@ -283,6 +279,7 @@ def get_panel_rects():
     left_w = int(avail_w * 0.29)
     center_w = int(avail_w * 0.42)
     right_w = avail_w - left_w - center_w
+    
     x = OUTER_GAP
     left = pygame.Rect(x, panel_y, left_w, panel_h)
     x += left_w + INNER_GAP
@@ -290,7 +287,6 @@ def get_panel_rects():
     x += center_w + INNER_GAP
     right = pygame.Rect(x, panel_y, right_w, panel_h)
     return left, center, right
-
 
 def toggle_fullscreen():
     global fullscreen, WINDOW_WIDTH, WINDOW_HEIGHT, screen
@@ -300,12 +296,9 @@ def toggle_fullscreen():
         WINDOW_HEIGHT = info.current_h
         screen = pygame.display.set_mode((WINDOW_WIDTH, WINDOW_HEIGHT), pygame.FULLSCREEN | pygame.SCALED)
     else:
-        # 1920 x 1080
-        # 1280 x 720
         WINDOW_WIDTH = 1280
         WINDOW_HEIGHT = 720
         screen = pygame.display.set_mode((WINDOW_WIDTH, WINDOW_HEIGHT), pygame.RESIZABLE)
-
 
 def wrap_text(text, font, max_width):
     words = text.split(" ")
@@ -323,23 +316,25 @@ def wrap_text(text, font, max_width):
         lines.append(current)
     return lines
 
-
 def draw_top_bar(surface):
     W = surface.get_width()
     bar_rect = pygame.Rect(0, 0, W, TOP_BAR_HEIGHT)
     pygame.draw.rect(surface, COLOR_BLUE, bar_rect)
+    
     if app_phase in ("nasa_tlx", "ueq_s"):
         if app_phase == "nasa_tlx":
             page = cfg.nasa_tlx_current_page + 1
             total = 6
             title = f"NASA-TLX ({page}/{total})"
         else:
-            title = "UEQ-S"
+            title = "User Experience Questionnaire (UEQ-S)"
         text = font_large.render(f"Questionnaire: {title}", True, COLOR_WHITE)
     else:
         text = font_large.render("Place paper on the designated projection area", True, COLOR_WHITE)
+        
     text_rect = text.get_rect(center=(W // 2, TOP_BAR_HEIGHT // 2))
     surface.blit(text, text_rect)
+    
     badge_text = font_body.render(status_msg, True, COLOR_WHITE)
     pad = 10
     badge_w = badge_text.get_width() + pad * 2
@@ -350,7 +345,6 @@ def draw_top_bar(surface):
     pygame.draw.rect(surface, COLOR_WHITE, (badge_x, badge_y, badge_w, badge_h), 1)
     surface.blit(badge_text, (badge_x + pad, badge_y + (badge_h - badge_text.get_height()) // 2))
 
-
 def draw_bottom_bar(surface):
     W = surface.get_width()
     H = surface.get_height()
@@ -359,20 +353,22 @@ def draw_bottom_bar(surface):
     console = font_bold.render(f"CONSOLE LOG: {status_msg}", True, COLOR_TEXT)
     surface.blit(console, (OUTER_GAP, H - BOTTOM_BAR_HEIGHT + (BOTTOM_BAR_HEIGHT - console.get_height()) // 2))
 
-
 def draw_cartesian_plane(surface, area):
     pygame.draw.rect(surface, COLOR_WHITE, area)
     ox = area.x + area.width // 2
     oy = area.y + area.height // 2
     scale = max(1, int(min(area.width, area.height) / 14))
     grid_surf = pygame.Surface((area.width, area.height), pygame.SRCALPHA)
+    
     for x in range(ox % scale, area.x + area.width, scale):
         pygame.draw.line(grid_surf, (*COLOR_GRID, 180), (x, area.y), (x, area.y + area.height))
     for y in range(oy % scale, area.y + area.height, scale):
         pygame.draw.line(grid_surf, (*COLOR_GRID, 180), (area.x, y), (area.x + area.width, y))
+        
     surface.blit(grid_surf, (area.x, area.y))
     pygame.draw.line(surface, COLOR_TEXT, (area.x, oy), (area.x + area.width, oy), 2)
     pygame.draw.line(surface, COLOR_TEXT, (ox, area.y), (ox, area.y + area.height), 2)
+    
     clip_rect = surface.get_clip()
     surface.set_clip(area)
     for vec in active_vectors:
@@ -386,7 +382,6 @@ def draw_cartesian_plane(surface, area):
         txt = font_bold.render(label, True, COLOR_TEXT)
         surface.blit(txt, (tx + 8, ty - 4))
     surface.set_clip(clip_rect)
-
 
 def draw_dashed_rect(surface, color, rect, width, dash_len, gap_len):
     x, y, w, h = rect
@@ -402,7 +397,6 @@ def draw_dashed_rect(surface, color, rect, width, dash_len, gap_len):
     for start, end in segments:
         pygame.draw.line(surface, color, start, end, width)
 
-
 def draw_ar_overlay(surface, area, step):
     dash_len = 6
     gap_len = 4
@@ -415,7 +409,6 @@ def draw_ar_overlay(surface, area, step):
         rw = max(2, int(target[2] * area.width / 500))
         rh = max(2, int(target[3] * area.height / 500))
         draw_dashed_rect(surface, COLOR_TEXT, (rx, ry, rw, rh), 3, dash_len, gap_len)
-
 
 def draw_instruction_panel(surface, area):
     pad = 20
@@ -441,7 +434,6 @@ def draw_instruction_panel(surface, area):
     eq_rect = eq.get_rect(center=eq_card_rect.center)
     surface.blit(eq, eq_rect)
 
-
 def draw_panels(surface):
     left_rect, center_rect, right_rect = get_panel_rects()
     for rect in [left_rect, center_rect, right_rect]:
@@ -449,6 +441,7 @@ def draw_panels(surface):
         pygame.draw.rect(surface, COLOR_BLUE, rect, 3)
     draw_cartesian_plane(surface, left_rect)
     pygame.draw.rect(surface, COLOR_BLUE, left_rect, 3)
+    
     paper_margin = 10
     cam_area = pygame.Rect(
         center_rect.x + paper_margin, center_rect.y + paper_margin,
@@ -457,14 +450,17 @@ def draw_panels(surface):
     paper_aspect = 1.41
     paper_w = min(cam_area.width, int(cam_area.height * paper_aspect))
     paper_h = int(paper_w / paper_aspect)
+    
     if paper_h > cam_area.height:
         paper_h = cam_area.height
         paper_w = int(paper_h * paper_aspect)
+        
     paper_area = pygame.Rect(
         cam_area.x + (cam_area.width - paper_w) // 2,
         cam_area.y + (cam_area.height - paper_h) // 2,
         paper_w, paper_h
     )
+    
     if current_step == "secondStepLeft":
         with shared_frame_lock:
             currently_tracking = paper_detected
@@ -483,15 +479,14 @@ def draw_panels(surface):
             surface.blit(msg, msg_rect)
     else:
         draw_ar_overlay(surface, paper_area, current_step)
+        
     draw_instruction_panel(surface, right_rect)
-
 
 def draw_panels_start(surface):
     left_rect, center_rect, right_rect = get_panel_rects()
     for rect in [left_rect, center_rect, right_rect]:
         pygame.draw.rect(surface, COLOR_WHITE, rect)
         pygame.draw.rect(surface, COLOR_BLUE, rect, 3)
-
 
 def draw_start_button(surface, center_rect):
     btn_w, btn_h = 260, 70
@@ -509,7 +504,6 @@ def draw_start_button(surface, center_rect):
     text_rect = text.get_rect(center=btn_rect.center)
     surface.blit(text, text_rect)
     return btn_rect
-
 
 def draw_end_task_button(surface, center_rect):
     btn_w, btn_h = 160, 44
@@ -529,9 +523,8 @@ def draw_end_task_button(surface, center_rect):
     surface.blit(text, text_rect)
     return btn_rect
 
-
+# Main Application Loop
 running = True
-
 start_btn_rect = None
 end_btn_rect = None
 
@@ -585,6 +578,7 @@ while running:
             elif event.key == pygame.K_F11:
                 toggle_fullscreen()
 
+    # Rendering Phases
     if app_phase == "start":
         draw_top_bar(screen)
         draw_panels_start(screen)
@@ -607,6 +601,7 @@ while running:
     pygame.display.flip()
     clock.tick(60)
 
+# Graceful Shutdown Sequence
 log_message("System shutting down. Closing capture devices.")
 if os.path.exists(SESSION_PATH):
     with open(SESSION_PATH) as f:
@@ -614,7 +609,7 @@ if os.path.exists(SESSION_PATH):
     data["time_ended"] = datetime.now().strftime("%H:%M:%S")
     with open(SESSION_PATH, "w") as f:
         json.dump(data, f, indent=2)
-if 'cap' in dir() and cap is not None:
+if cap is not None:
     cap.release()
 pygame.quit()
 sys.exit()
