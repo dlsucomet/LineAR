@@ -84,7 +84,7 @@ def init_config():
             "problems": [],
         }, f, indent=2)
 
-STEP_SEQUENCE = ["firstStep", "firstStepOne", "firstStepTwo", "firstStepThree", "secondStepLeft", "secondStepRight", "thirdStepLeft", "thirdStepRight", "fourthStep", "complete"]
+STEP_SEQUENCE = ["firstStep", "firstStepOne", "firstStepTwo", "firstStepThree", "firstStepFour", "secondStepLeft", "secondStepRight", "thirdStepLeft", "thirdStepRight", "fourthStep", "complete"]
 current_step = "firstStep"
 last_ocr_time = 0
 status_msg = "System Ready. Place paper to align ArUco markers."
@@ -114,8 +114,8 @@ latest_frame = None
 pen_position = None
 pen_visible = False
 pen_click_queue = []
-pen_hsv_lower = (90, 80, 80)
-pen_hsv_upper = (130, 255, 255)
+pen_hsv_lower = (97, 68, 70)
+pen_hsv_upper = (125, 140, 149)
 pen_accel = 2.0
 pen_track_active = False
 pen_track_start = None
@@ -154,6 +154,11 @@ STEP_GUIDANCE = {
         "desc": "Review the second basis vector and its transformation.",
         "math": "L(w) = ?"
     },
+    "firstStepFour": {
+        "title": "Solve for the coefficients",
+        "desc": "Solve for the coefficients",
+        "math": "L(w) = ?"
+    },
     "secondStepLeft": {
         "title": "Transformation Property Expansion",
         "desc": "Substitute the known transformed vector definitions into your linear combination equation.",
@@ -189,17 +194,19 @@ STEP_GUIDANCE = {
 PROJECTION_REGIONS = {
     "firstStep": {},
     "firstStepOne": {
-        "one": {"left": 300, "top": 170, "width": 300, "height": 150},
-        "two": {"left": 300, "top": 170, "width": 300, "height": 150},
+        "one": {"left": 300, "top": 150, "width": 150, "height": 200},
     },
     "firstStepTwo": {
-        "one": {"left": 300, "top": 170, "width": 300, "height": 150},
-        "two": {"left": 300, "top": 170, "width": 300, "height": 150},
+        "one": {"left": 700, "top": 150, "width": 150, "height": 200},
     },
     "firstStepThree": {
-        "one": {"left": 300, "top": 170, "width": 300, "height": 150},
-        "two": {"left": 300, "top": 170, "width": 300, "height": 150},
+        "one": {"left": 1100, "top": 150, "width": 150, "height": 200},
     },
+    "firstStepFour": {
+        "one": {"left": 1100, "top": 400, "width": 100, "height": 100},
+        "one": {"left": 1100, "top": 4000, "width": 100, "height": 100},
+    },
+
     "secondStepLeft": {"one": {"left": 300, "top": 170, "width": 300, "height": 150},
                       "two": {"left": 250, "top": 570, "width": 150, "height": 100},
                       "three": {"left": 600, "top": 900, "width": 300, "height": 300},
@@ -253,6 +260,10 @@ CROP_REGIONS = {
         "two": {"left": 300, "top": 170, "width": 300, "height": 150},
     },
     "firstStepThree": {
+        "one": {"left": 300, "top": 170, "width": 300, "height": 150},
+        "two": {"left": 300, "top": 170, "width": 300, "height": 150},
+    },
+    "firstStepFour": {
         "one": {"left": 300, "top": 170, "width": 300, "height": 150},
         "two": {"left": 300, "top": 170, "width": 300, "height": 150},
     },

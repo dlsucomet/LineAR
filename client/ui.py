@@ -41,6 +41,11 @@ STEP_GUIDANCE = {
         "desc": "Review the second basis vector and its transformation.",
         "math": "L(w) = ?"
     },
+    "firstStepFour": {
+        "title": "Solve for the coefficients",
+        "desc": "Solve for the coefficients",
+        "math": "L(w) = ?"
+    },
     "secondStepLeft": {
         "title": "Transformation Property Expansion",
         "desc": "Substitute the known transformed vector definitions into your linear combination equation.",
