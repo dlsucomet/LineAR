@@ -248,7 +248,7 @@ def draw_instruction_panel(surface, area):
     bottom_limit = area.y + area.height - pad
     legend_reserve = 0
     if getattr(config.args, "mode", "") == "highlights":
-        legend_reserve = 80
+        legend_reserve = 110
         bottom_limit -= legend_reserve
     eq_card_h = max(20, min(int(70 * scale_y), bottom_limit - cy))
 
@@ -326,14 +326,14 @@ def draw_instruction_panel(surface, area):
             ((34, 197, 94),       "correct"),
             ((239, 68, 68),       "incorrect"),
         ]
-        sq = 12
-        line_h = 24
+        sq = 16
+        line_h = 32
         total_legend_h = len(legend_items) * line_h
         legend_x = cx
         legend_y = area.bottom - pad - total_legend_h
         for color, label in legend_items:
             pygame.draw.rect(surface, color, (legend_x, legend_y, sq, sq))
-            txt = font_bold.render(label, True, color)
+            txt = font_large.render(label, True, color)
             surface.blit(txt, (legend_x + sq + 6, legend_y - 2))
             legend_y += line_h
 
