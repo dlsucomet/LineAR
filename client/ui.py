@@ -275,12 +275,27 @@ def draw_instruction_panel(surface, area):
             pygame.draw.line(surf, pcol, (rx, y + total_h), (rx - 4, y + total_h), 2)
             return rx
 
-        def _text_w(txt):
-            return pf.size(txt)[0]
+        def _draw_paren(surf, x, y, h, side, width=2):
+            depth = max(6, int(h * 0.25))
+            n = 16
+            points = []
+            for i in range(n + 1):
+                t = i / n
+                py = y + t * h
+                x_off = depth * math.sin(t * math.pi)
+                if side == "left":
+                    points.append((x - x_off, py))
+                else:
+                    points.append((x + x_off, py))
+            pygame.draw.lines(surf, pcol, False, points, width)
+            return depth
 
-        def _draw_text(surf, x, y, txt):
+        def _draw_text(surf, x, y, txt, center_h=None):
             ts = pf.render(txt, True, pcol)
-            surf.blit(ts, (x, y))
+            draw_y = y
+            if center_h is not None:
+                draw_y = y + (center_h - ts.get_height()) // 2
+            surf.blit(ts, (x, draw_y))
             return x + ts.get_width()
 
         vx = cx
@@ -288,23 +303,35 @@ def draw_instruction_panel(surface, area):
         vx = _draw_text(surface, vx, vy, "Let L: R\u00b2 \u2192 R\u00b2 be a linear transformation such that")
         cy += int(24 * scale_y)
 
+        vec_h = 2 * pf.get_height() + 2
+
         vx = cx
         vy = cy
-        vx = _draw_text(surface, vx, vy, "L(")
+        vx = _draw_text(surface, vx, vy, "L", center_h=vec_h)
+        vx += _draw_paren(surface, vx, vy, vec_h, "left")
         vx = _draw_vvec(surface, vx, vy, [u_vec['x'], u_vec['y']]) + 2
-        vx = _draw_text(surface, vx, vy, ") = ")
+        vx += _draw_paren(surface, vx, vy, vec_h, "right")
+        vx = _draw_text(surface, vx, vy, " = ", center_h=vec_h)
+        vx += _draw_paren(surface, vx, vy, vec_h, "left")
         vx = _draw_vvec(surface, vx, vy, [lu[0], lu[1]]) + 2
-        vx = _draw_text(surface, vx, vy, ",  L(")
+        vx += _draw_paren(surface, vx, vy, vec_h, "right")
+        vx = _draw_text(surface, vx, vy, ",  L", center_h=vec_h)
+        vx += _draw_paren(surface, vx, vy, vec_h, "left")
         vx = _draw_vvec(surface, vx, vy, [w_vec['x'], w_vec['y']]) + 2
-        vx = _draw_text(surface, vx, vy, ") = ")
-        vx = _draw_vvec(surface, vx, vy, [lw[0], lw[1]])
+        vx += _draw_paren(surface, vx, vy, vec_h, "right")
+        vx = _draw_text(surface, vx, vy, " = ", center_h=vec_h)
+        vx += _draw_paren(surface, vx, vy, vec_h, "left")
+        vx = _draw_vvec(surface, vx, vy, [lw[0], lw[1]]) + 2
+        vx += _draw_paren(surface, vx, vy, vec_h, "right")
         cy += int(50 * scale_y)
 
         vx = cx
         vy = cy
-        vx = _draw_text(surface, vx, vy, "Find L(")
-        vx = _draw_vvec(surface, vx, vy, [v_vec['x'], v_vec['y']])
-        vx = _draw_text(surface, vx, vy, ").")
+        vx = _draw_text(surface, vx, vy, "Find L", center_h=vec_h)
+        vx += _draw_paren(surface, vx, vy, vec_h, "left")
+        vx = _draw_vvec(surface, vx, vy, [v_vec['x'], v_vec['y']]) + 2
+        vx += _draw_paren(surface, vx, vy, vec_h, "right")
+        vx = _draw_text(surface, vx, vy, ".", center_h=vec_h)
         cy += int(50 * scale_y)
 
         sep_y = int(cy)
