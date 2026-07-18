@@ -36,6 +36,8 @@ COLOR_BG = (248, 250, 252)
 COLOR_TEXT = (0, 0, 0)
 COLOR_AXIS = (0, 0, 0)
 COLOR_BLUE = (26, 58, 107)
+COLOR_COPY_BLUE = (60, 120, 200)
+COLOR_HIGHLIGHT_BLUE = (100, 170, 240)
 COLOR_GRID = (226, 232, 240)
 COLOR_WHITE = (255, 255, 255)
 COLOR_POINT_LIGHT = (100, 160, 230)
@@ -82,7 +84,7 @@ def init_config():
             "problems": [],
         }, f, indent=2)
 
-STEP_SEQUENCE = ["firstStep", "secondStepLeft", "secondStepRight", "thirdStepLeft", "thirdStepRight", "fourthStep", "complete"]
+STEP_SEQUENCE = ["firstStep", "firstStepOne", "firstStepTwo", "firstStepThree", "secondStepLeft", "secondStepRight", "thirdStepLeft", "thirdStepRight", "fourthStep", "complete"]
 current_step = "firstStep"
 last_ocr_time = 0
 status_msg = "System Ready. Place paper to align ArUco markers."
