@@ -102,15 +102,6 @@ paper_detected = False
 paper_stable_since = 0
 flip_detected = False
 
-proj_calib_matrix = None
-proj_calibrated = False
-
-CALIB_MARKER_SCREEN_POSITIONS = {
-    4: (0, 0),
-    5: (WINDOW_WIDTH - 1, 0),
-    6: (WINDOW_WIDTH - 1, WINDOW_HEIGHT - 1),
-    7: (0, WINDOW_HEIGHT - 1),
-}
 shared_frame_lock = threading.Lock()
 cap = None
 ocr_reader = None

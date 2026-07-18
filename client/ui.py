@@ -92,9 +92,6 @@ def draw_top_bar(surface):
     else:
         text = font_large.render("Place paper on the designated projection area", True, config.COLOR_WHITE)
     surface.blit(text, text.get_rect(center=(surface.get_width() // 2, config.TOP_BAR_HEIGHT // 2)))
-    if getattr(config, "proj_calibrated", False):
-        calib_text = font_body.render("CALIBRATED", True, (74, 222, 128))
-        surface.blit(calib_text, (surface.get_width() - calib_text.get_width() - 12, (config.TOP_BAR_HEIGHT - calib_text.get_height()) // 2))
 
 def draw_bottom_bar(surface, center_rect=None):
     H = surface.get_height()
@@ -323,7 +320,6 @@ def draw_projection_boxes(surface, center):
     with config.shared_frame_lock:
         tracking = config.paper_detected
         track_mat = config.tracking_matrix
-        calib_mat = config.proj_calib_matrix
 
     highlight_step = config.current_step
     if config.feedback_timer > 0 and config.feedback_step:
@@ -333,8 +329,8 @@ def draw_projection_boxes(surface, center):
         if tracking:
             if config.args.mode == "highlights":
                 for _, box in config.PROJECTION_REGIONS[highlight_step].items():
-                    tl = transform_to_projection_space(box["left"], box["top"], center, track_mat, calib_mat)
-                    br = transform_to_projection_space(box["left"] + box["width"], box["top"] + box["height"], center, track_mat, calib_mat)
+                    tl = transform_to_projection_space(box["left"], box["top"], center, track_mat)
+                    br = transform_to_projection_space(box["left"] + box["width"], box["top"] + box["height"], center, track_mat)
                     if tl and br:
                         pygame.draw.rect(surface, config.COLOR_BLUE, (tl[0], tl[1], br[0]-tl[0], br[1]-tl[1]))
         else:
@@ -345,8 +341,8 @@ def draw_projection_boxes(surface, center):
         if tracking:
             feedback_color = (34, 197, 94) if config.feedback_state == "green" else (239, 68, 68)
             for _, box in config.CROP_REGIONS[config.feedback_step].items():
-                tl = transform_to_projection_space(box["left"], box["top"], center, track_mat, calib_mat)
-                br = transform_to_projection_space(box["left"] + box["width"], box["top"] + box["height"], center, track_mat, calib_mat)
+                tl = transform_to_projection_space(box["left"], box["top"], center, track_mat)
+                br = transform_to_projection_space(box["left"] + box["width"], box["top"] + box["height"], center, track_mat)
                 if tl and br:
                     pygame.draw.rect(surface, feedback_color, (tl[0], tl[1], br[0]-tl[0], br[1]-tl[1]))
 

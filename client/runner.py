@@ -195,8 +195,6 @@ def main(mode):
     config.feedback_timer = 0
     config.is_processing = False
     config.debug_preview = False
-    config.proj_calib_matrix = None
-    config.proj_calibrated = False
     config.nasa_tlx_responses = [None] * 6
     config.ueq_s_responses = [None] * 8
     config.nasa_tlx_current_page = 0

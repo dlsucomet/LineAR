@@ -59,16 +59,7 @@ active_vectors = [
 warped_document = None
 tracking_matrix = None
 paper_detected = False
-proj_calib_matrix = None
-proj_calibrated = False
 shared_frame_lock = threading.Lock()
-
-CALIB_MARKER_SCREEN_POSITIONS = {
-    4: (0, 0),
-    5: (WINDOW_WIDTH - 1, 0),
-    6: (WINDOW_WIDTH - 1, WINDOW_HEIGHT - 1),
-    7: (0, WINDOW_HEIGHT - 1),
-}
 fullscreen = False
 app_phase = "start"
 
@@ -141,7 +132,7 @@ CROP_REGIONS = {
 
 
 def paper_tracking_daemon():
-    global tracking_matrix, paper_detected, warped_document, proj_calib_matrix, proj_calibrated
+    global tracking_matrix, paper_detected, warped_document
     aruco_dict = cv2.aruco.getPredefinedDictionary(cv2.aruco.DICT_4X4_50)
     aruco_params = cv2.aruco.DetectorParameters()
     detector = cv2.aruco.ArucoDetector(aruco_dict, aruco_params)
@@ -155,16 +146,6 @@ def paper_tracking_daemon():
         corners, ids, _ = detector.detectMarkers(frame)
         if ids is not None and len(ids) >= 4:
             corner_map = {int(ids[i][0]): corners[i][0] for i in range(len(ids))}
-
-            # Calibration: detect surface markers 4-7 (independent of paper tracking)
-            calib_ids = [4, 5, 6, 7]
-            if all(k in corner_map for k in calib_ids):
-                calib_src = np.array([corner_map[k][0] for k in calib_ids], dtype="float32")
-                calib_dst = np.array([CALIB_MARKER_SCREEN_POSITIONS[k] for k in calib_ids], dtype="float32")
-                calib_M, _ = cv2.findHomography(calib_src, calib_dst)
-                with shared_frame_lock:
-                    proj_calib_matrix = calib_M
-                    proj_calibrated = True
 
             # Paper tracking: detect paper markers 0-3
             if all(k in corner_map for k in [0, 1, 2, 3]):
@@ -287,14 +268,6 @@ def transform_to_projection_space(w_x, w_y):
     transformed = cv2.perspectiveTransform(src_point, tracking_matrix)
     cam_x = transformed[0][0][0]
     cam_y = transformed[0][0][1]
-    if proj_calib_matrix is not None:
-        cam_pt = np.array([[[cam_x, cam_y]]], dtype="float32")
-        screen_pt = cv2.perspectiveTransform(cam_pt, proj_calib_matrix)
-        calib_x, calib_y = screen_pt[0][0][0], screen_pt[0][0][1]
-        _, center_rect, _ = get_panel_rects()
-        p_x = center_rect.x + int((calib_x / WINDOW_WIDTH) * center_rect.width)
-        p_y = center_rect.y + int((calib_y / WINDOW_HEIGHT) * center_rect.height)
-        return int(p_x), int(p_y)
     _, center_rect, _ = get_panel_rects()
     p_x = center_rect.x + int((cam_x / 1280.0) * center_rect.width)
     p_y = center_rect.y + int((cam_y / 720.0) * center_rect.height)
@@ -375,10 +348,6 @@ def draw_top_bar(surface):
     badge_y = (TOP_BAR_HEIGHT - badge_h) // 2
     pygame.draw.rect(surface, COLOR_TEXT, (badge_x, badge_y, badge_w, badge_h))
     pygame.draw.rect(surface, COLOR_WHITE, (badge_x, badge_y, badge_w, badge_h), 1)
-    if proj_calibrated:
-        calib_text = font_body.render("CALIBRATED", True, (74, 222, 128))
-        calib_x = badge_x - calib_text.get_width() - 10
-        surface.blit(calib_text, (calib_x, (TOP_BAR_HEIGHT - calib_text.get_height()) // 2))
     surface.blit(badge_text, (badge_x + pad, badge_y + (badge_h - badge_text.get_height()) // 2))
 
 
