@@ -115,8 +115,8 @@ latest_frame = None
 pen_position = None
 pen_visible = False
 pen_click_queue = []
-pen_hsv_lower = (97, 68, 70)
-pen_hsv_upper = (125, 140, 149)
+pen_hsv_lower = (98, 61, 87)
+pen_hsv_upper = (125, 142, 153)
 pen_accel = 2.0
 pen_track_active = False
 pen_track_start = None
@@ -195,38 +195,36 @@ STEP_GUIDANCE = {
 PROJECTION_REGIONS = {
     "firstStep": {},
     "firstStepOne": {
-        "one": {"left": 300, "top": 150, "width": 150, "height": 200},
+        "one": {"left": 100, "top": 200, "width": 300, "height": 200},
     },
     "firstStepTwo": {
-        "one": {"left": 700, "top": 150, "width": 150, "height": 200},
+        "one": {"left": 600, "top": 200, "width": 300, "height": 200},
     },
     "firstStepThree": {
-        "one": {"left": 1100, "top": 150, "width": 150, "height": 200},
+        "one": {"left": 1100, "top": 200, "width": 300, "height": 200},
     },
     "firstStepFour": {
-        "one": {"left": 1100, "top": 400, "width": 100, "height": 100},
-        "one": {"left": 1100, "top": 4000, "width": 100, "height": 100},
+        "one": {"left": 1800, "top": 750, "width": 250, "height": 150},
+        "two": {"left": 2400, "top": 750, "width": 250, "height": 150},
     },
-
-    "secondStepLeft": {"one": {"left": 300, "top": 170, "width": 300, "height": 150},
-                      "two": {"left": 250, "top": 570, "width": 150, "height": 100},
-                      "three": {"left": 600, "top": 900, "width": 300, "height": 300},
-                      "four": {"left": 300, "top": 1000, "width": 150, "height": 100}
+    "secondStepLeft": {"one": {"left": 1800, "top": 750, "width": 250, "height": 150},
+                      "two": {"left": 600, "top": 1300, "width": 250, "height": 150},
+                      "three": {"left": 900, "top": 1200, "width": 300, "height": 300},
                       },
-    "secondStepRight": {"one": {"left": 1800, "top": 120, "width": 300, "height": 150},
-                      "two": {"left": 250, "top": 650, "width": 150, "height": 100},
-                      "three": {"left": 1800, "top": 900, "width": 300, "height": 300},
-                      "four": {"left": 1500, "top": 1000, "width": 150, "height": 100}},
+    "secondStepRight": {"one": {"left": 2400, "top": 750, "width": 250, "height": 150},
+                      "two": {"left": 1500, "top": 1300, "width": 250, "height": 150},
+                      "three": {"left": 1800, "top": 1200, "width": 300, "height": 300},
+                      },
     "thirdStepLeft": {
-        "one": {"left": 300, "top": 900, "width": 700, "height": 300},
-        "two": {"left": 300, "top": 1600, "width": 300, "height": 300}
+        "one": {"left": 600, "top": 1200, "width": 700, "height": 300},
+        "two": {"left": 300, "top": 1800, "width": 300, "height": 300}
     },
     "thirdStepRight": {
-        "one": {"left": 1500, "top": 900, "width": 700, "height": 300},
-        "two": {"left": 800, "top": 1600, "width": 300, "height": 300}
+        "one": {"left": 1500, "top": 1200, "width": 700, "height": 300},
+        "two": {"left": 800, "top": 1800, "width": 300, "height": 300}
     },
     "fourthStep": {
-        "one": {"left": 300, "top": 1600, "width": 2000, "height": 300},
+        "one": {"left": 300, "top": 1700, "width": 2000, "height": 300},
         "two": {"left": 300, "top": 2350, "width": 300, "height": 300}
     }
 }
@@ -249,30 +247,16 @@ _questionnaire_ueq_title_bottom = 0
 
 # "one": {"top": 940, "left": 150, "width": 1000, "height": 200}
 CROP_REGIONS = {
-    "firstStep": {"one": {"top": 100, "left": 350, "width": 1000, "height": 500},
-                  "two": {"top": 100, "left": 350, "width": 1000, "height": 500}
-    },
-    "firstStepOne": {
-        "one": {"left": 300, "top": 170, "width": 300, "height": 150},
-        "two": {"left": 300, "top": 170, "width": 300, "height": 150},
-    },
-    "firstStepTwo": {
-        "one": {"left": 300, "top": 170, "width": 300, "height": 150},
-        "two": {"left": 300, "top": 170, "width": 300, "height": 150},
-    },
-    "firstStepThree": {
-        "one": {"left": 300, "top": 170, "width": 300, "height": 150},
-        "two": {"left": 300, "top": 170, "width": 300, "height": 150},
-    },
-    "firstStepFour": {
-        "one": {"left": 300, "top": 170, "width": 300, "height": 150},
-        "two": {"left": 300, "top": 170, "width": 300, "height": 150},
-    },
-    "secondStepLeft": {"one": {"top": 1030, "left": 220, "width": 1500, "height": 400}},
-    "secondStepRight": {"one": {"top": 1030, "left": 220, "width": 1500, "height": 400}},
-    "thirdStepLeft": {"one": {"top": 1530, "left": 220, "width": 1500, "height": 400}},
-    "thirdStepRight": {"one": {"top": 1530, "left": 220, "width": 1500, "height": 400}},
-    "fourthStep": {"one": {"top": 1930, "left": 220, "width": 1500, "height": 400}},
+    "firstStep": {},
+    "firstStepOne": {"one": {"top": 270, "left": 220, "width": 1700, "height": 750}},
+    "firstStepTwo": {"one": {"top": 270, "left": 220, "width": 1700, "height": 750}},
+    "firstStepThree": {"one": {"top": 270, "left": 220, "width": 1700, "height": 750}},
+    "firstStepFour": {"one": {"top": 270, "left": 220, "width": 1700, "height": 750}},
+    "secondStepLeft": {"one": {"top": 1030, "left": 220, "width": 1700, "height": 400}},
+    "secondStepRight": {"one": {"top": 1030, "left": 220, "width": 1700, "height": 400}},
+    "thirdStepLeft": {"one": {"top": 1530, "left": 220, "width": 1700, "height": 400}},
+    "thirdStepRight": {"one": {"top": 1530, "left": 220, "width": 1700, "height": 400}},
+    "fourthStep": {"one": {"top": 1930, "left": 220, "width": 1700, "height": 400}},
 }
 
 def get_panel_rects(surface_width, surface_height):
