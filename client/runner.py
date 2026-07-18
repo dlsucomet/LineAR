@@ -22,6 +22,8 @@ import cv2
 import sys
 import os
 import time
+import fcntl
+import struct
 import json
 import warnings
 import threading
@@ -212,7 +214,30 @@ def main(mode):
     ui._init_fonts()
 
     log_message("Initializing hardware camera capture access...")
-    config.cap = cv2.VideoCapture('/dev/video0')  # REDRAGON 1080p via device path
+    camera_device = None
+    for i in range(8):
+        dev = f'/dev/video{i}'
+        if not os.path.exists(dev):
+            continue
+        try:
+            fd = os.open(dev, os.O_RDWR | os.O_NONBLOCK)
+            buf = bytearray(108)
+            fcntl.ioctl(fd, 0x80685600, buf)  # VIDIOC_QUERYCAP
+            card = buf[16:48].split(b'\x00')[0].decode()
+            device_caps = struct.unpack_from('I', buf, 88)[0]
+            os.close(fd)
+            if "REDRAGON" in card.upper() and (device_caps & 0x00000001):
+                camera_device = dev
+                break
+        except Exception:
+            continue
+
+    if camera_device:
+        config.cap = cv2.VideoCapture(camera_device)
+        log_message(f"Found REDRAGON camera at {camera_device}")
+    else:
+        config.cap = cv2.VideoCapture(0)
+        log_message("REDRAGON not found, falling back to default camera")
     config.cap.set(cv2.CAP_PROP_FRAME_WIDTH, 1920)
     config.cap.set(cv2.CAP_PROP_FRAME_HEIGHT, 1080)
     if not config.cap.isOpened():
