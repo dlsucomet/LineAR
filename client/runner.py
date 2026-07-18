@@ -378,6 +378,8 @@ def main(mode):
                     debug_simulate_correct()
                 elif event.key == pygame.K_r and config.debug_mode:
                     debug_simulate_incorrect()
+                elif event.key == pygame.K_n and config.debug_mode:
+                    advance_debug_state()
                 elif (
                     event.key == pygame.K_p
                     and config.debug_mode

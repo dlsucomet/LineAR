@@ -82,7 +82,7 @@ def init_config():
             "problems": [],
         }, f, indent=2)
 
-STEP_SEQUENCE = ["firstStep", "secondStepLeft", "secondStepRight", "thirdStepLeft", "thirdStepRight", "fourthStep", "complete"]
+STEP_SEQUENCE = ["firstStep", "firstStepOne", "firstStepTwo", "firstStepThree", "secondStepLeft", "secondStepRight", "thirdStepLeft", "thirdStepRight", "fourthStep", "complete"]
 current_step = "firstStep"
 last_ocr_time = 0
 status_msg = "System Ready. Place paper to align ArUco markers."

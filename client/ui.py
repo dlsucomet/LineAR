@@ -26,6 +26,21 @@ STEP_GUIDANCE = {
         "desc": "Express the input vector as a linear combination of the given basis vectors.",
         "math": "L(c1*v1 + c2*v2) = c1*L(v1) + c2*L(v2)"
     },
+    "firstStepOne": {
+        "title": "Identify the Target",
+        "desc": "The vector you need to find is highlighted below.",
+        "math": "L(v) = ?"
+    },
+    "firstStepTwo": {
+        "title": "First Basis Vector",
+        "desc": "Review the first basis vector and its transformation.",
+        "math": "L(u) = ?"
+    },
+    "firstStepThree": {
+        "title": "Second Basis Vector",
+        "desc": "Review the second basis vector and its transformation.",
+        "math": "L(w) = ?"
+    },
     "secondStepLeft": {
         "title": "Transformation Property Expansion",
         "desc": "Substitute the known transformed vector definitions into your linear combination equation.",
@@ -255,7 +270,7 @@ def draw_instruction_panel(surface, area):
         pf = font_medium
         pcol = config.COLOR_TEXT
 
-        def _draw_vvec(surf, x, y, vals):
+        def _draw_vvec(surf, x, y, vals, colors=None):
             strs = [str(vals[0]), str(vals[1])]
             rh = pf.get_height()
             mw_v = max(pf.size(s)[0] for s in strs)
@@ -268,7 +283,14 @@ def draw_instruction_panel(surface, area):
             tx = bx + 6
             for i, s in enumerate(strs):
                 ts = pf.render(s, True, pcol)
-                surf.blit(ts, (tx + (mw_v - ts.get_width()) // 2, y + i * (rh + gap)))
+                text_x = tx + (mw_v - ts.get_width()) // 2
+                text_y = y + i * (rh + gap)
+                if colors and i < len(colors) and colors[i]:
+                    pad = 3
+                    bg_rect = pygame.Rect(text_x - pad, text_y - pad,
+                                          ts.get_width() + pad * 2, ts.get_height() + pad * 2)
+                    pygame.draw.rect(surf, colors[i], bg_rect, border_radius=3)
+                surf.blit(ts, (text_x, text_y))
             rx = tx + mw_v + 6
             pygame.draw.line(surf, pcol, (rx, y), (rx, y + total_h), 2)
             pygame.draw.line(surf, pcol, (rx, y), (rx - 4, y), 2)
@@ -305,34 +327,39 @@ def draw_instruction_panel(surface, area):
 
         vec_h = 2 * pf.get_height() + 2
 
+        step_colors = {None: None, "firstStep": None, "firstStepOne": [config.COLOR_BLUE, config.COLOR_POINT_LIGHT], "firstStepTwo": [config.COLOR_BLUE, config.COLOR_POINT_LIGHT], "firstStepThree": [config.COLOR_BLUE, config.COLOR_POINT_LIGHT]}
+        hl_u = step_colors.get(current_step)
+        hl_w = step_colors.get(current_step) if current_step == "firstStepThree" else None
+        hl_v = step_colors.get(current_step) if current_step == "firstStepOne" else None
+
         vx = cx
         vy = cy
         vx = _draw_text(surface, vx, vy, "L", center_h=vec_h)
         vx += 16
         _draw_paren(surface, vx, vy, vec_h, "left")
         vx += 10
-        vx = _draw_vvec(surface, vx, vy, [u_vec['x'], u_vec['y']]) + 10
+        vx = _draw_vvec(surface, vx, vy, [u_vec['x'], u_vec['y']], colors=hl_u) + 10
         vx += _draw_paren(surface, vx, vy, vec_h, "right")
         vx += 16
         vx = _draw_text(surface, vx, vy, " = ", center_h=vec_h)
         vx += 16
         _draw_paren(surface, vx, vy, vec_h, "left")
         vx += 10
-        vx = _draw_vvec(surface, vx, vy, [lu[0], lu[1]]) + 10
+        vx = _draw_vvec(surface, vx, vy, [lu[0], lu[1]], colors=hl_u) + 10
         vx += _draw_paren(surface, vx, vy, vec_h, "right")
         vx += 16
         vx = _draw_text(surface, vx, vy, ",  L", center_h=vec_h)
         vx += 16
         _draw_paren(surface, vx, vy, vec_h, "left")
         vx += 10
-        vx = _draw_vvec(surface, vx, vy, [w_vec['x'], w_vec['y']]) + 10
+        vx = _draw_vvec(surface, vx, vy, [w_vec['x'], w_vec['y']], colors=hl_w) + 10
         vx += _draw_paren(surface, vx, vy, vec_h, "right")
         vx += 16
         vx = _draw_text(surface, vx, vy, " = ", center_h=vec_h)
         vx += 16
         _draw_paren(surface, vx, vy, vec_h, "left")
         vx += 10
-        vx = _draw_vvec(surface, vx, vy, [lw[0], lw[1]]) + 10
+        vx = _draw_vvec(surface, vx, vy, [lw[0], lw[1]], colors=hl_w) + 10
         vx += _draw_paren(surface, vx, vy, vec_h, "right")
         cy += int(50 * scale_y)
 
@@ -342,7 +369,7 @@ def draw_instruction_panel(surface, area):
         vx += 16
         _draw_paren(surface, vx, vy, vec_h, "left")
         vx += 10
-        vx = _draw_vvec(surface, vx, vy, [v_vec['x'], v_vec['y']]) + 10
+        vx = _draw_vvec(surface, vx, vy, [v_vec['x'], v_vec['y']], colors=hl_v) + 10
         vx += _draw_paren(surface, vx, vy, vec_h, "right")
         vx += 16
         vx = _draw_text(surface, vx, vy, ".", center_h=vec_h)
