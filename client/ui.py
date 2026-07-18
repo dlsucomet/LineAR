@@ -328,9 +328,9 @@ def draw_instruction_panel(surface, area):
         vec_h = 2 * pf.get_height() + 2
 
         step_colors = {None: None, "firstStep": None, "firstStepOne": [config.COLOR_BLUE, config.COLOR_POINT_LIGHT], "firstStepTwo": [config.COLOR_BLUE, config.COLOR_POINT_LIGHT], "firstStepThree": [config.COLOR_BLUE, config.COLOR_POINT_LIGHT]}
-        hl_u = step_colors.get(current_step)
-        hl_w = step_colors.get(current_step) if current_step == "firstStepThree" else None
-        hl_v = step_colors.get(current_step) if current_step == "firstStepOne" else None
+        hl_u = step_colors.get(config.current_step)
+        hl_w = step_colors.get(config.current_step) if config.current_step == "firstStepThree" else None
+        hl_v = step_colors.get(config.current_step) if config.current_step == "firstStepOne" else None
 
         vx = cx
         vy = cy
