@@ -28,7 +28,6 @@ def paper_tracking_daemon():
     last_matrix = None
     last_src_pts = None
     smoothed_tracking = None
-    smoothed_calib = None
     ema_alpha = 0.3
     last_capture_time = 0
     STABILITY_PIXEL_TOLERANCE = 3.0  # max per-corner movement (px) to still count as "stable"
@@ -121,9 +120,6 @@ def paper_tracking_daemon():
             if last_state:
                 log_message("Tracking Lock Lost: Target sheet missing or occluded.")
                 last_state = False
-        if last_calib_state:
-            log_message("Calibration Lock Lost: fewer than 4 ArUco markers visible.")
-            last_calib_state = False
 
 def detect_content_bands(warped_img):
     gray = cv2.cvtColor(warped_img, cv2.COLOR_BGR2GRAY)
