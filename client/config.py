@@ -181,11 +181,11 @@ CROP_REGIONS = {
     "firstStep": {"one": {"top": 100, "left": 350, "width": 1000, "height": 500},
                   "two": {"top": 100, "left": 350, "width": 1000, "height": 500}
     },
-    "secondStepLeft": {"one": {"top": 100, "left": 350, "width": 1000, "height": 500}},
-    "secondStepRight": {"one": {"top": 820, "left": 250, "width": 1000, "height": 200}},
-    "thirdStepLeft": {"one": {"top": 900, "left": 500, "width": 180, "height": 380}},
-    "thirdStepRight": {"one": {"top": 900, "left": 1100, "width": 180, "height": 180}},
-    "thirdStep": {"one": {"top": 1300, "left": 700, "width": 180, "height": 380}},
+    "firstStepLeft": {"one": {"top": 1030, "left": 220, "width": 1500, "height": 400}},
+    "firstStepRight": {"one": {"top": 1030, "left": 220, "width": 1500, "height": 400}},
+    "secondStepLeft": {"one": {"top": 1530, "left": 220, "width": 1500, "height": 400}},
+    "secondStepRight": {"one": {"top": 1530, "left": 220, "width": 1500, "height": 400}},
+    "thirdStep": {"one": {"top": 1930, "left": 220, "width": 1500, "height": 400}},
 }
 
 def get_panel_rects(surface_width, surface_height):
