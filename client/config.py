@@ -143,7 +143,10 @@ PROJECTION_REGIONS = {
                       "three": {"left": 800, "top": 1200, "width": 500, "height": 300},
                       "four": {"left": 400, "top": 1250, "width": 300, "height": 150}
                       },
-    "firstStepRight": {"one": {"left": 550, "top": 300, "width": 120, "height": 60}},
+    "firstStepRight": {"one": {"left": 500, "top": 300, "width": 500, "height": 300},
+                      "two": {"left": 400, "top": 800, "width": 300, "height": 150},
+                      "three": {"left": 800, "top": 1200, "width": 500, "height": 300},
+                      "four": {"left": 400, "top": 1250, "width": 300, "height": 150}},
     "secondStepLeft": {
         "one": {"left": 300, "top": 500, "width": 110, "height": 210},
         "two": {"left": 450, "top": 480, "width": 110, "height": 210}
@@ -152,7 +155,10 @@ PROJECTION_REGIONS = {
         "one": {"left": 600, "top": 500, "width": 110, "height": 110},
         "two": {"left": 735, "top": 480, "width": 110, "height": 210}
     },
-    "thirdStep": {"one": {"left": 400, "top": 700, "width": 250, "height": 210}}
+    "thirdStep": {
+        "one": {"left": 300, "top": 500, "width": 110, "height": 210},
+        "two": {"left": 450, "top": 480, "width": 110, "height": 210}
+    }
 }
 
 problem_loaded = False
@@ -178,15 +184,9 @@ _questionnaire_ueq_title_bottom = 0
 CROP_REGIONS = {
     "firstStepLeft": {"one": {"top": 1100, "left": 350, "width": 1800, "height": 440}},
     "firstStepRight": {"one": {"top": 820, "left": 250, "width": 1000, "height": 200}},
-    "secondStepLeft": {
-        "one": {"top": 900, "left": 500, "width": 180, "height": 380},
-        "two": {"top": 860, "left": 800, "width": 180, "height": 380}
-    },
-    "secondStepRight": {
-        "one": {"top": 900, "left": 1100, "width": 180, "height": 180},
-        "two": {"top": 860, "left": 1370, "width": 180, "height": 380}
-    },
-    "thirdStep": {"one": {"top": 1300, "left": 700, "width": 180, "height": 380}}
+    "secondStepLeft": {"one": {"top": 900, "left": 500, "width": 180, "height": 380}},
+    "secondStepRight": {"one": {"top": 900, "left": 1100, "width": 180, "height": 180}},
+    "thirdStep": {"one": {"top": 1300, "left": 700, "width": 180, "height": 380}},
 }
 
 def get_panel_rects(surface_width, surface_height):
