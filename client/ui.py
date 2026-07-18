@@ -248,19 +248,63 @@ def draw_instruction_panel(surface, area):
         lu = config.expected_answers.get("firstStepRight", ["?", "?"])
         lw = config.expected_answers.get("secondStepRight", ["?", "?"])
 
-        header_surf = font_bold.render("Problem:", True, config.COLOR_TEXT)
+        header_surf = font_large.render("Problem:", True, config.COLOR_TEXT)
         surface.blit(header_surf, (cx, cy))
-        cy += int(22 * scale_y)
+        cy += int(36 * scale_y)
 
-        problem_text = (
-            f"Let L: R\u00b2 \u2192 R\u00b2 be a linear transformation such that "
-            f"L([{u_vec['x']} {u_vec['y']}]) = [{lu[0]} {lu[1]}], "
-            f"L([{w_vec['x']} {w_vec['y']}]) = [{lw[0]} {lw[1]}]. "
-            f"Find L([{v_vec['x']} {v_vec['y']}])."
-        )
-        for line in wrap_text(problem_text, font_body, mw):
-            surface.blit(font_body.render(line, True, config.COLOR_TEXT), (cx, cy))
-            cy += int(20 * scale_y)
+        pf = font_medium
+        pcol = config.COLOR_TEXT
+
+        def _draw_vvec(surf, x, y, vals):
+            strs = [str(vals[0]), str(vals[1])]
+            rh = pf.get_height()
+            mw_v = max(pf.size(s)[0] for s in strs)
+            gap = 2
+            total_h = 2 * rh + gap
+            bx = x
+            pygame.draw.line(surf, pcol, (bx, y), (bx, y + total_h), 2)
+            pygame.draw.line(surf, pcol, (bx, y), (bx + 4, y), 2)
+            pygame.draw.line(surf, pcol, (bx, y + total_h), (bx + 4, y + total_h), 2)
+            tx = bx + 6
+            for i, s in enumerate(strs):
+                ts = pf.render(s, True, pcol)
+                surf.blit(ts, (tx + (mw_v - ts.get_width()) // 2, y + i * (rh + gap)))
+            rx = tx + mw_v + 6
+            pygame.draw.line(surf, pcol, (rx, y), (rx, y + total_h), 2)
+            pygame.draw.line(surf, pcol, (rx, y), (rx - 4, y), 2)
+            pygame.draw.line(surf, pcol, (rx, y + total_h), (rx - 4, y + total_h), 2)
+            return rx
+
+        def _text_w(txt):
+            return pf.size(txt)[0]
+
+        def _draw_text(surf, x, y, txt):
+            ts = pf.render(txt, True, pcol)
+            surf.blit(ts, (x, y))
+            return x + ts.get_width()
+
+        vx = cx
+        vy = cy
+        vx = _draw_text(surface, vx, vy, "Let L: R\u00b2 \u2192 R\u00b2 be a linear transformation such that")
+        cy += int(24 * scale_y)
+
+        vx = cx
+        vy = cy
+        vx = _draw_text(surface, vx, vy, "L(")
+        vx = _draw_vvec(surface, vx, vy, [u_vec['x'], u_vec['y']]) + 2
+        vx = _draw_text(surface, vx, vy, ") = ")
+        vx = _draw_vvec(surface, vx, vy, [lu[0], lu[1]]) + 2
+        vx = _draw_text(surface, vx, vy, ",  L(")
+        vx = _draw_vvec(surface, vx, vy, [w_vec['x'], w_vec['y']]) + 2
+        vx = _draw_text(surface, vx, vy, ") = ")
+        vx = _draw_vvec(surface, vx, vy, [lw[0], lw[1]])
+        cy += int(24 * scale_y)
+
+        vx = cx
+        vy = cy
+        vx = _draw_text(surface, vx, vy, "Find L(")
+        vx = _draw_vvec(surface, vx, vy, [v_vec['x'], v_vec['y']])
+        vx = _draw_text(surface, vx, vy, ").")
         cy += int(10 * scale_y)
 
         sep_y = int(cy)
