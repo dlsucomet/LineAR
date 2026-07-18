@@ -36,6 +36,8 @@ COLOR_AXIS = (0, 0, 0)
 COLOR_BLUE = (26, 58, 107)
 COLOR_GRID = (226, 232, 240)
 COLOR_WHITE = (255, 255, 255)
+COLOR_POINT_LIGHT = (100, 160, 230)
+COLOR_POINT_DARK = (26, 58, 107)
 
 BASE_DIR = os.path.dirname(os.path.abspath(__file__))
 LOGS_DIR = os.path.join(BASE_DIR, "logs")

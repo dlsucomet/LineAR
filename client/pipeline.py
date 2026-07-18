@@ -202,13 +202,14 @@ def scan_qr_from_camera():
 
         if len(vals) >= 12:
             config.active_vectors = [
-                {"x": vals[0], "y": vals[1], "label": "u"},
-                {"x": vals[4], "y": vals[5], "label": "w"},
+                {"x": vals[0], "y": vals[1], "label": "u", "show_at": "firstStepLeft"},
+                {"x": vals[4], "y": vals[5], "label": "w", "show_at": "firstStepLeft"},
+                {"x": vals[8], "y": vals[9], "label": "v", "type": "point", "show_at": "firstStepLeft"},
             ]
 
-            tx, ty = vals[8], vals[9]
+            tx, ty = vals[10], vals[11]
             config.target_vector = (tx, ty)
-            config.active_vectors.append({"x": tx, "y": ty, "label": "L(v)"})
+            config.active_vectors.append({"x": tx, "y": ty, "label": "L(v)", "type": "point", "show_at": "complete"})
 
             config.expected_answers = {
                 "firstStepLeft": [str(vals[0]), str(vals[1])],
@@ -283,13 +284,14 @@ def ocr_problem_data():
             
             if len(vals) >= 12:
                 config.active_vectors = [
-                    {"x": vals[0], "y": vals[1], "label": "u"},
-                    {"x": vals[4], "y": vals[5], "label": "w"},
+                    {"x": vals[0], "y": vals[1], "label": "u", "show_at": "firstStepLeft"},
+                    {"x": vals[4], "y": vals[5], "label": "w", "show_at": "firstStepLeft"},
+                    {"x": vals[8], "y": vals[9], "label": "v", "type": "point", "show_at": "firstStepLeft"},
                 ]
                 
-                tx, ty = vals[8], vals[9]
+                tx, ty = vals[10], vals[11]
                 config.target_vector = (tx, ty)
-                config.active_vectors.append({"x": tx, "y": ty, "label": "L(v)"})
+                config.active_vectors.append({"x": tx, "y": ty, "label": "L(v)", "type": "point", "show_at": "complete"})
                 
                 config.expected_answers = {
                     "firstStepLeft": [str(vals[0]), str(vals[1])],    

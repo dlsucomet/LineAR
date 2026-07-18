@@ -149,7 +149,24 @@ def draw_cartesian_plane(surface, area):
         bounce_offset = int(amplitude * math.sin(config.feedback_timer * frequency) * (config.feedback_timer / 60.0))
         ox += bounce_offset
         oy -= bounce_offset  
+    step_order = config.STEP_SEQUENCE
+    current_idx = step_order.index(config.current_step) if config.current_step in step_order else 0
     scale = max(1, int(min(area.width, area.height) / 14))
+
+    max_extent = 0
+    for vec in config.active_vectors:
+        vec_idx = step_order.index(vec.get("show_at", "firstStepLeft"))
+        if vec_idx > current_idx:
+            continue
+        max_extent = max(max_extent, abs(vec["x"]), abs(vec["y"]))
+    if config.current_step == "complete" and config.target_vector:
+        tx, ty = config.target_vector
+        max_extent = max(max_extent, abs(tx), abs(ty))
+    if max_extent > 0:
+        half_area = min(area.width, area.height) / 2
+        fit_scale = max(1, int(half_area / (max_extent + 5)))
+        scale = min(scale, fit_scale)
+
     grid_surf = pygame.Surface((area.width, area.height), pygame.SRCALPHA)
     
     for x in range(ox % scale, area.x + area.width, scale):
@@ -164,27 +181,52 @@ def draw_cartesian_plane(surface, area):
     pygame.draw.line(surface, config.COLOR_TEXT, (ox, area.y), (ox, area.y + area.height), 2)
     clip_rect = surface.get_clip()
     surface.set_clip(area)
+
+    v_vec = next((v for v in config.active_vectors if v.get("type") == "point" and v["label"] == "v"), None)
+    v_px = ox + int(v_vec["x"] * scale) if v_vec else ox
+    v_py = oy - int(v_vec["y"] * scale) if v_vec else oy
+
     for vec in config.active_vectors:
-        tx, ty = ox + int(vec["x"] * scale), oy - int(vec["y"] * scale)
-        if area.x <= tx <= area.x + area.width and area.y <= ty <= area.y + area.height:
-            pygame.draw.line(surface, config.COLOR_TEXT, (ox, oy), (tx, ty), 4)
-            angle = math.atan2(oy - ty, tx - ox)
-            arrow_len = 14
-            arrow_w = 6
-            base_lx = tx - arrow_len * math.cos(angle) + arrow_w * math.sin(angle)
-            base_ly = ty + arrow_len * math.sin(angle) + arrow_w * math.cos(angle)
-            base_rx = tx - arrow_len * math.cos(angle) - arrow_w * math.sin(angle)
-            base_ry = ty + arrow_len * math.sin(angle) - arrow_w * math.cos(angle)
-            pygame.draw.polygon(surface, config.COLOR_TEXT, [
-                (tx, ty),
-                (int(base_lx), int(base_ly)),
-                (int(base_rx), int(base_ry))
-            ])
-            surface.blit(font_bold.render(f'{vec["label"]} ({vec["x"]},{vec["y"]})', True, config.COLOR_TEXT), (tx + 16, ty - 4))
+        vec_idx = step_order.index(vec.get("show_at", "firstStepLeft"))
+        if vec_idx > current_idx:
+            continue
+
+        if vec.get("type") == "point":
+            if vec["label"] == "v":
+                color = config.COLOR_POINT_LIGHT
+                tx, ty = ox + int(vec["x"] * scale), oy - int(vec["y"] * scale)
+            elif vec["label"] == "L(v)":
+                prog = getattr(config, "transformation_progress", 0.0)
+                final_tx = ox + int(vec["x"] * scale)
+                final_ty = oy - int(vec["y"] * scale)
+                tx = int(v_px + (final_tx - v_px) * prog)
+                ty = int(v_py + (final_ty - v_py) * prog)
+                color = config.COLOR_POINT_DARK
+            else:
+                color = config.COLOR_TEXT
+                tx, ty = ox + int(vec["x"] * scale), oy - int(vec["y"] * scale)
+            if area.x <= tx <= area.x + area.width and area.y <= ty <= area.y + area.height:
+                pygame.draw.circle(surface, color, (tx, ty), 6)
+                surface.blit(font_bold.render(f'{vec["label"]} ({vec["x"]},{vec["y"]})', True, color), (tx + 16, ty - 4))
+        else:
+            tx, ty = ox + int(vec["x"] * scale), oy - int(vec["y"] * scale)
+            if area.x <= tx <= area.x + area.width and area.y <= ty <= area.y + area.height:
+                pygame.draw.line(surface, config.COLOR_TEXT, (ox, oy), (tx, ty), 4)
+                angle = math.atan2(oy - ty, tx - ox)
+                arrow_len = 14
+                arrow_w = 6
+                base_lx = tx - arrow_len * math.cos(angle) + arrow_w * math.sin(angle)
+                base_ly = ty + arrow_len * math.sin(angle) + arrow_w * math.cos(angle)
+                base_rx = tx - arrow_len * math.cos(angle) - arrow_w * math.sin(angle)
+                base_ry = ty + arrow_len * math.sin(angle) - arrow_w * math.cos(angle)
+                pygame.draw.polygon(surface, config.COLOR_TEXT, [
+                    (tx, ty),
+                    (int(base_lx), int(base_ly)),
+                    (int(base_rx), int(base_ry))
+                ])
+                surface.blit(font_bold.render(f'{vec["label"]} ({vec["x"]},{vec["y"]})', True, config.COLOR_TEXT), (tx + 16, ty - 4))
     surface.set_clip(clip_rect)
 
-    if config.problem_loaded and config.target_vector is not None:
-        draw_transformed_triangle(surface, area, ox, oy, scale)
 
 def draw_instruction_panel(surface, area):
     pad = 20
@@ -447,21 +489,40 @@ def draw_debug_button(surface):
     return rect
 
 def draw_transformed_triangle(surface, area, ox, oy, scale):
-    """Draws a base shape that dynamically morphs into the custom matrix state."""
-    # Define standard input shape coordinates
+    """Draws a parallelogram from the basis vectors that morphs into the transformed shape."""
+    vectors = {v["label"]: v for v in config.active_vectors}
+
+    if not all(k in vectors for k in ("u", "w", "L(u)", "L(w)")):
+        return
+
+    u = vectors["u"]
+    w = vectors["w"]
+    lu = vectors["L(u)"]
+    lw = vectors["L(w)"]
+
+    # Compute transformation matrix M = [L(u)|L(w)] x [u|w]^(-1)
+    det = u["x"] * w["y"] - u["y"] * w["x"]
+    if abs(det) < 1e-10:
+        return
+
+    m00 = (lu["x"] * w["y"] - lw["x"] * u["y"]) / det
+    m01 = (-lu["x"] * w["x"] + lw["x"] * u["x"]) / det
+    m10 = (lu["y"] * w["y"] - lw["y"] * u["y"]) / det
+    m11 = (-lu["y"] * w["x"] + lw["y"] * u["x"]) / det
+
+    config.matrix_engine.set_target(m00, m01, m10, m11)
+
+    # Parallelogram formed by basis vectors: origin, u, u+w, w
     base_vertices = [
-        [1.0, 1.0],
-        [3.0, 1.0],
-        [2.0, 3.0]
+        [0.0, 0.0],
+        [float(u["x"]), float(u["y"])],
+        [float(u["x"] + w["x"]), float(u["y"] + w["y"])],
+        [float(w["x"]), float(w["y"])]
     ]
-    
-    if config.target_vector:
-        tx, ty = config.target_vector
-        config.matrix_engine.set_target(tx, 0.0, 0.0, ty)
-    
+
     current_progress = getattr(config, "transformation_progress", 0.0)
     vertices = config.matrix_engine.transform_shape(base_vertices, current_progress)
-    
+
     r = int(59 + (34 - 59) * current_progress)
     g = int(130 + (197 - 130) * current_progress)
     b = int(246 + (94 - 246) * current_progress)
