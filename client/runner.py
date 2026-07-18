@@ -179,7 +179,7 @@ def toggle_fullscreen():
             (info.current_w, info.current_h), pygame.FULLSCREEN | pygame.SCALED
         )
     else:
-        pygame.display.set_mode((1280, 720), pygame.RESIZABLE)
+        pygame.display.set_mode((1920, 1080), pygame.RESIZABLE)
 
 
 def main(mode):
@@ -220,8 +220,11 @@ def main(mode):
 
     log_message("Initializing hardware camera capture access...")
     config.cap = cv2.VideoCapture(1)
-    config.cap.set(cv2.CAP_PROP_FRAME_WIDTH, 1280)
-    config.cap.set(cv2.CAP_PROP_FRAME_HEIGHT, 720)
+    config.cap.set(cv2.CAP_PROP_FRAME_WIDTH, 1920)
+    config.cap.set(cv2.CAP_PROP_FRAME_HEIGHT, 1080)
+    config.CAM_W = int(config.cap.get(cv2.CAP_PROP_FRAME_WIDTH))
+    config.CAM_H = int(config.cap.get(cv2.CAP_PROP_FRAME_HEIGHT))
+    log_message(f"Camera initialized at {config.CAM_W}x{config.CAM_H}")
     if not config.cap.isOpened():
         log_message(
             "CRITICAL ERROR: Could not open the system video capture stream.")

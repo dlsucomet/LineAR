@@ -4,3 +4,4 @@ client/__pycache__
 client/logs/
 client/linear_session.log
 server/server.js
+BUGFIX.md

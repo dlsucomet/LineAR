@@ -23,8 +23,10 @@ debug_mode = False
 debug_hints = True
 debug_preview = False
 
-WINDOW_WIDTH = 1280
-WINDOW_HEIGHT = 720
+WINDOW_WIDTH = 1920
+WINDOW_HEIGHT = 1080
+CAM_W = 1920
+CAM_H = 1080
 TOP_BAR_HEIGHT = 50
 BOTTOM_BAR_HEIGHT = 70
 OUTER_GAP = 14

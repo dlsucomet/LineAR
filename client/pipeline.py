@@ -464,8 +464,8 @@ def transform_to_projection_space(w_x, w_y, center_rect, track_mat=None):
     transformed = cv2.perspectiveTransform(src_point, track_mat)
     cam_x = transformed[0][0][0]
     cam_y = transformed[0][0][1]
-    p_x = center_rect.x + round((cam_x / 1280.0) * center_rect.width)
-    p_y = center_rect.y + round((cam_y / 720.0) * center_rect.height)
+    p_x = center_rect.x + round((cam_x / config.CAM_W) * center_rect.width)
+    p_y = center_rect.y + round((cam_y / config.CAM_H) * center_rect.height)
     return p_x, p_y
 
 def get_projector_box_points(box, center_rect):
@@ -587,9 +587,9 @@ def track_pen_tip(frame, screen_w, screen_h):
                 _save_pen_hsv_config(h_low, s_low, v_low, h_high, s_high, v_high)
                 config.pen_calibrating = False
                 config.pen_calib_samples = []
-    sx = int(((cx / 1280.0 - 0.5) * config.pen_accel + 0.5) * screen_w)
+    sx = int(((cx / config.CAM_W - 0.5) * config.pen_accel + 0.5) * screen_w)
     sx = max(0, min(screen_w - 1, sx))
-    sy = int(((cy / 720.0 - 0.5) * config.pen_accel + 0.5) * screen_h)
+    sy = int(((cy / config.CAM_H - 0.5) * config.pen_accel + 0.5) * screen_h)
     sy = max(0, min(screen_h - 1, sy))
     raw = (sx, sy)
 
