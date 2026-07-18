@@ -132,7 +132,7 @@ pen_calib_samples = []
 
 PROJECTION_REGIONS = {
     "firstStepLeft": {"one": {"left": 300, "top": 170, "width": 300, "height": 150},
-                      "two": {"left": 250, "top": 570, "width": 150, "height": 100},
+                      "two": {"left": 250, "top": 530, "width": 150, "height": 100},
                       "three": {"left": 600, "top": 900, "width": 300, "height": 300},
                       "four": {"left": 300, "top": 1000, "width": 150, "height": 100}
                       },
@@ -175,11 +175,11 @@ _questionnaire_ueq_title_bottom = 0
 
 # "one": {"top": 940, "left": 150, "width": 1000, "height": 200}
 CROP_REGIONS = {
-    "firstStepLeft": {"one": {"top": 100, "left": 350, "width": 1000, "height": 500}},
-    "firstStepRight": {"one": {"top": 820, "left": 250, "width": 1000, "height": 200}},
-    "secondStepLeft": {"one": {"top": 900, "left": 500, "width": 180, "height": 380}},
-    "secondStepRight": {"one": {"top": 900, "left": 1100, "width": 180, "height": 180}},
-    "thirdStep": {"one": {"top": 1300, "left": 700, "width": 180, "height": 380}},
+    "firstStepLeft": {"one": {"top": 1030, "left": 220, "width": 1500, "height": 400}},
+    "firstStepRight": {"one": {"top": 1030, "left": 220, "width": 1500, "height": 400}},
+    "secondStepLeft": {"one": {"top": 1530, "left": 220, "width": 1500, "height": 400}},
+    "secondStepRight": {"one": {"top": 1530, "left": 220, "width": 1500, "height": 400}},
+    "thirdStep": {"one": {"top": 1930, "left": 220, "width": 1500, "height": 400}},
 }
 
 def get_panel_rects(surface_width, surface_height):

@@ -108,9 +108,21 @@ def paper_tracking_daemon():
                     os.makedirs(captures_dir, exist_ok=True)
                     stamp = datetime.now().strftime("%H%M%S_%f")[:-3]
                     try:
+                        crop_img = config.warped_document
+                        regions = config.CROP_REGIONS.get(config.current_step, {})
+                        if regions:
+                            imgs = []
+                            for rname, box in regions.items():
+                                ih, iw = crop_img.shape[:2]
+                                r_top = max(0, min(box["top"], ih - 1))
+                                r_left = max(0, min(box["left"], iw - 1))
+                                r_height = max(1, min(box["height"], ih - r_top))
+                                r_width = max(1, min(box["width"], iw - r_left))
+                                imgs.append(crop_img[r_top:r_top+r_height, r_left:r_left+r_width])
+                            crop_img = np.vstack(imgs) if len(imgs) > 1 else imgs[0]
                         cv2.imwrite(
                             os.path.join(captures_dir, f"p{config.problem_number}_track_{config.current_step}_{stamp}.png"),
-                            config.warped_document,
+                            crop_img,
                         )
                     except Exception:
                         pass
