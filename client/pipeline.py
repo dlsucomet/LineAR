@@ -237,9 +237,9 @@ def scan_qr_from_camera():
 
         if len(vals) >= 12:
             config.active_vectors = [
-                {"x": vals[0], "y": vals[1], "label": "u", "show_at": "firstStepLeft"},
-                {"x": vals[4], "y": vals[5], "label": "w", "show_at": "firstStepLeft"},
-                {"x": vals[8], "y": vals[9], "label": "v", "type": "point", "show_at": "firstStepLeft"},
+                {"x": vals[0], "y": vals[1], "label": "u", "show_at": "firstStep"},
+                {"x": vals[4], "y": vals[5], "label": "w", "show_at": "firstStep"},
+                {"x": vals[8], "y": vals[9], "label": "v", "type": "point", "show_at": "firstStep"},
             ]
 
             tx, ty = vals[10], vals[11]
@@ -247,11 +247,12 @@ def scan_qr_from_camera():
             config.active_vectors.append({"x": tx, "y": ty, "label": "L(v)", "type": "point", "show_at": "complete"})
 
             config.expected_answers = {
-                "firstStepLeft": [str(vals[0]), str(vals[1])],
-                "firstStepRight": [str(vals[2]), str(vals[3])],
-                "secondStepLeft": [str(vals[4]), str(vals[5])],
-                "secondStepRight": [str(vals[6]), str(vals[7])],
-                "thirdStep": [str(vals[10]), str(vals[11])]
+                "firstStep": [str(vals[0]), str(vals[1])],
+                "secondStepLeft": [str(vals[2]), str(vals[3])],
+                "secondStepRight": [str(vals[4]), str(vals[5])],
+                "thirdStepLeft": [str(vals[6]), str(vals[7])],
+                "thirdStepRight": [str(vals[8]), str(vals[9])],
+                "fourthStep": [str(vals[10]), str(vals[11])]
             }
 
             config.problem_loaded = True
@@ -331,9 +332,9 @@ def ocr_problem_data():
             
             if len(vals) >= 12:
                 config.active_vectors = [
-                    {"x": vals[0], "y": vals[1], "label": "u", "show_at": "firstStepLeft"},
-                    {"x": vals[4], "y": vals[5], "label": "w", "show_at": "firstStepLeft"},
-                    {"x": vals[8], "y": vals[9], "label": "v", "type": "point", "show_at": "firstStepLeft"},
+                    {"x": vals[0], "y": vals[1], "label": "u", "show_at": "firstStep"},
+                    {"x": vals[4], "y": vals[5], "label": "w", "show_at": "firstStep"},
+                    {"x": vals[8], "y": vals[9], "label": "v", "type": "point", "show_at": "firstStep"},
                 ]
                 
                 tx, ty = vals[10], vals[11]
@@ -341,11 +342,12 @@ def ocr_problem_data():
                 config.active_vectors.append({"x": tx, "y": ty, "label": "L(v)", "type": "point", "show_at": "complete"})
                 
                 config.expected_answers = {
-                    "firstStepLeft": [str(vals[0]), str(vals[1])],    
-                    "firstStepRight": [str(vals[2]), str(vals[3])],   
-                    "secondStepLeft": [str(vals[4]), str(vals[5])],
-                    "secondStepRight": [str(vals[6]), str(vals[7])],
-                    "thirdStep": [str(vals[10]), str(vals[11])]        
+                    "firstStep": [str(vals[0]), str(vals[1])],    
+                    "secondStepLeft": [str(vals[2]), str(vals[3])],   
+                    "secondStepRight": [str(vals[4]), str(vals[5])],
+                    "thirdStepLeft": [str(vals[6]), str(vals[7])],
+                    "thirdStepRight": [str(vals[8]), str(vals[9])],
+                    "fourthStep": [str(vals[10]), str(vals[11])]
                 }
                 
                 config.problem_loaded = True

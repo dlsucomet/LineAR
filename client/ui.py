@@ -157,7 +157,7 @@ def draw_cartesian_plane(surface, area):
 
     max_extent = 0
     for vec in config.active_vectors:
-        vec_idx = step_order.index(vec.get("show_at", "firstStepLeft"))
+        vec_idx = step_order.index(vec.get("show_at", "firstStep"))
         if vec_idx > current_idx:
             continue
         max_extent = max(max_extent, abs(vec["x"]), abs(vec["y"]))
@@ -189,7 +189,7 @@ def draw_cartesian_plane(surface, area):
     v_py = oy - int(v_vec["y"] * scale) if v_vec else oy
 
     for vec in config.active_vectors:
-        vec_idx = step_order.index(vec.get("show_at", "firstStepLeft"))
+        vec_idx = step_order.index(vec.get("show_at", "firstStep"))
         if vec_idx > current_idx:
             continue
 
@@ -245,8 +245,8 @@ def draw_instruction_panel(surface, area):
         u_vec = config.active_vectors[0]
         w_vec = config.active_vectors[1]
         v_vec = config.active_vectors[2]
-        lu = config.expected_answers.get("firstStepRight", ["?", "?"])
-        lw = config.expected_answers.get("secondStepRight", ["?", "?"])
+        lu = config.expected_answers.get("secondStepLeft", ["?", "?"])
+        lw = config.expected_answers.get("thirdStepLeft", ["?", "?"])
 
         header_surf = font_large.render("Problem:", True, config.COLOR_TEXT)
         surface.blit(header_surf, (cx, cy))

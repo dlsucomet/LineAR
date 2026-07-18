@@ -69,7 +69,7 @@ def save_problem_results():
 
 def reset_for_new_problem():
     config.problem_number += 1
-    config.current_step = "firstStepLeft"
+    config.current_step = "firstStep"
     config.problem_loaded = False
     config.expected_answers = {}
     config.target_vector = None
@@ -89,14 +89,7 @@ def reset_for_new_problem():
     log_message(f"=== Problem {config.problem_number} Ready ===")
 
 
-STEP_ORDER = [
-    "firstStepLeft",
-    "firstStepRight",
-    "secondStepLeft",
-    "secondStepRight",
-    "thirdStep",
-    "complete",
-]
+STEP_ORDER = config.STEP_SEQUENCE
 
 
 def advance_debug_state():
@@ -187,7 +180,7 @@ def main(mode):
     config.args.mode = mode
     config.running = True
     config.app_phase = "start"
-    config.current_step = "firstStepLeft"
+    config.current_step = "firstStep"
     config.transformation_progress = 0.0
     config.green_count = 0
     config.red_count = 0
