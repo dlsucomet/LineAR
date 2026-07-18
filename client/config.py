@@ -95,6 +95,7 @@ red_count = 0
 feedback_state = None
 feedback_timer = 0
 feedback_step = None
+show_hint = False
 problem_number = 1
 problem_ended_early = False
 

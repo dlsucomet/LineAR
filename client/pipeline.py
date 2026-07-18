@@ -378,6 +378,7 @@ def background_ocr_pipeline():
             config.feedback_step = config.current_step
             config.feedback_state = "green"
             config.feedback_timer = 60
+            config.show_hint = False
             idx = config.STEP_SEQUENCE.index(config.current_step)
             if idx < len(config.STEP_SEQUENCE) - 1:
                 config.current_step = config.STEP_SEQUENCE[idx + 1]
@@ -390,6 +391,7 @@ def background_ocr_pipeline():
             config.feedback_step = config.current_step
             config.feedback_state = "red"
             config.feedback_timer = 60
+            config.show_hint = True
             log_message(f"REJECTED: Submission mismatch. Got: {list(recognized_data.values())}")
         
         with open(config.SESSION_PATH) as f:

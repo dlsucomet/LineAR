@@ -246,6 +246,32 @@ def draw_cartesian_plane(surface, area):
     surface.set_clip(clip_rect)
 
 
+def get_hint_math(step):
+    qr = config.qr_data
+    if not qr:
+        return None
+    try:
+        c1 = qr['step1_linearCombination']['c1']
+        c2 = qr['step1_linearCombination']['c2']
+        og1, ov1 = qr['step2_applyTransformation']['og1_ov1']
+        og2, ov2 = qr['step2_applyTransformation']['og2_ov2']
+        c1og1, c1ov1 = qr['step3_scalarMultiplication']['scaled_vector1']
+        c2og2, c2ov2 = qr['step3_scalarMultiplication']['scaled_vector2']
+        of1, on1 = qr['complete']['final_output']
+    except (KeyError, TypeError):
+        return None
+
+    hints = {
+        "firstStep":       f"L([c1]*u + [c2]*v) = [c1]*L(u) + [c2]*L(v)".replace("[c1]", str(c1)).replace("[c2]", str(c2)),
+        "secondStepLeft":  f"[{c1}] * [{og1} / {ov1}]",
+        "secondStepRight": f"[{c2}] * [{og2} / {ov2}]",
+        "thirdStepLeft":   f"[{c1}] * [{og1} / {ov1}] = [{c1og1} / {c1ov1}]",
+        "thirdStepRight":  f"[{c2}] * [{og2} / {ov2}] = [{c2og2} / {c2ov2}]",
+        "fourthStep":      f"[{c1og1} / {c1ov1}] + [{c2og2} / {c2ov2}] = [{of1} / {on1}]",
+    }
+    return hints.get(step)
+
+
 def draw_instruction_panel(surface, area):
     pad = 20
     cx, cy, mw = area.x + pad, area.y + pad, area.width - pad * 2
@@ -253,6 +279,12 @@ def draw_instruction_panel(surface, area):
     if config.current_step == "complete" and config.target_vector:
         tx, ty = config.target_vector
         step_info = dict(step_info, math=f"L(v) = [{tx} / {ty}]")
+
+    # NEW OVERRIDE: Show hint on incorrect answer
+    if getattr(config, 'show_hint', False):
+        hint_math = get_hint_math(config.current_step)
+        if hint_math:
+            step_info = dict(step_info, math=hint_math)
 
     default_panel_h = 572
     scale_y = max(0.5, area.height / default_panel_h)
@@ -592,7 +624,7 @@ def draw_done_button(surface, center_rect, y_offset=0):
     green = (34, 197, 94)
     if hovered:
         pygame.draw.rect(surface, config.COLOR_WHITE, btn_rect, border_radius=12)
-        pygame.draw.rect(surface, green, btn_rect, 3, border_radius=12)
+        pygame.draw.rect(green, btn_rect, 3, border_radius=12)
         text = font_large.render("DONE", True, green)
     else:
         pygame.draw.rect(surface, green, btn_rect, border_radius=12)

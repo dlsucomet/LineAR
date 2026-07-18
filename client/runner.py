@@ -77,6 +77,7 @@ def reset_for_new_problem():
     config.feedback_state = None
     config.feedback_timer = 0
     config.feedback_step = None
+    config.show_hint = False
     config.green_count = 0
     config.red_count = 0
     config.is_processing = False
@@ -113,6 +114,7 @@ def debug_simulate_correct():
     config.green_count += 1
     config.feedback_state = "green"
     config.feedback_timer = 60
+    config.show_hint = False
     if config.app_phase in ("running", "done"):
         idx = config.STEP_SEQUENCE.index(config.current_step)
         if idx < len(config.STEP_SEQUENCE) - 1:
@@ -133,6 +135,7 @@ def debug_simulate_incorrect():
     config.red_count += 1
     config.feedback_state = "red"
     config.feedback_timer = 60
+    config.show_hint = True
     log_message(f"DEBUG: Incorrect recorded (red={config.red_count})")
     _write_session_counts()
 
@@ -184,6 +187,7 @@ def main(mode):
     config.red_count = 0
     config.feedback_state = None
     config.feedback_timer = 0
+    config.show_hint = False
     config.is_processing = False
     config.debug_preview = False
     config.nasa_tlx_responses = [None] * 6
