@@ -136,21 +136,21 @@ PROJECTION_REGIONS = {
                       "three": {"left": 600, "top": 900, "width": 300, "height": 300},
                       "four": {"left": 300, "top": 1000, "width": 150, "height": 100}
                       },
-    "firstStepRight": {"one": {"left": 500, "top": 300, "width": 500, "height": 300},
-                      "two": {"left": 400, "top": 800, "width": 300, "height": 150},
-                      "three": {"left": 800, "top": 1200, "width": 500, "height": 300},
-                      "four": {"left": 400, "top": 1250, "width": 300, "height": 150}},
+    "firstStepRight": {"one": {"left": 1800, "top": 120, "width": 300, "height": 150},
+                      "two": {"left": 250, "top": 650, "width": 150, "height": 100},
+                      "three": {"left": 1800, "top": 900, "width": 300, "height": 300},
+                      "four": {"left": 1500, "top": 1000, "width": 150, "height": 100}},
     "secondStepLeft": {
-        "one": {"left": 300, "top": 500, "width": 110, "height": 210},
-        "two": {"left": 450, "top": 480, "width": 110, "height": 210}
+        "one": {"left": 300, "top": 900, "width": 700, "height": 300},
+        "two": {"left": 300, "top": 1600, "width": 300, "height": 300}
     },
     "secondStepRight": {
-        "one": {"left": 600, "top": 500, "width": 110, "height": 110},
-        "two": {"left": 735, "top": 480, "width": 110, "height": 210}
+        "one": {"left": 1500, "top": 900, "width": 700, "height": 300},
+        "two": {"left": 800, "top": 1600, "width": 300, "height": 300}
     },
     "thirdStep": {
-        "one": {"left": 300, "top": 500, "width": 110, "height": 210},
-        "two": {"left": 450, "top": 480, "width": 110, "height": 210}
+        "one": {"left": 300, "top": 1600, "width": 2000, "height": 300},
+        "two": {"left": 300, "top": 2350, "width": 300, "height": 300}
     }
 }
 
