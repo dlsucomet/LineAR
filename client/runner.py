@@ -219,15 +219,16 @@ def main(mode):
     ui._init_fonts()
 
     log_message("Initializing hardware camera capture access...")
-    config.cap = cv2.VideoCapture(1)
+    config.cap = cv2.VideoCapture('/dev/video0')  # REDRAGON 1080p via device path
     config.cap.set(cv2.CAP_PROP_FRAME_WIDTH, 1920)
     config.cap.set(cv2.CAP_PROP_FRAME_HEIGHT, 1080)
-    config.CAM_W = int(config.cap.get(cv2.CAP_PROP_FRAME_WIDTH))
-    config.CAM_H = int(config.cap.get(cv2.CAP_PROP_FRAME_HEIGHT))
-    log_message(f"Camera initialized at {config.CAM_W}x{config.CAM_H}")
     if not config.cap.isOpened():
         log_message(
             "CRITICAL ERROR: Could not open the system video capture stream.")
+    else:
+        config.CAM_W = int(config.cap.get(cv2.CAP_PROP_FRAME_WIDTH))
+        config.CAM_H = int(config.cap.get(cv2.CAP_PROP_FRAME_HEIGHT))
+        log_message(f"Camera stream initialized: {config.CAM_W}x{config.CAM_H}")
     log_message("Booting up backend real-time tracking daemon thread pass...")
     threading.Thread(target=paper_tracking_daemon, daemon=True).start()
 

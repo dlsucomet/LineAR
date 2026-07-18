@@ -131,10 +131,10 @@ pen_calibrating = False
 pen_calib_samples = []
 
 PROJECTION_REGIONS = {
-    "firstStepLeft": {"one": {"left": -800, "top": -800, "width": 500, "height": 300},
-                      "two": {"left": -800, "top": -100, "width": 300, "height": 150},
-                      "three": {"left": 600, "top": 600, "width": 500, "height": 300},
-                      "four": {"left": 100, "top": 650, "width": 300, "height": 150}
+    "firstStepLeft": {"one": {"left": 300, "top": 170, "width": 300, "height": 150},
+                      "two": {"left": 250, "top": 570, "width": 150, "height": 100},
+                      "three": {"left": 600, "top": 900, "width": 300, "height": 300},
+                      "four": {"left": 300, "top": 1000, "width": 150, "height": 100}
                       },
     "firstStepRight": {"one": {"left": 500, "top": 300, "width": 500, "height": 300},
                       "two": {"left": 400, "top": 800, "width": 300, "height": 150},
@@ -175,7 +175,7 @@ _questionnaire_ueq_title_bottom = 0
 
 # "one": {"top": 940, "left": 150, "width": 1000, "height": 200}
 CROP_REGIONS = {
-    "firstStepLeft": {"one": {"top": 1100, "left": 350, "width": 1800, "height": 440}},
+    "firstStepLeft": {"one": {"top": 100, "left": 350, "width": 1000, "height": 500}},
     "firstStepRight": {"one": {"top": 820, "left": 250, "width": 1000, "height": 200}},
     "secondStepLeft": {"one": {"top": 900, "left": 500, "width": 180, "height": 380}},
     "secondStepRight": {"one": {"top": 900, "left": 1100, "width": 180, "height": 180}},
