@@ -298,14 +298,14 @@ def draw_instruction_panel(surface, area):
         vx = _draw_vvec(surface, vx, vy, [w_vec['x'], w_vec['y']]) + 2
         vx = _draw_text(surface, vx, vy, ") = ")
         vx = _draw_vvec(surface, vx, vy, [lw[0], lw[1]])
-        cy += int(24 * scale_y)
+        cy += int(50 * scale_y)
 
         vx = cx
         vy = cy
         vx = _draw_text(surface, vx, vy, "Find L(")
         vx = _draw_vvec(surface, vx, vy, [v_vec['x'], v_vec['y']])
         vx = _draw_text(surface, vx, vy, ").")
-        cy += int(10 * scale_y)
+        cy += int(50 * scale_y)
 
         sep_y = int(cy)
         pygame.draw.line(surface, config.COLOR_GRID, (cx, sep_y), (cx + mw, sep_y), 1)
