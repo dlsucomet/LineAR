@@ -103,6 +103,7 @@ qr_data = None
 
 warped_document = None
 tracking_matrix = None
+frozen_tracking_matrix = None
 paper_detected = False
 paper_stable_since = 0
 

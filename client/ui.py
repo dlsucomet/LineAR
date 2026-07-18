@@ -485,29 +485,32 @@ def draw_projection_boxes(surface, center):
     with config.shared_frame_lock:
         tracking = config.paper_detected
         track_mat = config.tracking_matrix
+        frozen_mat = config.frozen_tracking_matrix
 
     highlight_step = config.current_step
     if config.feedback_timer > 0 and config.feedback_step:
         highlight_step = config.feedback_step
 
     if highlight_step in config.PROJECTION_REGIONS:
-        if tracking:
+        proj_mat = track_mat if tracking else frozen_mat
+        if proj_mat is not None:
             if config.args.mode == "highlights":
                 for _, box in config.PROJECTION_REGIONS[highlight_step].items():
-                    tl = transform_to_projection_space(box["left"], box["top"], center, track_mat)
-                    br = transform_to_projection_space(box["left"] + box["width"], box["top"] + box["height"], center, track_mat)
+                    tl = transform_to_projection_space(box["left"], box["top"], center, proj_mat)
+                    br = transform_to_projection_space(box["left"] + box["width"], box["top"] + box["height"], center, proj_mat)
                     if tl and br:
                         pygame.draw.rect(surface, config.COLOR_BLUE, (tl[0], tl[1], br[0]-tl[0], br[1]-tl[1]))
-        else:
+        elif not tracking:
             msg = font_bold.render("[ Align ArUco Markers to Project Guides ]", True, config.COLOR_TEXT)
             surface.blit(msg, msg.get_rect(center=center.center))
 
     if config.feedback_timer > 0 and config.feedback_step and config.feedback_step in config.CROP_REGIONS:
-        if tracking:
+        proj_mat = track_mat if tracking else frozen_mat
+        if proj_mat is not None:
             feedback_color = (34, 197, 94) if config.feedback_state == "green" else (239, 68, 68)
             for _, box in config.CROP_REGIONS[config.feedback_step].items():
-                tl = transform_to_projection_space(box["left"], box["top"], center, track_mat)
-                br = transform_to_projection_space(box["left"] + box["width"], box["top"] + box["height"], center, track_mat)
+                tl = transform_to_projection_space(box["left"], box["top"], center, proj_mat)
+                br = transform_to_projection_space(box["left"] + box["width"], box["top"] + box["height"], center, proj_mat)
                 if tl and br:
                     pygame.draw.rect(surface, feedback_color, (tl[0], tl[1], br[0]-tl[0], br[1]-tl[1]))
 

@@ -135,10 +135,10 @@ def paper_tracking_daemon():
         else:
             with config.shared_frame_lock:
                 if not config.debug_preview:
+                    config.frozen_tracking_matrix = config.tracking_matrix
                     config.paper_detected = False
             last_matrix = None
             last_src_pts = None
-            smoothed_tracking = None
             last_capture_time = 0  # reset so the next lock starts its own capture cadence
             if last_state:
                 log_message("Tracking Lock Lost: Target sheet missing or occluded.")
