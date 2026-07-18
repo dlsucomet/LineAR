@@ -382,17 +382,13 @@ def background_ocr_pipeline():
             gray = cv2.cvtColor(crop, cv2.COLOR_BGR2GRAY)
             
             # Cubic up-scale by 2.0x to handle small text dimensions safely
-            resized = cv2.resize(gray, (0, 0), fx=2.0, fy=2.0, interpolation=cv2.INTER_CUBIC)
+            resized = cv2.resize(gray, (0, 0), fx=2.0, fy=2.0, interpolation=cv2.INTER_LANCZOS4)
             
             # Localized grid normalization via CLAHE to erase overhead lighting glare
-            clahe = cv2.createCLAHE(clipLimit=4.0, tileGridSize=(16, 16))
+            clahe = cv2.createCLAHE(clipLimit=2.0, tileGridSize=(16, 16))
             enhanced = clahe.apply(resized)
             
-            # Blur edge artifacts out of the compressed stream
-            blurred = cv2.GaussianBlur(enhanced, (3, 3), 0)
-            
-            # Binarize directly with Otsu thresholding for absolute print contrast
-            _, binary = cv2.threshold(blurred, 0, 255, cv2.THRESH_BINARY + cv2.THRESH_OTSU)
+            _, binary = cv2.threshold(enhanced, 0, 255, cv2.THRESH_BINARY + cv2.THRESH_OTSU)
             
             try:
                 cv2.imwrite(os.path.join(captures_dir, f"p{config.problem_number}_{config.current_step}_{region_name}_{stamp}.png"), binary)
