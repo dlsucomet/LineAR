@@ -15,6 +15,14 @@ _last_qr_capture_time = 0.0
 def paper_tracking_daemon():
     aruco_dict = cv2.aruco.getPredefinedDictionary(cv2.aruco.DICT_4X4_50)
     aruco_params = cv2.aruco.DetectorParameters()
+    aruco_params.adaptiveThreshWinSizeMin = 7
+    aruco_params.adaptiveThreshWinSizeMax = 53
+    aruco_params.adaptiveThreshWinSizeStep = 10
+    aruco_params.cornerRefinementMethod = cv2.aruco.CORNER_REFINE_SUBPIX
+    aruco_params.cornerRefinementWinSize = 10
+    aruco_params.cornerRefinementMaxIterations = 50
+    aruco_params.minDistanceToBorder = 5
+    aruco_params.errorCorrectionRate = 0.8
     detector = cv2.aruco.ArucoDetector(aruco_dict, aruco_params)
     max_w, max_h = 2200, 2600  # marker-corner mapping — DO NOT change, existing crop regions are calibrated against this
     pad = 100
@@ -44,7 +52,11 @@ def paper_tracking_daemon():
         frame = cv2.flip(frame, -1)
         with config.shared_frame_lock:
             config.latest_frame = frame.copy()
-        corners, ids, _ = detector.detectMarkers(frame)
+        gray = cv2.cvtColor(frame, cv2.COLOR_BGR2GRAY)
+        clahe = cv2.createCLAHE(clipLimit=2.0, tileGridSize=(8, 8))
+        enhanced = clahe.apply(gray)
+        enhanced_bgr = cv2.cvtColor(enhanced, cv2.COLOR_GRAY2BGR)
+        corners, ids, _ = detector.detectMarkers(enhanced_bgr)
         # Report which ArUco marker IDs are currently visible, only when the set changes
         current_ids = set(int(i) for i in ids.flatten()) if ids is not None else set()
         if current_ids != last_seen_ids:

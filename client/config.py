@@ -129,10 +129,10 @@ pen_calibrating = False
 pen_calib_samples = []
 
 PROJECTION_REGIONS = {
-    "firstStepLeft": {"one": {"left": 0, "top": 0, "width": 500, "height": 300},
-                      "two": {"left": 0, "top": 800, "width": 300, "height": 150},
-                      "three": {"left": 600, "top": 1450, "width": 500, "height": 300},
-                      "four": {"left": 100, "top": 1550, "width": 300, "height": 150}
+    "firstStepLeft": {"one": {"left": -800, "top": -800, "width": 500, "height": 300},
+                      "two": {"left": -800, "top": -100, "width": 300, "height": 150},
+                      "three": {"left": 600, "top": 600, "width": 500, "height": 300},
+                      "four": {"left": 100, "top": 650, "width": 300, "height": 150}
                       },
     "firstStepRight": {"one": {"left": 500, "top": 300, "width": 500, "height": 300},
                       "two": {"left": 400, "top": 800, "width": 300, "height": 150},
