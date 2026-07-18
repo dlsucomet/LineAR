@@ -23,8 +23,8 @@ debug_mode = False
 debug_hints = True
 debug_preview = False
 
-WINDOW_WIDTH = 1920
-WINDOW_HEIGHT = 1080
+WINDOW_WIDTH = 1280
+WINDOW_HEIGHT = 720
 CAM_W = 1920
 CAM_H = 1080
 TOP_BAR_HEIGHT = 50
@@ -97,12 +97,12 @@ problem_number = 1
 problem_ended_early = False
 
 active_vectors = []
+qr_data = None
 
 warped_document = None
 tracking_matrix = None
 paper_detected = False
 paper_stable_since = 0
-flip_detected = False
 
 shared_frame_lock = threading.Lock()
 cap = None
@@ -160,9 +160,6 @@ PROJECTION_REGIONS = {
 problem_loaded = False
 expected_answers = {}
 target_vector = None
-
-flip_paper_lost = False
-qr_confirm_start = 0
 
 nasa_tlx_responses = [None] * 6
 ueq_s_responses = [None] * 8

@@ -7,9 +7,7 @@ from questionnaires import (
 from pipeline import (
     paper_tracking_daemon,
     background_ocr_pipeline,
-    ocr_problem_data,
     scan_qr_from_camera,
-    detect_flip_by_qr,
     track_pen_tip,
     update_pen_state,
 )
@@ -83,8 +81,6 @@ def reset_for_new_problem():
     config.transformation_progress = 0.0
     config.last_ocr_time = 0
     config.problem_ended_early = False
-    config.flip_paper_lost = False
-    config.flip_detected = False
     config.app_phase = "start"
     log_message(f"=== Problem {config.problem_number} Ready ===")
 
@@ -464,28 +460,15 @@ def main(mode):
             and config.problem_loaded
             and not config.is_processing
         ):
-            config.app_phase = "qr_confirm"
-            config.qr_confirm_start = time.time()
-            log_message("Problem loaded successfully!")
-
-        if config.app_phase == "qr_confirm":
-            if time.time() - config.qr_confirm_start >= 2.0:
-                config.app_phase = "flip_prompt"
-                config.flip_paper_lost = False
-                config.flip_detected = False
-                log_message("Please flip your paper to the problem side.")
-                threading.Thread(target=detect_flip_by_qr, daemon=True).start()
-
-        if config.app_phase == "flip_prompt" and config.flip_detected:
             config.app_phase = "running"
             config._problem_start_str = datetime.now().strftime("%H:%M:%S")
             config._problem_start_time = time.time()
-            log_message(f"=== Problem {config.problem_number} Started ===")
+            log_message(f"Problem loaded! === Problem {config.problem_number} Started ===")
 
         if config.app_phase == "running" and config.problem_loaded and not config.is_processing:
             now = pygame.time.get_ticks()
             if (
-                now - config.last_ocr_time >= 5000
+                now - config.last_ocr_time >= 3000
                 and time.time() - config.paper_stable_since >= 3.0
             ):
                 config.last_ocr_time = now
@@ -511,10 +494,6 @@ def main(mode):
             start_btn_rect = ui.draw_start_button(screen, center_rect)
         elif config.app_phase == "scan_qr":
             center_rect = ui.draw_panels(screen, mode="scan_qr")
-        elif config.app_phase == "qr_confirm":
-            center_rect = ui.draw_panels(screen, mode="qr_confirm")
-        elif config.app_phase == "flip_prompt":
-            center_rect = ui.draw_panels(screen, mode="flip_prompt")
         elif config.app_phase == "done":
             center_rect = ui.draw_panels(screen, mode="done")
             new_problem_btn_rect = ui.draw_new_problem_button(

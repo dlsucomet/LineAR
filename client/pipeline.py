@@ -10,7 +10,6 @@ from logger import log_message
 
 from pyzbar.pyzbar import decode
 
-_last_qr_capture_time = 0.0
 
 def paper_tracking_daemon():
     aruco_dict = cv2.aruco.getPredefinedDictionary(cv2.aruco.DICT_4X4_50)
@@ -233,32 +232,73 @@ def scan_qr_from_camera():
 
         log_message(f"Code discovered! Type: {code_type} | Content: {data}")
 
-        vals = [int(n) for n in re.findall(r'-?\d+', data)]
+        sections = data.rstrip('|').split('|')
+        if len(sections) != 6:
+            log_message(f"Invalid QR format: expected 6 pipe-delimited sections, got {len(sections)}.")
+            config.is_processing = False
+            return
 
-        if len(vals) >= 12:
-            config.active_vectors = [
-                {"x": vals[0], "y": vals[1], "label": "u", "show_at": "firstStep"},
-                {"x": vals[4], "y": vals[5], "label": "w", "show_at": "firstStep"},
-                {"x": vals[8], "y": vals[9], "label": "v", "type": "point", "show_at": "firstStep"},
-            ]
+        s1 = sections[0].split(';')
+        g1, v1 = [int(x) for x in s1[0].split(',')]
+        og1, ov1 = [int(x) for x in s1[1].split(',')]
 
-            tx, ty = vals[10], vals[11]
-            config.target_vector = (tx, ty)
-            config.active_vectors.append({"x": tx, "y": ty, "label": "L(v)", "type": "point", "show_at": "complete"})
+        s2 = sections[1].split(';')
+        g2, v2 = [int(x) for x in s2[0].split(',')]
+        og2, ov2 = [int(x) for x in s2[1].split(',')]
 
-            config.expected_answers = {
-                "firstStep": [str(vals[0]), str(vals[1])],
-                "secondStepLeft": [str(vals[2]), str(vals[3])],
-                "secondStepRight": [str(vals[4]), str(vals[5])],
-                "thirdStepLeft": [str(vals[6]), str(vals[7])],
-                "thirdStepRight": [str(vals[8]), str(vals[9])],
-                "fourthStep": [str(vals[10]), str(vals[11])]
+        s3 = sections[2].split(';')
+        f1, n1 = [int(x) for x in s3[0].split(',')]
+        of1, on1 = [int(x) for x in s3[1].split(',')]
+
+        c1, c2 = [int(x) for x in sections[3].split(',')]
+
+        s6 = sections[5].split(';')
+        c1og1, c1ov1 = [int(x) for x in s6[0].split(',')]
+        c2og2, c2ov2 = [int(x) for x in s6[1].split(',')]
+
+        config.qr_data = {
+            'step1_linearCombination': {
+                'c1': c1, 'c2': c2,
+                'v1': [g1, v1], 'v2': [g2, v2],
+                'v_target': [f1, n1]
+            },
+            'step2_applyTransformation': {
+                'c1': c1, 'c2': c2,
+                'og1_ov1': [og1, ov1], 'og2_ov2': [og2, ov2]
+            },
+            'step3_scalarMultiplication': {
+                'scaled_vector1': [c1og1, c1ov1],
+                'scaled_vector2': [c2og2, c2ov2]
+            },
+            'complete': {
+                'final_output': [of1, on1],
+                'v_target': [f1, n1]
             }
+        }
 
-            config.problem_loaded = True
-            log_message(f"Problem successfully initialized via {code_type}! Target: {config.target_vector}")
-        else:
-            log_message(f"Data validation error: Found {len(vals)} numbers, expected 12.")
+        config.active_vectors = [
+            {"x": g1, "y": v1, "label": "u", "show_at": "firstStep"},
+            {"x": g2, "y": v2, "label": "v", "show_at": "firstStep"},
+            {"x": f1, "y": n1, "label": "w", "type": "point", "show_at": "firstStep"},
+            {"x": of1, "y": on1, "label": "L(w)", "type": "point", "show_at": "complete"},
+        ]
+        config.target_vector = (of1, on1)
+
+        config.expected_answers = {
+            "firstStep":       {"one": [str(c1), str(c2)]},
+            "secondStepLeft":  {"one": [str(c1), str(og1), str(ov1)]},
+            "secondStepRight": {"one": [str(c2), str(og2), str(ov2)]},
+            "thirdStepLeft":   {"one": [str(c1og1), str(c1ov1)]},
+            "thirdStepRight":  {"one": [str(c2og2), str(c2ov2)]},
+            "fourthStep":      {"one": [str(of1), str(on1)]},
+        }
+
+        log_message(f"QR parsed — u=({g1},{v1}) L(u)=({og1},{ov1}) | v=({g2},{v2}) L(v)=({og2},{ov2}) | w=({f1},{n1}) L(w)=({of1},{on1})")
+        log_message(f"QR parsed — c1={c1}, c2={c2} | c1*L(u)=({c1og1},{c1ov1}) c2*L(v)=({c2og2},{c2ov2})")
+        log_message(f"Expected answers: {config.expected_answers}")
+
+        config.problem_loaded = True
+        log_message(f"Problem successfully initialized via {code_type}! Target: {config.target_vector}")
 
     except Exception as e:
         log_message(f"CRITICAL QR SCAN FAILURE: {str(e)}")
@@ -266,100 +306,6 @@ def scan_qr_from_camera():
     config.is_processing = False
 
 
-def detect_flip_by_qr():
-    log_message("Flip detection: scanning camera for QR absence...")
-    detector = cv2.QRCodeDetector()
-    while config.running and config.app_phase == "flip_prompt":
-        with config.shared_frame_lock:
-            if config.latest_frame is None:
-                time.sleep(0.3)
-                continue
-            local_frame = config.latest_frame.copy()
-
-        decoded, _, _ = detector.detectAndDecode(local_frame)
-        if not decoded:
-            qr_visible = False
-        else:
-            qr_visible = any(d.strip() for d in decoded)
-
-        if not qr_visible:
-            config.flip_detected = True
-            log_message("Flip detected: QR code no longer visible.")
-            return
-
-        time.sleep(0.5)
-
-    log_message("Flip detection: exited (phase changed or shutdown).")
-
-
-def ocr_problem_data():
-    with config.shared_frame_lock:
-        if config.warped_document is None:
-            return
-        local_sheet = config.warped_document.copy()
-
-    log_message("Scanning document surface for configuration codes (QR or Barcode)...")
-
-    global _last_qr_capture_time
-    now = time.time()
-    if now - _last_qr_capture_time >= 2.0:
-        _last_qr_capture_time = now
-        try:
-            captures_dir = os.path.join(config.PARTICIPANT_DIR, "qr_scan_captures")
-            os.makedirs(captures_dir, exist_ok=True)
-            stamp = datetime.now().strftime("%H%M%S_%f")[:-3]
-            cv2.imwrite(os.path.join(captures_dir, f"qr_scan_{stamp}.png"), local_sheet)
-        except Exception:
-            pass
-
-    try:
-        # pyzbar scans for both 1D linear barcodes and 2D QR codes by default
-        detected_codes = decode(local_sheet)
-        
-        if not detected_codes:
-            log_message("Problem Code: No valid QR code or barcode detected, retrying.")
-            config.is_processing = False
-            return
-
-        for code in detected_codes:
-            raw_string = code.data.decode('utf-8').strip()
-            log_message(f"Code discovered! Type: {code.type} | Content: {raw_string}")
-            
-            # Using regex allows us to grab numbers regardless of the packaging format.
-            # Handles barcode strings: "1 2 3 4 5 6 7 8 9 10 11 12" 
-            # Handles legacy QR strings: "1,2,3,4|5,6,7,8|9,10,11,12"
-            vals = [int(n) for n in re.findall(r'-?\d+', raw_string)]
-            
-            if len(vals) >= 12:
-                config.active_vectors = [
-                    {"x": vals[0], "y": vals[1], "label": "u", "show_at": "firstStep"},
-                    {"x": vals[4], "y": vals[5], "label": "w", "show_at": "firstStep"},
-                    {"x": vals[8], "y": vals[9], "label": "v", "type": "point", "show_at": "firstStep"},
-                ]
-                
-                tx, ty = vals[10], vals[11]
-                config.target_vector = (tx, ty)
-                config.active_vectors.append({"x": tx, "y": ty, "label": "L(v)", "type": "point", "show_at": "complete"})
-                
-                config.expected_answers = {
-                    "firstStep": [str(vals[0]), str(vals[1])],    
-                    "secondStepLeft": [str(vals[2]), str(vals[3])],   
-                    "secondStepRight": [str(vals[4]), str(vals[5])],
-                    "thirdStepLeft": [str(vals[6]), str(vals[7])],
-                    "thirdStepRight": [str(vals[8]), str(vals[9])],
-                    "fourthStep": [str(vals[10]), str(vals[11])]
-                }
-                
-                config.problem_loaded = True
-                log_message(f"Problem successfully initialized via {code.type}! Target: {config.target_vector}")
-                break
-            else:
-                log_message(f"Data validation error: Found {len(vals)} numbers, expected 12.")
-                
-    except Exception as e:
-        log_message(f"CRITICAL CODE INITIALIZATION FAILURE: {str(e)}")
-
-    config.is_processing = False
 
 def background_ocr_pipeline():
     with config.shared_frame_lock:

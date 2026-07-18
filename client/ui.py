@@ -81,10 +81,6 @@ def draw_top_bar(surface):
         text = font_large.render("Use the pen to click Start", True, config.COLOR_WHITE)
     elif config.app_phase == "scan_qr":
         text = font_large.render("Show the QR code side of your paper to the camera", True, config.COLOR_WHITE)
-    elif config.app_phase == "qr_confirm":
-        text = font_large.render("Problem loaded successfully!", True, config.COLOR_WHITE)
-    elif config.app_phase == "flip_prompt":
-        text = font_large.render("Please flip your paper to the problem side", True, config.COLOR_WHITE)
     elif config.app_phase == "done":
         text = font_large.render("Use the pen to click Done", True, config.COLOR_WHITE)
     elif config.app_phase == "nasa_tlx":
@@ -245,8 +241,8 @@ def draw_instruction_panel(surface, area):
         u_vec = config.active_vectors[0]
         w_vec = config.active_vectors[1]
         v_vec = config.active_vectors[2]
-        lu = config.expected_answers.get("secondStepLeft", ["?", "?"])
-        lw = config.expected_answers.get("thirdStepLeft", ["?", "?"])
+        lu = config.expected_answers.get("secondStepLeft", {}).get("one", ["?", "?"])
+        lw = config.expected_answers.get("thirdStepLeft", {}).get("one", ["?", "?"])
 
         header_surf = font_large.render("Problem:", True, config.COLOR_TEXT)
         surface.blit(header_surf, (cx, cy))
@@ -497,20 +493,6 @@ def draw_panels(surface, mode="running"):
         pygame.draw.rect(surface, config.COLOR_BLUE, left, 3)
         msg = font_bold.render("[ Scanning for QR code... ]", True, config.COLOR_TEXT)
         surface.blit(msg, msg.get_rect(center=center.center))
-        draw_instruction_panel(surface, right)
-        return center
-
-    if mode == "qr_confirm":
-        draw_cartesian_plane(surface, left)
-        pygame.draw.rect(surface, config.COLOR_BLUE, left, 3)
-        draw_projection_boxes(surface, center)
-        draw_instruction_panel(surface, right)
-        return center
-
-    if mode == "flip_prompt":
-        draw_cartesian_plane(surface, left)
-        pygame.draw.rect(surface, config.COLOR_BLUE, left, 3)
-        draw_projection_boxes(surface, center)
         draw_instruction_panel(surface, right)
         return center
 
