@@ -21,27 +21,32 @@ def _init_fonts():
 
 # Step-by-step guidance dictionary configuration
 STEP_GUIDANCE = {
-    "firstStepLeft": {
+    "firstStep": {
         "title": "Linear Combination Setup",
         "desc": "Express the input vector as a linear combination of the given basis vectors.",
         "math": "L(c1*v1 + c2*v2) = c1*L(v1) + c2*L(v2)"
     },
-    "firstStepRight": {
+    "secondStepLeft": {
         "title": "Transformation Property Expansion",
         "desc": "Substitute the known transformed vector definitions into your linear combination equation.",
         "math": "c1 * [x1 / y1] + c2 * [x2 / y2]"
     },
-    "secondStepLeft": {
+    "secondStepRight": {
+        "title": "Transformation Property Expansion",
+        "desc": "Substitute the known transformed vector definitions into your linear combination equation.",
+        "math": "c1 * [x1 / y1] + c2 * [x2 / y2]"
+    },
+    "thirdStepLeft": {
         "title": "Scalar Multiplication",
         "desc": "Distribute the first scalar coefficient into the left vector component elements.",
         "math": "a * [b / c] = [a * b / a * c]"
     },
-    "secondStepRight": {
+    "thirdStepRight": {
         "title": "Scalar Multiplication",
         "desc": "Distribute the second scalar coefficient into the right vector component elements.",
         "math": "a * [b / c] = [a * b / a * c]"
     },
-    "thirdStep": {
+    "fourthStep": {
         "title": "Vector Addition",
         "desc": "Perform row-by-row matrix addition on your scaled vector elements to solve.",
         "math": "[a / b] + [c / d] = [a + c / b + d]"

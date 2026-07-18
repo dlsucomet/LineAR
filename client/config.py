@@ -82,8 +82,8 @@ def init_config():
             "problems": [],
         }, f, indent=2)
 
-STEP_SEQUENCE = ["firstStepLeft", "firstStepRight", "secondStepLeft", "secondStepRight", "thirdStep", "complete"]
-current_step = "firstStepLeft"
+STEP_SEQUENCE = ["firstStep", "secondStepLeft", "secondStepRight", "thirdStepLeft", "thirdStepRight", "fourthStep", "complete"]
+current_step = "firstStep"
 last_ocr_time = 0
 status_msg = "System Ready. Place paper to align ArUco markers."
 is_processing = False
@@ -131,24 +131,27 @@ pen_calibrating = False
 pen_calib_samples = []
 
 PROJECTION_REGIONS = {
-    "firstStepLeft": {"one": {"left": 300, "top": 170, "width": 300, "height": 150},
+    "firstStep": {"one": {"left": 300, "top": 170, "width": 300, "height": 150},
+                  "two": {"left": 300, "top": 170, "width": 300, "height": 150},
+    },
+    "secondStepLeft": {"one": {"left": 300, "top": 170, "width": 300, "height": 150},
                       "two": {"left": 250, "top": 570, "width": 150, "height": 100},
                       "three": {"left": 600, "top": 900, "width": 300, "height": 300},
                       "four": {"left": 300, "top": 1000, "width": 150, "height": 100}
                       },
-    "firstStepRight": {"one": {"left": 1800, "top": 120, "width": 300, "height": 150},
+    "secondStepRight": {"one": {"left": 1800, "top": 120, "width": 300, "height": 150},
                       "two": {"left": 250, "top": 650, "width": 150, "height": 100},
                       "three": {"left": 1800, "top": 900, "width": 300, "height": 300},
                       "four": {"left": 1500, "top": 1000, "width": 150, "height": 100}},
-    "secondStepLeft": {
+    "thirdStepLeft": {
         "one": {"left": 300, "top": 900, "width": 700, "height": 300},
         "two": {"left": 300, "top": 1600, "width": 300, "height": 300}
     },
-    "secondStepRight": {
+    "thirdStepRight": {
         "one": {"left": 1500, "top": 900, "width": 700, "height": 300},
         "two": {"left": 800, "top": 1600, "width": 300, "height": 300}
     },
-    "thirdStep": {
+    "fourthStep": {
         "one": {"left": 300, "top": 1600, "width": 2000, "height": 300},
         "two": {"left": 300, "top": 2350, "width": 300, "height": 300}
     }
@@ -175,10 +178,13 @@ _questionnaire_ueq_title_bottom = 0
 
 # "one": {"top": 940, "left": 150, "width": 1000, "height": 200}
 CROP_REGIONS = {
-    "firstStepLeft": {"one": {"top": 100, "left": 350, "width": 1000, "height": 500}},
-    "firstStepRight": {"one": {"top": 820, "left": 250, "width": 1000, "height": 200}},
-    "secondStepLeft": {"one": {"top": 900, "left": 500, "width": 180, "height": 380}},
-    "secondStepRight": {"one": {"top": 900, "left": 1100, "width": 180, "height": 180}},
+    "firstStep": {"one": {"top": 100, "left": 350, "width": 1000, "height": 500},
+                  "two": {"top": 100, "left": 350, "width": 1000, "height": 500}
+    },
+    "secondStepLeft": {"one": {"top": 100, "left": 350, "width": 1000, "height": 500}},
+    "secondStepRight": {"one": {"top": 820, "left": 250, "width": 1000, "height": 200}},
+    "thirdStepLeft": {"one": {"top": 900, "left": 500, "width": 180, "height": 380}},
+    "thirdStepRight": {"one": {"top": 900, "left": 1100, "width": 180, "height": 180}},
     "thirdStep": {"one": {"top": 1300, "left": 700, "width": 180, "height": 380}},
 }
 
