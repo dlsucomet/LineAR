@@ -236,6 +236,32 @@ def draw_instruction_panel(surface, area):
     default_panel_h = 572
     scale_y = max(0.5, area.height / default_panel_h)
 
+    if config.problem_loaded and getattr(config, "active_vectors", None) and len(config.active_vectors) >= 3:
+        u_vec = config.active_vectors[0]
+        w_vec = config.active_vectors[1]
+        v_vec = config.active_vectors[2]
+        lu = config.expected_answers.get("firstStepRight", ["?", "?"])
+        lw = config.expected_answers.get("secondStepRight", ["?", "?"])
+
+        header_surf = font_bold.render("Problem:", True, config.COLOR_TEXT)
+        surface.blit(header_surf, (cx, cy))
+        cy += int(22 * scale_y)
+
+        problem_text = (
+            f"Let L: R\u00b2 \u2192 R\u00b2 be a linear transformation such that "
+            f"L([{u_vec['x']} {u_vec['y']}]) = [{lu[0]} {lu[1]}], "
+            f"L([{w_vec['x']} {w_vec['y']}]) = [{lw[0]} {lw[1]}]. "
+            f"Find L([{v_vec['x']} {v_vec['y']}])."
+        )
+        for line in wrap_text(problem_text, font_body, mw):
+            surface.blit(font_body.render(line, True, config.COLOR_TEXT), (cx, cy))
+            cy += int(20 * scale_y)
+        cy += int(10 * scale_y)
+
+        sep_y = int(cy)
+        pygame.draw.line(surface, config.COLOR_GRID, (cx, sep_y), (cx + mw, sep_y), 1)
+        cy += int(10 * scale_y)
+
     for line in wrap_text(step_info["title"], font_large, mw):
         surface.blit(font_large.render(line, True, config.COLOR_TEXT), (cx, cy))
         cy += int(36 * scale_y)
