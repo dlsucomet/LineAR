@@ -4,6 +4,7 @@ import json
 import time
 import cv2
 import numpy as np
+from collections import Counter
 from datetime import datetime
 import config
 from logger import log_message
@@ -285,7 +286,10 @@ def scan_qr_from_camera():
         config.target_vector = (of1, on1)
 
         config.expected_answers = {
-            "firstStep":       {"one": [str(c1), str(c2)]},
+            "firstStepOne":    {"one": [str(f1), str(n1)]},
+            "firstStepTwo":    {"one": [str(g1), str(v1)]},
+            "firstStepThree":  {"one": [str(g2), str(v2)]},
+            "firstStepFour":   {"one": [str(c1), str(c2)]},
             "secondStepLeft":  {"one": [str(c1), str(og1), str(ov1)]},
             "secondStepRight": {"one": [str(c2), str(og2), str(ov2)]},
             "thirdStepLeft":   {"one": [str(c1og1), str(c1ov1)]},
@@ -371,14 +375,19 @@ def background_ocr_pipeline():
         is_valid = False
         expected = config.expected_answers.get(config.current_step, {})
         all_empty = all(len(v) == 0 for v in recognized_data.values())
-        if not all_empty and recognized_data == expected:
-            is_valid = True
+        if not all_empty and expected:
+            # A region passes if every expected value is present in what was
+            # recognized for that region (duplicates counted individually via
+            # Counter), even if extra/unexpected tokens were also picked up.
+            is_valid = all(
+                not (Counter(expected_tokens) - Counter(recognized_data.get(region_name, [])))
+                for region_name, expected_tokens in expected.items()
+            )
         if is_valid:
             config.green_count += 1
             config.feedback_step = config.current_step
             config.feedback_state = "green"
             config.feedback_timer = 60
-            config.show_hint = False
             idx = config.STEP_SEQUENCE.index(config.current_step)
             if idx < len(config.STEP_SEQUENCE) - 1:
                 config.current_step = config.STEP_SEQUENCE[idx + 1]
@@ -391,7 +400,6 @@ def background_ocr_pipeline():
             config.feedback_step = config.current_step
             config.feedback_state = "red"
             config.feedback_timer = 60
-            config.show_hint = True
             log_message(f"REJECTED: Submission mismatch. Got: {list(recognized_data.values())}")
         
         with open(config.SESSION_PATH) as f:
