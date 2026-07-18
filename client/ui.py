@@ -309,23 +309,25 @@ def draw_instruction_panel(surface, area):
         vy = cy
         vx = _draw_text(surface, vx, vy, "L", center_h=vec_h)
         vx += 16
-        _draw_paren(surface, vx, vy, vec_h, "left")
+        vx += _draw_paren(surface, vx, vy, vec_h, "left")
         vx = _draw_vvec(surface, vx, vy, [u_vec['x'], u_vec['y']]) + 2
         vx += _draw_paren(surface, vx, vy, vec_h, "right")
         vx += 16
         vx = _draw_text(surface, vx, vy, " = ", center_h=vec_h)
-        _draw_paren(surface, vx, vy, vec_h, "left")
+        vx += 16
+        vx += _draw_paren(surface, vx, vy, vec_h, "left")
         vx = _draw_vvec(surface, vx, vy, [lu[0], lu[1]]) + 2
         vx += _draw_paren(surface, vx, vy, vec_h, "right")
         vx += 16
         vx = _draw_text(surface, vx, vy, ",  L", center_h=vec_h)
         vx += 16
-        _draw_paren(surface, vx, vy, vec_h, "left")
+        vx += _draw_paren(surface, vx, vy, vec_h, "left")
         vx = _draw_vvec(surface, vx, vy, [w_vec['x'], w_vec['y']]) + 2
         vx += _draw_paren(surface, vx, vy, vec_h, "right")
         vx += 16
         vx = _draw_text(surface, vx, vy, " = ", center_h=vec_h)
-        _draw_paren(surface, vx, vy, vec_h, "left")
+        vx += 16
+        vx += _draw_paren(surface, vx, vy, vec_h, "left")
         vx = _draw_vvec(surface, vx, vy, [lw[0], lw[1]]) + 2
         vx += _draw_paren(surface, vx, vy, vec_h, "right")
         cy += int(50 * scale_y)
@@ -334,7 +336,7 @@ def draw_instruction_panel(surface, area):
         vy = cy
         vx = _draw_text(surface, vx, vy, "Find L", center_h=vec_h)
         vx += 16
-        _draw_paren(surface, vx, vy, vec_h, "left")
+        vx += _draw_paren(surface, vx, vy, vec_h, "left")
         vx = _draw_vvec(surface, vx, vy, [v_vec['x'], v_vec['y']]) + 2
         vx += _draw_paren(surface, vx, vy, vec_h, "right")
         vx += 16
