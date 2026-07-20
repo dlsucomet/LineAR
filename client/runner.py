@@ -8,8 +8,6 @@ from pipeline import (
     paper_tracking_daemon,
     background_ocr_pipeline,
     scan_qr_from_camera,
-    track_pen_tip,
-    update_pen_state,
 )
 from logger import log_message, init_session_files
 import ui
@@ -82,6 +80,7 @@ def reset_for_new_problem():
     config.red_count = 0
     config.is_processing = False
     config.transformation_progress = 0.0
+    config.complete_point_progress = 0.0
     config.last_ocr_time = 0
     config.problem_ended_early = False
     config.app_phase = "start"
@@ -286,60 +285,6 @@ def main(mode):
             end_box_h,
         )
 
-        # Pen tracking from camera feed
-        with config.shared_frame_lock:
-            frame = config.latest_frame
-        if frame is not None:
-            screen_w, screen_h = screen.get_size()
-            pos = track_pen_tip(frame, screen_w, screen_h)
-            update_pen_state(pos)
-
-            if pos is not None:
-                now = time.time()
-                hover_target = None
-                if config.app_phase == "start" and start_btn_rect.collidepoint(pos):
-                    hover_target = "start"
-                elif config.app_phase == "done" and new_problem_btn_rect.collidepoint(
-                    pos
-                ):
-                    hover_target = "new_problem"
-                elif config.app_phase == "done" and done_btn_rect.collidepoint(pos):
-                    hover_target = "done"
-                elif config.app_phase == "running" and end_btn_rect.collidepoint(pos):
-                    hover_target = "end"
-                elif config.app_phase == "nasa_tlx":
-                    hover_target = "nasa"
-                elif config.app_phase == "ueq_s":
-                    hover_target = "ueq"
-
-                if hover_target is not None:
-                    if hover_target == config.pen_hover_button:
-                        if (now - config.pen_hover_start) >= 0.5 and (
-                            now - config.pen_last_click_time
-                        ) > 0.3:
-                            pygame.event.post(
-                                pygame.event.Event(
-                                    pygame.MOUSEBUTTONDOWN, {
-                                        "pos": pos, "button": 1}
-                                )
-                            )
-                            pygame.event.post(
-                                pygame.event.Event(
-                                    pygame.MOUSEBUTTONUP, {
-                                        "pos": pos, "button": 1}
-                                )
-                            )
-                            config.pen_last_click_time = now
-                            config.pen_hover_button = None
-                            config.pen_hover_start = now
-                    else:
-                        config.pen_hover_button = hover_target
-                        config.pen_hover_start = now
-                else:
-                    config.pen_hover_button = None
-            else:
-                config.pen_hover_button = None
-
         for event in pygame.event.get():
             if event.type == pygame.QUIT:
                 handle_shutdown(from_button=False)
@@ -455,17 +400,6 @@ def main(mode):
                 elif event.key == pygame.K_F11:
                     config.fullscreen = not config.fullscreen
                     toggle_fullscreen()
-                elif event.key == pygame.K_c:
-                    if not config.pen_calibrating:
-                        config.pen_calibrating = True
-                        config.pen_calib_samples = []
-                        print(
-                            "\n>>> PEN CALIBRATION STARTED — hold pen tip still in frame <<<"
-                        )
-                elif event.key == pygame.K_v:
-                    config.pen_debug_collect = 60
-                    config.pen_debug_samples = []
-                    print("\n>>> HSV DEBUG — collecting 60 frames at center... <<<")
 
             elif event.type == pygame.VIDEORESIZE:
                 if not config.fullscreen:
@@ -509,10 +443,15 @@ def main(mode):
 
         if config.current_step == "complete":
             if config.transformation_progress < 1.0:
-                config.transformation_progress += 0.05
+                config.transformation_progress += 0.003
+            if config.complete_point_progress < 1.0:
+                config.complete_point_progress += 0.003
 
         config.transformation_progress = max(
             0.0, min(1.0, config.transformation_progress)
+        )
+        config.complete_point_progress = max(
+            0.0, min(1.0, config.complete_point_progress)
         )
 
         ui.draw_top_bar(screen)
@@ -528,10 +467,10 @@ def main(mode):
         elif config.app_phase == "done":
             center_rect = ui.draw_panels(screen, mode="done")
             new_problem_btn_rect = ui.draw_new_problem_button(
-                screen, center_rect, y_offset=-30
+                screen, center_rect, y_offset=-60
             )
             done_btn_rect = ui.draw_done_button(
-                screen, center_rect, y_offset=30)
+                screen, center_rect, y_offset=60)
         elif config.app_phase == "nasa_tlx":
             draw_nasa_tlx(screen)
         elif config.app_phase == "ueq_s":
@@ -544,9 +483,6 @@ def main(mode):
             config.feedback_timer -= 1
             if config.feedback_timer == 0:
                 config.feedback_state = None
-
-        if config.pen_position is not None and config.app_phase != "running":
-            ui.draw_pen_cursor(screen, config.pen_position)
 
         pygame.display.flip()
         clock.tick(60)

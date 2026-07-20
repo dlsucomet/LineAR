@@ -13,6 +13,9 @@ matrix_engine = VariableMatrix()
 # Tracking variable for shape morphing progress (0.0 = Base Shape, 1.0 = Fully Transformed)
 transformation_progress = 0.0
 
+# Progress for the L(w) point fly-in animation at the "complete" step
+complete_point_progress = 0.0
+
 parser = argparse.ArgumentParser()
 parser.add_argument("--mode", choices=["highlights", "no_highlights"], default="no_highlights")
 args = parser.parse_args()
@@ -42,6 +45,7 @@ COLOR_GRID = (226, 232, 240)
 COLOR_WHITE = (255, 255, 255)
 COLOR_POINT_LIGHT = (100, 160, 230)
 COLOR_POINT_DARK = (26, 58, 107)
+COLOR_POINT_BLUE = (59, 130, 246)
 
 BASE_DIR = os.path.dirname(os.path.abspath(__file__))
 LOGS_DIR = os.path.join(BASE_DIR, "logs")
@@ -113,26 +117,6 @@ cap = None
 ocr_reader = None
 
 latest_frame = None
-pen_position = None
-pen_visible = False
-pen_click_queue = []
-pen_hsv_lower = (98, 61, 87)
-pen_hsv_upper = (125, 142, 153)
-pen_accel = 2.0
-pen_track_active = False
-pen_track_start = None
-pen_track_last = None
-pen_smooth_pos = None
-pen_median_buffer = []
-pen_last_click_time = 0
-pen_has_clicked = False
-pen_hover_button = None
-pen_hover_start = 0
-pen_debug_hsv = False
-pen_debug_collect = 0
-pen_debug_samples = []
-pen_calibrating = False
-pen_calib_samples = []
 
 
 STEP_GUIDANCE = {

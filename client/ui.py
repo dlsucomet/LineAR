@@ -14,9 +14,9 @@ font_equation = None
 def _init_fonts():
     global font_large, font_medium, font_body, font_bold, font_equation
     pygame.font.init()
-    font_large = pygame.font.SysFont("segoeui", 24, bold=True)
+    font_large = pygame.font.SysFont("segoeui", 28, bold=True)
     font_medium = pygame.font.SysFont("segoeui", 18)
-    font_body = pygame.font.SysFont("segoeui", 15)
+    font_body = pygame.font.SysFont("segoeui", 18)
     font_bold = pygame.font.SysFont("segoeui", 15, bold=True)
     font_equation = pygame.font.SysFont("segoeui", 15, bold=True)
 
@@ -103,25 +103,29 @@ def draw_top_bar(surface):
     pygame.draw.rect(surface, config.COLOR_BLUE, bar_rect)
     if config.app_phase == "start":
         text = font_large.render(
-            "Use the pen to click Start", True, config.COLOR_WHITE)
+            "Click Start", True, config.COLOR_WHITE)
     elif config.app_phase == "scan_qr":
         text = font_large.render(
             "Show the QR code side of your paper to the camera", True, config.COLOR_WHITE)
     elif config.app_phase == "done":
         text = font_large.render(
-            "Use the pen to click Done", True, config.COLOR_WHITE)
+            "Please press new problem for another problem, please press done to finish", True, config.COLOR_WHITE)
     elif config.app_phase == "nasa_tlx":
         page = config.nasa_tlx_current_page + 1
         total = 6
         title = f"NASA-TLX ({page}/{total})"
         text = font_large.render(
-            f"Questionnaire: {title} — Use the pen to interact", True, config.COLOR_WHITE)
+            f"Questionnaire: {title}", True, config.COLOR_WHITE)
     elif config.app_phase == "ueq_s":
         text = font_large.render(
-            "Questionnaire: UEQ-S — Use the pen to interact", True, config.COLOR_WHITE)
+            "Questionnaire: UEQ-S", True, config.COLOR_WHITE)
     else:
-        text = font_large.render(
-            "Place paper on the designated projection area", True, config.COLOR_WHITE)
+        if getattr(config.args, "mode", "") == "highlights":
+            text = font_large.render(
+                "Please copy the number as highlighted by the blue marker", True, config.COLOR_WHITE)
+        else:
+            text = font_large.render(
+                "Place paper on the designated projection area", True, config.COLOR_WHITE)
     surface.blit(text, text.get_rect(
         center=(surface.get_width() // 2, config.TOP_BAR_HEIGHT // 2)))
 
@@ -201,7 +205,7 @@ def draw_cartesian_plane(surface, area):
     if max_extent > 0:
         half_area = min(area.width, area.height) / 2
         fit_scale = max(1, int(half_area / (max_extent + 5)))
-        scale = min(scale, fit_scale)
+        scale = fit_scale
 
     grid_surf = pygame.Surface((area.width, area.height), pygame.SRCALPHA)
 
@@ -243,6 +247,23 @@ def draw_cartesian_plane(surface, area):
                 tx = int(v_px + (final_tx - v_px) * prog)
                 ty = int(v_py + (final_ty - v_py) * prog)
                 color = config.COLOR_POINT_DARK
+            elif vec["label"] == "L(w)":
+                prog = getattr(config, "complete_point_progress", 0.0)
+                w_vec = next((v for v in config.active_vectors if v.get("type") == "point" and v["label"] == "w"), None)
+                w_px = ox + int(w_vec["x"] * scale) if w_vec else ox
+                w_py = oy - int(w_vec["y"] * scale) if w_vec else oy
+                final_tx = ox + int(vec["x"] * scale)
+                final_ty = oy - int(vec["y"] * scale)
+                tx = int(w_px + (final_tx - w_px) * prog)
+                ty = int(w_py + (final_ty - w_py) * prog)
+                color = config.COLOR_POINT_BLUE
+                radius = int(6 + 2 * prog)
+                if area.x <= tx <= area.x + area.width and area.y <= ty <= area.y + area.height:
+                    pygame.draw.circle(surface, color, (tx, ty), radius)
+                    if prog > 0.5:
+                        surface.blit(font_bold.render(f'{vec["label"]} ({vec["x"]},{
+                                     vec["y"]})', True, color), (tx + 16, ty - 4))
+                continue
             else:
                 color = config.COLOR_TEXT
                 tx, ty = ox + int(vec["x"] * scale), oy - int(vec["y"] * scale)
@@ -459,11 +480,11 @@ def draw_instruction_panel(surface, area):
     for line in wrap_text(step_info["title"], font_large, mw):
         surface.blit(font_large.render(
             line, True, config.COLOR_TEXT), (cx, cy))
-        cy += int(36 * scale_y)
-    cy += int(4 * scale_y)
+        cy += int(40 * scale_y)
+    cy += int(6 * scale_y)
     for line in wrap_text(step_info["desc"], font_body, mw):
         surface.blit(font_body.render(line, True, config.COLOR_TEXT), (cx, cy))
-        cy += int(22 * scale_y)
+        cy += int(26 * scale_y)
     cy += int(10 * scale_y)
 
     bottom_limit = area.y + area.height - pad
@@ -556,8 +577,8 @@ def draw_instruction_panel(surface, area):
             ((34, 197, 94),       "correct"),
             ((239, 68, 68),       "incorrect"),
         ]
-        sq = 16
-        line_h = 32
+        sq = 20
+        line_h = 40
         total_legend_h = len(legend_items) * line_h
         legend_x = cx
         legend_y = area.bottom - pad - total_legend_h
@@ -812,11 +833,3 @@ def draw_transformed_triangle(surface, area, ox, oy, scale):
     surface.blit(poly_surf, (area.x, area.y))
     pygame.draw.polygon(surface, color, pixel_points, 3)
     surface.set_clip(clip_rect)
-
-
-def draw_pen_cursor(surface, pos):
-    cx, cy = pos
-    r = 12
-    pygame.draw.circle(surface, (30, 30, 30), (cx, cy), r)
-    pygame.draw.circle(surface, (255, 255, 255), (cx, cy), r, 2)
-    pygame.draw.circle(surface, (255, 255, 255), (cx, cy), 2)
