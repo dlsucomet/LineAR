@@ -285,12 +285,16 @@ def scan_qr_from_camera():
         config.target_vector = (of1, on1)
 
         config.expected_answers = {
-            "firstStep":       {"one": [str(c1), str(c2)]},
-            "secondStepLeft":  {"one": [str(c1), str(og1), str(ov1)]},
-            "secondStepRight": {"one": [str(c2), str(og2), str(ov2)]},
-            "thirdStepLeft":   {"one": [str(c1og1), str(c1ov1)]},
-            "thirdStepRight":  {"one": [str(c2og2), str(c2ov2)]},
-            "fourthStep":      {"one": [str(of1), str(on1)]},
+            "firstStep":        {},
+            "firstStepOne":     {"one": [str(f1), str(n1)]},
+            "firstStepTwo":     {"one": [str(g1), str(v1)]},
+            "firstStepThree":   {"one": [str(g2), str(v2)]},
+            "firstStepFour":    {"one": [str(c1), str(c2)]},
+            "secondStepLeft":   {"one": [str(c1), str(og1), str(ov1)]},
+            "secondStepRight":  {"one": [str(c2), str(og2), str(ov2)]},
+            "thirdStepLeft":    {"one": [str(c1og1), str(c1ov1)]},
+            "thirdStepRight":   {"one": [str(c2og2), str(c2ov2)]},
+            "fourthStep":       {"one": [str(of1), str(on1)]},
         }
 
         log_message(f"QR parsed — u=({g1},{v1}) L(u)=({og1},{ov1}) | v=({g2},{v2}) L(v)=({og2},{ov2}) | w=({f1},{n1}) L(w)=({of1},{on1})")
@@ -305,6 +309,15 @@ def scan_qr_from_camera():
 
     config.is_processing = False
 
+
+
+def _expected_subset_match(recognized_data, expected):
+    for region_name, expected_tokens in expected.items():
+        recognized_tokens = [str(t) for t in recognized_data.get(region_name, [])]
+        for token in expected_tokens:
+            if str(token) not in recognized_tokens:
+                return False
+    return True
 
 
 def background_ocr_pipeline():
@@ -371,7 +384,16 @@ def background_ocr_pipeline():
         is_valid = False
         expected = config.expected_answers.get(config.current_step, {})
         all_empty = all(len(v) == 0 for v in recognized_data.values())
-        if not all_empty and recognized_data == expected:
+
+        if not expected and not regions:
+            idx = config.STEP_SEQUENCE.index(config.current_step)
+            if idx < len(config.STEP_SEQUENCE) - 1:
+                config.current_step = config.STEP_SEQUENCE[idx + 1]
+                log_message(f"SKIPPED: Step has no expected values, advancing to '{config.current_step}'.")
+            config.is_processing = False
+            return
+
+        if not all_empty and expected and _expected_subset_match(recognized_data, expected):
             is_valid = True
         if is_valid:
             config.green_count += 1
