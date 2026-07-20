@@ -1,7 +1,7 @@
 import re
 import pygame
 import config
-import math 
+import math
 from pipeline import transform_to_projection_space
 
 font_large = None
@@ -9,6 +9,7 @@ font_medium = None
 font_body = None
 font_bold = None
 font_equation = None
+
 
 def _init_fonts():
     global font_large, font_medium, font_body, font_bold, font_equation
@@ -18,6 +19,7 @@ def _init_fonts():
     font_body = pygame.font.SysFont("segoeui", 15)
     font_bold = pygame.font.SysFont("segoeui", 15, bold=True)
     font_equation = pygame.font.SysFont("segoeui", 15, bold=True)
+
 
 # Step-by-step guidance dictionary configuration
 STEP_GUIDANCE = {
@@ -78,6 +80,7 @@ STEP_GUIDANCE = {
     }
 }
 
+
 def wrap_text(text, font, max_width):
     words = text.split(" ")
     lines = []
@@ -94,29 +97,39 @@ def wrap_text(text, font, max_width):
         lines.append(current_line)
     return lines
 
+
 def draw_top_bar(surface):
     bar_rect = pygame.Rect(0, 0, surface.get_width(), config.TOP_BAR_HEIGHT)
     pygame.draw.rect(surface, config.COLOR_BLUE, bar_rect)
     if config.app_phase == "start":
-        text = font_large.render("Use the pen to click Start", True, config.COLOR_WHITE)
+        text = font_large.render(
+            "Use the pen to click Start", True, config.COLOR_WHITE)
     elif config.app_phase == "scan_qr":
-        text = font_large.render("Show the QR code side of your paper to the camera", True, config.COLOR_WHITE)
+        text = font_large.render(
+            "Show the QR code side of your paper to the camera", True, config.COLOR_WHITE)
     elif config.app_phase == "done":
-        text = font_large.render("Use the pen to click Done", True, config.COLOR_WHITE)
+        text = font_large.render(
+            "Use the pen to click Done", True, config.COLOR_WHITE)
     elif config.app_phase == "nasa_tlx":
         page = config.nasa_tlx_current_page + 1
         total = 6
         title = f"NASA-TLX ({page}/{total})"
-        text = font_large.render(f"Questionnaire: {title} — Use the pen to interact", True, config.COLOR_WHITE)
+        text = font_large.render(
+            f"Questionnaire: {title} — Use the pen to interact", True, config.COLOR_WHITE)
     elif config.app_phase == "ueq_s":
-        text = font_large.render("Questionnaire: UEQ-S — Use the pen to interact", True, config.COLOR_WHITE)
+        text = font_large.render(
+            "Questionnaire: UEQ-S — Use the pen to interact", True, config.COLOR_WHITE)
     else:
-        text = font_large.render("Place paper on the designated projection area", True, config.COLOR_WHITE)
-    surface.blit(text, text.get_rect(center=(surface.get_width() // 2, config.TOP_BAR_HEIGHT // 2)))
+        text = font_large.render(
+            "Place paper on the designated projection area", True, config.COLOR_WHITE)
+    surface.blit(text, text.get_rect(
+        center=(surface.get_width() // 2, config.TOP_BAR_HEIGHT // 2)))
+
 
 def draw_bottom_bar(surface, center_rect=None):
     H = surface.get_height()
-    bar_rect = pygame.Rect(0, H - config.BOTTOM_BAR_HEIGHT, surface.get_width(), config.BOTTOM_BAR_HEIGHT)
+    bar_rect = pygame.Rect(0, H - config.BOTTOM_BAR_HEIGHT,
+                           surface.get_width(), config.BOTTOM_BAR_HEIGHT)
     pygame.draw.rect(surface, config.COLOR_BG, bar_rect)
 
     msg = config.status_msg
@@ -130,7 +143,8 @@ def draw_bottom_bar(surface, center_rect=None):
         if avail_w > 20:
             full_text = f"CONSOLE LOG: {msg}"
             lines = wrap_text(full_text, font_bold, avail_w)
-            show_hints = getattr(config, "debug_mode", False) and getattr(config, "debug_hints", False)
+            show_hints = getattr(config, "debug_mode", False) and getattr(
+                config, "debug_hints", False)
             max_lines = 2 if show_hints else 3
             if len(lines) > max_lines:
                 lines = lines[:max_lines]
@@ -150,25 +164,29 @@ def draw_bottom_bar(surface, center_rect=None):
             hints += " | [P] Preview"
         hints += " | [H] Hints"
         hint_surf = font_bold.render(hints, True, config.COLOR_TEXT)
-        surface.blit(hint_surf, (config.OUTER_GAP, bar_rect.bottom - hint_surf.get_height() - 6))
+        surface.blit(hint_surf, (config.OUTER_GAP,
+                     bar_rect.bottom - hint_surf.get_height() - 6))
 
     if getattr(config, "debug_mode", False):
         return draw_debug_button(surface)
     return None
 
+
 def draw_cartesian_plane(surface, area):
     pygame.draw.rect(surface, config.COLOR_WHITE, area)
-    
+
     ox, oy = area.x + area.width // 2, area.y + area.height // 2
-    
+
     if getattr(config, "feedback_timer", 0) > 0 and getattr(config, "feedback_state", "") == "green":
-        amplitude = 25 
+        amplitude = 25
         frequency = 0.1
-        bounce_offset = int(amplitude * math.sin(config.feedback_timer * frequency) * (config.feedback_timer / 60.0))
+        bounce_offset = int(amplitude * math.sin(config.feedback_timer *
+                            frequency) * (config.feedback_timer / 60.0))
         ox += bounce_offset
-        oy -= bounce_offset  
+        oy -= bounce_offset
     step_order = config.STEP_SEQUENCE
-    current_idx = step_order.index(config.current_step) if config.current_step in step_order else 0
+    current_idx = step_order.index(
+        config.current_step) if config.current_step in step_order else 0
     scale = max(1, int(min(area.width, area.height) / 14))
 
     max_extent = 0
@@ -186,21 +204,26 @@ def draw_cartesian_plane(surface, area):
         scale = min(scale, fit_scale)
 
     grid_surf = pygame.Surface((area.width, area.height), pygame.SRCALPHA)
-    
+
     for x in range(ox % scale, area.x + area.width, scale):
         local_x = x - area.x
-        pygame.draw.line(grid_surf, (*config.COLOR_GRID, 180), (local_x, 0), (local_x, area.height))
+        pygame.draw.line(grid_surf, (*config.COLOR_GRID, 180),
+                         (local_x, 0), (local_x, area.height))
     for y in range(oy % scale, area.y + area.height, scale):
         local_y = y - area.y
-        pygame.draw.line(grid_surf, (*config.COLOR_GRID, 180), (0, local_y), (area.width, local_y))
-        
+        pygame.draw.line(grid_surf, (*config.COLOR_GRID, 180),
+                         (0, local_y), (area.width, local_y))
+
     surface.blit(grid_surf, (area.x, area.y))
-    pygame.draw.line(surface, config.COLOR_TEXT, (area.x, oy), (area.x + area.width, oy), 2)
-    pygame.draw.line(surface, config.COLOR_TEXT, (ox, area.y), (ox, area.y + area.height), 2)
+    pygame.draw.line(surface, config.COLOR_TEXT, (area.x, oy),
+                     (area.x + area.width, oy), 2)
+    pygame.draw.line(surface, config.COLOR_TEXT, (ox, area.y),
+                     (ox, area.y + area.height), 2)
     clip_rect = surface.get_clip()
     surface.set_clip(area)
 
-    v_vec = next((v for v in config.active_vectors if v.get("type") == "point" and v["label"] == "v"), None)
+    v_vec = next((v for v in config.active_vectors if v.get(
+        "type") == "point" and v["label"] == "v"), None)
     v_px = ox + int(v_vec["x"] * scale) if v_vec else ox
     v_py = oy - int(v_vec["y"] * scale) if v_vec else oy
 
@@ -225,24 +248,31 @@ def draw_cartesian_plane(surface, area):
                 tx, ty = ox + int(vec["x"] * scale), oy - int(vec["y"] * scale)
             if area.x <= tx <= area.x + area.width and area.y <= ty <= area.y + area.height:
                 pygame.draw.circle(surface, color, (tx, ty), 6)
-                surface.blit(font_bold.render(f'{vec["label"]} ({vec["x"]},{vec["y"]})', True, color), (tx + 16, ty - 4))
+                surface.blit(font_bold.render(f'{vec["label"]} ({vec["x"]},{
+                             vec["y"]})', True, color), (tx + 16, ty - 4))
         else:
             tx, ty = ox + int(vec["x"] * scale), oy - int(vec["y"] * scale)
             if area.x <= tx <= area.x + area.width and area.y <= ty <= area.y + area.height:
-                pygame.draw.line(surface, config.COLOR_TEXT, (ox, oy), (tx, ty), 4)
+                pygame.draw.line(surface, config.COLOR_TEXT,
+                                 (ox, oy), (tx, ty), 4)
                 angle = math.atan2(oy - ty, tx - ox)
                 arrow_len = 14
                 arrow_w = 6
-                base_lx = tx - arrow_len * math.cos(angle) + arrow_w * math.sin(angle)
-                base_ly = ty + arrow_len * math.sin(angle) + arrow_w * math.cos(angle)
-                base_rx = tx - arrow_len * math.cos(angle) - arrow_w * math.sin(angle)
-                base_ry = ty + arrow_len * math.sin(angle) - arrow_w * math.cos(angle)
+                base_lx = tx - arrow_len * \
+                    math.cos(angle) + arrow_w * math.sin(angle)
+                base_ly = ty + arrow_len * \
+                    math.sin(angle) + arrow_w * math.cos(angle)
+                base_rx = tx - arrow_len * \
+                    math.cos(angle) - arrow_w * math.sin(angle)
+                base_ry = ty + arrow_len * \
+                    math.sin(angle) - arrow_w * math.cos(angle)
                 pygame.draw.polygon(surface, config.COLOR_TEXT, [
                     (tx, ty),
                     (int(base_lx), int(base_ly)),
                     (int(base_rx), int(base_ry))
                 ])
-                surface.blit(font_bold.render(f'{vec["label"]} ({vec["x"]},{vec["y"]})', True, config.COLOR_TEXT), (tx + 16, ty - 4))
+                surface.blit(font_bold.render(f'{vec["label"]} ({vec["x"]},{
+                             vec["y"]})', True, config.COLOR_TEXT), (tx + 16, ty - 4))
     surface.set_clip(clip_rect)
 
 
@@ -275,7 +305,8 @@ def get_hint_math(step):
 def draw_instruction_panel(surface, area):
     pad = 20
     cx, cy, mw = area.x + pad, area.y + pad, area.width - pad * 2
-    step_info = STEP_GUIDANCE.get(config.current_step, STEP_GUIDANCE["complete"])
+    step_info = STEP_GUIDANCE.get(
+        config.current_step, STEP_GUIDANCE["complete"])
     if config.current_step == "complete" and config.target_vector:
         tx, ty = config.target_vector
         step_info = dict(step_info, math=f"L(v) = [{tx} / {ty}]")
@@ -293,8 +324,10 @@ def draw_instruction_panel(surface, area):
         u_vec = config.active_vectors[0]
         w_vec = config.active_vectors[1]
         v_vec = config.active_vectors[2]
-        lu = config.expected_answers.get("secondStepLeft", {}).get("one", ["?", "?"])
-        lw = config.expected_answers.get("thirdStepLeft", {}).get("one", ["?", "?"])
+        lu = config.expected_answers.get(
+            "secondStepLeft", {}).get("one", ["?", "?"])
+        lw = config.expected_answers.get(
+            "thirdStepLeft", {}).get("one", ["?", "?"])
 
         header_surf = font_large.render("Problem:", True, config.COLOR_TEXT)
         surface.blit(header_surf, (cx, cy))
@@ -312,7 +345,8 @@ def draw_instruction_panel(surface, area):
             bx = x
             pygame.draw.line(surf, pcol, (bx, y), (bx, y + total_h), 2)
             pygame.draw.line(surf, pcol, (bx, y), (bx + 4, y), 2)
-            pygame.draw.line(surf, pcol, (bx, y + total_h), (bx + 4, y + total_h), 2)
+            pygame.draw.line(surf, pcol, (bx, y + total_h),
+                             (bx + 4, y + total_h), 2)
             tx = bx + 6
             for i, s in enumerate(strs):
                 ts = pf.render(s, True, pcol)
@@ -327,7 +361,8 @@ def draw_instruction_panel(surface, area):
             rx = tx + mw_v + 6
             pygame.draw.line(surf, pcol, (rx, y), (rx, y + total_h), 2)
             pygame.draw.line(surf, pcol, (rx, y), (rx - 4, y), 2)
-            pygame.draw.line(surf, pcol, (rx, y + total_h), (rx - 4, y + total_h), 2)
+            pygame.draw.line(surf, pcol, (rx, y + total_h),
+                             (rx - 4, y + total_h), 2)
             return rx
 
         def _draw_paren(surf, x, y, h, side, width=2):
@@ -355,15 +390,20 @@ def draw_instruction_panel(surface, area):
 
         vx = cx
         vy = cy
-        vx = _draw_text(surface, vx, vy, "Let L: R\u00b2 \u2192 R\u00b2 be a linear transformation such that")
+        vx = _draw_text(
+            surface, vx, vy, "Let L: R\u00b2 \u2192 R\u00b2 be a linear transformation such that")
         cy += int(24 * scale_y)
 
         vec_h = 2 * pf.get_height() + 2
 
-        step_colors = {None: None, "firstStep": None, "firstStepOne": [config.COLOR_HIGHLIGHT_BLUE, config.COLOR_POINT_LIGHT], "firstStepTwo": [config.COLOR_HIGHLIGHT_BLUE, config.COLOR_POINT_LIGHT], "firstStepThree": [config.COLOR_HIGHLIGHT_BLUE, config.COLOR_POINT_LIGHT]}
-        hl_u = step_colors.get(config.current_step) if config.current_step == "firstStepTwo" else None
-        hl_w = step_colors.get(config.current_step) if config.current_step == "firstStepThree" else None
-        hl_v = step_colors.get(config.current_step) if config.current_step == "firstStepOne" else None
+        step_colors = {None: None, "firstStep": None, "firstStepOne": [config.COLOR_HIGHLIGHT_BLUE, config.COLOR_POINT_LIGHT], "firstStepTwo": [
+            config.COLOR_HIGHLIGHT_BLUE, config.COLOR_POINT_LIGHT], "firstStepThree": [config.COLOR_HIGHLIGHT_BLUE, config.COLOR_POINT_LIGHT]}
+        hl_u = step_colors.get(
+            config.current_step) if config.current_step == "firstStepTwo" else None
+        hl_w = step_colors.get(
+            config.current_step) if config.current_step == "firstStepThree" else None
+        hl_v = step_colors.get(
+            config.current_step) if config.current_step == "firstStepOne" else None
 
         vx = cx
         vy = cy
@@ -371,7 +411,8 @@ def draw_instruction_panel(surface, area):
         vx += 16
         _draw_paren(surface, vx, vy, vec_h, "left")
         vx += 10
-        vx = _draw_vvec(surface, vx, vy, [u_vec['x'], u_vec['y']], colors=hl_u) + 10
+        vx = _draw_vvec(surface, vx, vy, [
+                        u_vec['x'], u_vec['y']], colors=hl_u) + 10
         vx += _draw_paren(surface, vx, vy, vec_h, "right")
         vx += 16
         vx = _draw_text(surface, vx, vy, " = ", center_h=vec_h)
@@ -385,7 +426,8 @@ def draw_instruction_panel(surface, area):
         vx += 16
         _draw_paren(surface, vx, vy, vec_h, "left")
         vx += 10
-        vx = _draw_vvec(surface, vx, vy, [w_vec['x'], w_vec['y']], colors=hl_w) + 10
+        vx = _draw_vvec(surface, vx, vy, [
+                        w_vec['x'], w_vec['y']], colors=hl_w) + 10
         vx += _draw_paren(surface, vx, vy, vec_h, "right")
         vx += 16
         vx = _draw_text(surface, vx, vy, " = ", center_h=vec_h)
@@ -402,18 +444,21 @@ def draw_instruction_panel(surface, area):
         vx += 16
         _draw_paren(surface, vx, vy, vec_h, "left")
         vx += 10
-        vx = _draw_vvec(surface, vx, vy, [v_vec['x'], v_vec['y']], colors=hl_v) + 10
+        vx = _draw_vvec(surface, vx, vy, [
+                        v_vec['x'], v_vec['y']], colors=hl_v) + 10
         vx += _draw_paren(surface, vx, vy, vec_h, "right")
         vx += 16
         vx = _draw_text(surface, vx, vy, ".", center_h=vec_h)
         cy += int(50 * scale_y)
 
         sep_y = int(cy)
-        pygame.draw.line(surface, config.COLOR_GRID, (cx, sep_y), (cx + mw, sep_y), 1)
+        pygame.draw.line(surface, config.COLOR_GRID,
+                         (cx, sep_y), (cx + mw, sep_y), 1)
         cy += int(10 * scale_y)
 
     for line in wrap_text(step_info["title"], font_large, mw):
-        surface.blit(font_large.render(line, True, config.COLOR_TEXT), (cx, cy))
+        surface.blit(font_large.render(
+            line, True, config.COLOR_TEXT), (cx, cy))
         cy += int(36 * scale_y)
     cy += int(4 * scale_y)
     for line in wrap_text(step_info["desc"], font_body, mw):
@@ -470,29 +515,38 @@ def draw_instruction_panel(surface, area):
         for i, (ptype, pcontent) in enumerate(parts):
             if ptype == "text":
                 t_surf = use_font.render(pcontent, True, config.COLOR_TEXT)
-                surface.blit(t_surf, (current_x, center_y - t_surf.get_height() // 2))
+                surface.blit(t_surf, (current_x, center_y -
+                             t_surf.get_height() // 2))
                 current_x += t_surf.get_width()
             else:
                 rows = pcontent
-                row_surfaces = [use_font.render(r, True, config.COLOR_TEXT) for r in rows]
+                row_surfaces = [use_font.render(
+                    r, True, config.COLOR_TEXT) for r in rows]
                 max_row_w = max(s.get_width() for s in row_surfaces)
                 total_h = len(rows) * row_h + (len(rows) - 1) * line_spacing
                 bracket_top = center_y - total_h // 2
                 bracket_bottom = bracket_top + total_h
 
-                pygame.draw.line(surface, config.COLOR_TEXT, (current_x, bracket_top), (current_x, bracket_bottom), 2)
-                pygame.draw.line(surface, config.COLOR_TEXT, (current_x, bracket_top), (current_x + 4, bracket_top), 2)
-                pygame.draw.line(surface, config.COLOR_TEXT, (current_x, bracket_bottom), (current_x + 4, bracket_bottom), 2)
+                pygame.draw.line(surface, config.COLOR_TEXT, (current_x,
+                                 bracket_top), (current_x, bracket_bottom), 2)
+                pygame.draw.line(surface, config.COLOR_TEXT, (current_x,
+                                 bracket_top), (current_x + 4, bracket_top), 2)
+                pygame.draw.line(surface, config.COLOR_TEXT, (current_x,
+                                 bracket_bottom), (current_x + 4, bracket_bottom), 2)
 
                 content_x = current_x + 6
                 for j, surf in enumerate(row_surfaces):
                     row_y = bracket_top + j * (row_h + line_spacing)
-                    surface.blit(surf, (content_x + (max_row_w - surf.get_width()) // 2, row_y))
+                    surface.blit(
+                        surf, (content_x + (max_row_w - surf.get_width()) // 2, row_y))
 
                 right_x = content_x + max_row_w + 6
-                pygame.draw.line(surface, config.COLOR_TEXT, (right_x, bracket_top), (right_x, bracket_bottom), 2)
-                pygame.draw.line(surface, config.COLOR_TEXT, (right_x, bracket_top), (right_x - 4, bracket_top), 2)
-                pygame.draw.line(surface, config.COLOR_TEXT, (right_x, bracket_bottom), (right_x - 4, bracket_bottom), 2)
+                pygame.draw.line(surface, config.COLOR_TEXT,
+                                 (right_x, bracket_top), (right_x, bracket_bottom), 2)
+                pygame.draw.line(surface, config.COLOR_TEXT,
+                                 (right_x, bracket_top), (right_x - 4, bracket_top), 2)
+                pygame.draw.line(surface, config.COLOR_TEXT, (right_x,
+                                 bracket_bottom), (right_x - 4, bracket_bottom), 2)
 
                 current_x = right_x
 
@@ -513,6 +567,7 @@ def draw_instruction_panel(surface, area):
             surface.blit(txt, (legend_x + sq + 6, legend_y - 2))
             legend_y += line_h
 
+
 def draw_projection_boxes(surface, center):
     with config.shared_frame_lock:
         tracking = config.paper_detected
@@ -528,26 +583,36 @@ def draw_projection_boxes(surface, center):
         if proj_mat is not None:
             if config.args.mode == "highlights":
                 for _, box in config.PROJECTION_REGIONS[highlight_step].items():
-                    tl = transform_to_projection_space(box["left"], box["top"], center, proj_mat)
-                    br = transform_to_projection_space(box["left"] + box["width"], box["top"] + box["height"], center, proj_mat)
+                    tl = transform_to_projection_space(
+                        box["left"], box["top"], center, proj_mat)
+                    br = transform_to_projection_space(
+                        box["left"] + box["width"], box["top"] + box["height"], center, proj_mat)
                     if tl and br:
-                        pygame.draw.rect(surface, config.COLOR_BLUE, (tl[0], tl[1], br[0]-tl[0], br[1]-tl[1]))
+                        pygame.draw.rect(
+                            surface, config.COLOR_BLUE, (tl[0], tl[1], br[0]-tl[0], br[1]-tl[1]))
         elif not tracking:
-            msg = font_bold.render("[ Align ArUco Markers to Project Guides ]", True, config.COLOR_TEXT)
+            msg = font_bold.render(
+                "[ Align ArUco Markers to Project Guides ]", True, config.COLOR_TEXT)
             surface.blit(msg, msg.get_rect(center=center.center))
 
     if config.feedback_timer > 0 and config.feedback_step and config.feedback_step in config.CROP_REGIONS:
         proj_mat = track_mat if tracking else frozen_mat
         if proj_mat is not None:
-            feedback_color = (34, 197, 94) if config.feedback_state == "green" else (239, 68, 68)
+            feedback_color = (
+                34, 197, 94) if config.feedback_state == "green" else (239, 68, 68)
             for _, box in config.CROP_REGIONS[config.feedback_step].items():
-                tl = transform_to_projection_space(box["left"], box["top"], center, proj_mat)
-                br = transform_to_projection_space(box["left"] + box["width"], box["top"] + box["height"], center, proj_mat)
+                tl = transform_to_projection_space(
+                    box["left"], box["top"], center, proj_mat)
+                br = transform_to_projection_space(
+                    box["left"] + box["width"], box["top"] + box["height"], center, proj_mat)
                 if tl and br:
-                    pygame.draw.rect(surface, feedback_color, (tl[0], tl[1], br[0]-tl[0], br[1]-tl[1]))
+                    pygame.draw.rect(surface, feedback_color,
+                                     (tl[0], tl[1], br[0]-tl[0], br[1]-tl[1]))
+
 
 def draw_panels(surface, mode="running"):
-    left, center, right = config.get_panel_rects(surface.get_width(), surface.get_height())
+    left, center, right = config.get_panel_rects(
+        surface.get_width(), surface.get_height())
     for rect in [left, center, right]:
         pygame.draw.rect(surface, config.COLOR_WHITE, rect)
         pygame.draw.rect(surface, config.COLOR_BLUE, rect, 3)
@@ -558,7 +623,8 @@ def draw_panels(surface, mode="running"):
     if mode == "scan_qr":
         draw_cartesian_plane(surface, left)
         pygame.draw.rect(surface, config.COLOR_BLUE, left, 3)
-        msg = font_bold.render("[ Scanning for QR code... ]", True, config.COLOR_TEXT)
+        msg = font_bold.render(
+            "[ Scanning for QR code... ]", True, config.COLOR_TEXT)
         surface.blit(msg, msg.get_rect(center=center.center))
         draw_instruction_panel(surface, right)
         return center
@@ -575,23 +641,27 @@ def draw_panels(surface, mode="running"):
     draw_instruction_panel(surface, right)
     return center
 
+
 def draw_start_button(surface, center_rect):
     btn_w = max(100, min(260, int(center_rect.width * 0.30)))
     btn_h = max(28, min(70, int(btn_w * 70 / 260)))
     btn_rect = pygame.Rect(
         center_rect.x + (center_rect.width - btn_w) // 2,
-        center_rect.y + (center_rect.height - btn_h) // 2, 
-        btn_w, 
+        center_rect.y + (center_rect.height - btn_h) // 2,
+        btn_w,
         btn_h
     )
     mx, my = pygame.mouse.get_pos()
     hovered = btn_rect.collidepoint(mx, my)
     if hovered:
-        pygame.draw.rect(surface, config.COLOR_WHITE, btn_rect, border_radius=12)
-        pygame.draw.rect(surface, config.COLOR_BLUE, btn_rect, 3, border_radius=12)
+        pygame.draw.rect(surface, config.COLOR_WHITE,
+                         btn_rect, border_radius=12)
+        pygame.draw.rect(surface, config.COLOR_BLUE,
+                         btn_rect, 3, border_radius=12)
         text = font_large.render("START", True, config.COLOR_BLUE)
     else:
-        pygame.draw.rect(surface, config.COLOR_BLUE, btn_rect, border_radius=12)
+        pygame.draw.rect(surface, config.COLOR_BLUE,
+                         btn_rect, border_radius=12)
         text = font_large.render("START", True, config.COLOR_WHITE)
     text_rect = text.get_rect(center=btn_rect.center)
     surface.blit(text, text_rect)
@@ -602,13 +672,17 @@ def draw_end_task_button(surface, center_rect):
     btn_w = max(80, min(160, int(center_rect.width * 0.18)))
     btn_h = max(22, min(44, int(btn_w * 44 / 160)))
     H = surface.get_height()
-    rect = pygame.Rect(center_rect.centerx - btn_w // 2, H - config.BOTTOM_BAR_HEIGHT + (config.BOTTOM_BAR_HEIGHT - btn_h) // 2, btn_w, btn_h)
+    rect = pygame.Rect(center_rect.centerx - btn_w // 2, H - config.BOTTOM_BAR_HEIGHT +
+                       (config.BOTTOM_BAR_HEIGHT - btn_h) // 2, btn_w, btn_h)
     hovered = rect.collidepoint(pygame.mouse.get_pos())
-    pygame.draw.rect(surface, config.COLOR_WHITE if hovered else config.COLOR_BLUE, rect, border_radius=6)
+    pygame.draw.rect(
+        surface, config.COLOR_WHITE if hovered else config.COLOR_BLUE, rect, border_radius=6)
     pygame.draw.rect(surface, config.COLOR_BLUE, rect, 3, border_radius=6)
-    t = font_medium.render("End Task", True, config.COLOR_BLUE if hovered else config.COLOR_WHITE)
+    t = font_medium.render(
+        "End Task", True, config.COLOR_BLUE if hovered else config.COLOR_WHITE)
     surface.blit(t, t.get_rect(center=rect.center))
     return rect
+
 
 def draw_done_button(surface, center_rect, y_offset=0):
     btn_w = max(100, min(260, int(center_rect.width * 0.30)))
@@ -623,8 +697,9 @@ def draw_done_button(surface, center_rect, y_offset=0):
     hovered = btn_rect.collidepoint(mx, my)
     green = (34, 197, 94)
     if hovered:
-        pygame.draw.rect(surface, config.COLOR_WHITE, btn_rect, border_radius=12)
-        pygame.draw.rect(green, btn_rect, 3, border_radius=12)
+        pygame.draw.rect(surface, config.COLOR_WHITE,
+                         btn_rect, border_radius=12)
+        pygame.draw.rect(surface, green, btn_rect, 3, border_radius=12)
         text = font_large.render("DONE", True, green)
     else:
         pygame.draw.rect(surface, green, btn_rect, border_radius=12)
@@ -632,6 +707,7 @@ def draw_done_button(surface, center_rect, y_offset=0):
     text_rect = text.get_rect(center=btn_rect.center)
     surface.blit(text, text_rect)
     return btn_rect
+
 
 def draw_new_problem_button(surface, center_rect, y_offset=0):
     btn_w = max(100, min(260, int(center_rect.width * 0.30)))
@@ -649,28 +725,37 @@ def draw_new_problem_button(surface, center_rect, y_offset=0):
     line1 = small_font.render("NEW", True, color)
     line2 = small_font.render("PROBLEM", True, color)
     if hovered:
-        pygame.draw.rect(surface, config.COLOR_WHITE, btn_rect, border_radius=12)
-        pygame.draw.rect(surface, config.COLOR_BLUE, btn_rect, 3, border_radius=12)
+        pygame.draw.rect(surface, config.COLOR_WHITE,
+                         btn_rect, border_radius=12)
+        pygame.draw.rect(surface, config.COLOR_BLUE,
+                         btn_rect, 3, border_radius=12)
     else:
-        pygame.draw.rect(surface, config.COLOR_BLUE, btn_rect, border_radius=12)
+        pygame.draw.rect(surface, config.COLOR_BLUE,
+                         btn_rect, border_radius=12)
     gap = 2
     total_h = line1.get_height() + gap + line2.get_height()
     start_y = btn_rect.centery - total_h // 2
     surface.blit(line1, line1.get_rect(centerx=btn_rect.centerx, top=start_y))
-    surface.blit(line2, line2.get_rect(centerx=btn_rect.centerx, top=start_y + line1.get_height() + gap))
+    surface.blit(line2, line2.get_rect(centerx=btn_rect.centerx,
+                 top=start_y + line1.get_height() + gap))
     return btn_rect
+
 
 def draw_debug_button(surface):
     H = surface.get_height()
     W = surface.get_width()
     btn_w, btn_h = 120, 30
-    rect = pygame.Rect(W - btn_w - config.OUTER_GAP, H - config.BOTTOM_BAR_HEIGHT + (config.BOTTOM_BAR_HEIGHT - btn_h) // 2, btn_w, btn_h)
+    rect = pygame.Rect(W - btn_w - config.OUTER_GAP, H - config.BOTTOM_BAR_HEIGHT +
+                       (config.BOTTOM_BAR_HEIGHT - btn_h) // 2, btn_w, btn_h)
     hovered = rect.collidepoint(pygame.mouse.get_pos())
-    pygame.draw.rect(surface, config.COLOR_WHITE if hovered else config.COLOR_BLUE, rect, border_radius=4)
+    pygame.draw.rect(
+        surface, config.COLOR_WHITE if hovered else config.COLOR_BLUE, rect, border_radius=4)
     pygame.draw.rect(surface, config.COLOR_BLUE, rect, 2, border_radius=4)
-    t = font_bold.render("DEBUG: Next Step", True, config.COLOR_BLUE if hovered else config.COLOR_WHITE)
+    t = font_bold.render("DEBUG: Next Step", True,
+                         config.COLOR_BLUE if hovered else config.COLOR_WHITE)
     surface.blit(t, t.get_rect(center=rect.center))
     return rect
+
 
 def draw_transformed_triangle(surface, area, ox, oy, scale):
     """Draws a parallelogram from the basis vectors that morphs into the transformed shape."""
@@ -705,7 +790,8 @@ def draw_transformed_triangle(surface, area, ox, oy, scale):
     ]
 
     current_progress = getattr(config, "transformation_progress", 0.0)
-    vertices = config.matrix_engine.transform_shape(base_vertices, current_progress)
+    vertices = config.matrix_engine.transform_shape(
+        base_vertices, current_progress)
 
     r = int(59 + (34 - 59) * current_progress)
     g = int(130 + (197 - 130) * current_progress)
