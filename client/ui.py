@@ -204,8 +204,7 @@ def draw_cartesian_plane(surface, area):
         max_extent = max(max_extent, abs(tx), abs(ty))
     if max_extent > 0:
         half_area = min(area.width, area.height) / 2
-        fit_scale = max(1.0, half_area / (max_extent + 5))
-        scale = fit_scale
+        scale = min(scale, max(1.0, half_area / (max_extent + 3)))
 
     grid_surf = pygame.Surface((area.width, area.height), pygame.SRCALPHA)
 
