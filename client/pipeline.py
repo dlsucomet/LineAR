@@ -178,16 +178,16 @@ def detect_content_bands(warped_img):
     return bands
 
 
-def _preprocessing_passes(region_img, blue):
+def _preprocessing_passes(region_img):
+    gray = cv2.cvtColor(region_img, cv2.COLOR_BGR2GRAY)
     for bs, c in [(15, 2), (15, 4), (31, 2), (31, 4)]:
         try:
-            thresh = cv2.adaptiveThreshold(blue, 255, cv2.ADAPTIVE_THRESH_GAUSSIAN_C,
+            thresh = cv2.adaptiveThreshold(gray, 255, cv2.ADAPTIVE_THRESH_GAUSSIAN_C,
                                            cv2.THRESH_BINARY_INV, bs, c)
             yield f"adaptive({bs},{c})", cv2.bitwise_not(thresh)
         except Exception:
             continue
     try:
-        gray = cv2.cvtColor(region_img, cv2.COLOR_BGR2GRAY)
         resized = cv2.resize(gray, (0, 0), fx=2.0, fy=2.0, interpolation=cv2.INTER_LANCZOS4)
         clahe = cv2.createCLAHE(clipLimit=2.0, tileGridSize=(16, 16))
         enhanced = clahe.apply(resized)
@@ -198,9 +198,8 @@ def _preprocessing_passes(region_img, blue):
 
 
 def _ocr_region(region_img, reader, min_confidence=0.3):
-    blue = region_img[:, :, 0]
     candidates = []
-    for label, processed in _preprocessing_passes(region_img, blue):
+    for label, processed in _preprocessing_passes(region_img):
         try:
             results = reader.readtext(processed, allowlist='0123456789-', paragraph=False)
             tokens = []
