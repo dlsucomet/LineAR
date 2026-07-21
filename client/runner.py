@@ -433,9 +433,20 @@ def main(mode):
 
         if config.app_phase == "running" and config.problem_loaded and not config.is_processing:
             now = pygame.time.get_ticks()
+            marker_elapsed = time.time() - config.markers_visible_since
+            remaining = max(0, 3.0 - marker_elapsed)
+            if remaining > 0:
+                countdown = int(remaining) + 1
+                if not hasattr(config, '_last_countdown') or config._last_countdown != countdown:
+                    config._last_countdown = countdown
+                    log_message(f"OCR ready in {countdown}s (markers visible for {marker_elapsed:.1f}s)")
+            else:
+                if not hasattr(config, '_last_countdown') or config._last_countdown != 0:
+                    config._last_countdown = 0
+                    log_message("Markers stable — OCR eligible")
             if (
-                now - config.last_ocr_time >= 3000
-                and time.time() - config.paper_stable_since >= 3.0
+                now - config.last_ocr_time >= 1000
+                and marker_elapsed >= 3.0
             ):
                 config.last_ocr_time = now
                 config.is_processing = True

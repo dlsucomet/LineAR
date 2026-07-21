@@ -32,12 +32,9 @@ def paper_tracking_daemon():
     canvas_w, canvas_h = max_w, max_h + 600
     last_state = False
     last_seen_ids = set()
-    last_matrix = None
-    last_src_pts = None
     smoothed_tracking = None
     ema_alpha = 0.3
     last_capture_time = 0
-    STABILITY_PIXEL_TOLERANCE = 3.0  # max per-corner movement (px) to still count as "stable"
     last_full_detect_time = 0.0
     MARKER_DROPOUT_GRACE = 0.5  # seconds to tolerate a brief marker dropout before declaring lock lost
     
@@ -78,14 +75,8 @@ def paper_tracking_daemon():
                 ], dtype="float32")
                 M = cv2.getPerspectiveTransform(src_pts, dst_pts)
                 _, M_inv = cv2.invert(M)
-                if last_src_pts is None:
-                    config.paper_stable_since = time.time()
-                else:
-                    max_corner_shift = np.max(np.linalg.norm(src_pts - last_src_pts, axis=1))
-                    if max_corner_shift > STABILITY_PIXEL_TOLERANCE:
-                        config.paper_stable_since = time.time()
-                last_src_pts = src_pts.copy()
-                last_matrix = M_inv.copy()
+                if config.markers_visible_since == 0:
+                    config.markers_visible_since = time.time()
                 last_full_detect_time = time.time()
                 if smoothed_tracking is None:
                     smoothed_tracking = M_inv.copy()
@@ -100,7 +91,7 @@ def paper_tracking_daemon():
                     last_state = True
 
                 now_capture = time.time()
-                is_settled = now_capture - config.paper_stable_since >= 1.0  # matrix hasn't moved in the last 1s
+                is_settled = now_capture - config.markers_visible_since >= 1.0
                 if config.PARTICIPANT_DIR and is_settled and now_capture - last_capture_time >= 3.0:
                     last_capture_time = now_capture
                     captures_dir = os.path.join(config.PARTICIPANT_DIR, "ocr_captures")
@@ -137,8 +128,7 @@ def paper_tracking_daemon():
                 if not config.debug_preview:
                     config.frozen_tracking_matrix = config.tracking_matrix
                     config.paper_detected = False
-            last_matrix = None
-            last_src_pts = None
+            config.markers_visible_since = 0
             last_capture_time = 0  # reset so the next lock starts its own capture cadence
             if last_state:
                 log_message("Tracking Lock Lost: Target sheet missing or occluded.")

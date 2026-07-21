@@ -110,7 +110,7 @@ warped_document = None
 tracking_matrix = None
 frozen_tracking_matrix = None
 paper_detected = False
-paper_stable_since = 0
+markers_visible_since = 0
 
 shared_frame_lock = threading.Lock()
 cap = None
