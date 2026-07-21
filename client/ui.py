@@ -191,7 +191,7 @@ def draw_cartesian_plane(surface, area):
     step_order = config.STEP_SEQUENCE
     current_idx = step_order.index(
         config.current_step) if config.current_step in step_order else 0
-    scale = max(1, int(min(area.width, area.height) / 14))
+    scale = max(1.0, min(area.width, area.height) / 14)
 
     max_extent = 0
     for vec in config.active_vectors:
@@ -204,19 +204,23 @@ def draw_cartesian_plane(surface, area):
         max_extent = max(max_extent, abs(tx), abs(ty))
     if max_extent > 0:
         half_area = min(area.width, area.height) / 2
-        fit_scale = max(1, int(half_area / (max_extent + 5)))
+        fit_scale = max(1.0, half_area / (max_extent + 5))
         scale = fit_scale
 
     grid_surf = pygame.Surface((area.width, area.height), pygame.SRCALPHA)
 
-    for x in range(ox % scale, area.x + area.width, scale):
+    x = ox % scale
+    while x < area.x + area.width:
         local_x = x - area.x
         pygame.draw.line(grid_surf, (*config.COLOR_GRID, 180),
                          (local_x, 0), (local_x, area.height))
-    for y in range(oy % scale, area.y + area.height, scale):
+        x += scale
+    y = oy % scale
+    while y < area.y + area.height:
         local_y = y - area.y
         pygame.draw.line(grid_surf, (*config.COLOR_GRID, 180),
                          (0, local_y), (area.width, local_y))
+        y += scale
 
     surface.blit(grid_surf, (area.x, area.y))
     pygame.draw.line(surface, config.COLOR_TEXT, (area.x, oy),
