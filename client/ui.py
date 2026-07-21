@@ -10,15 +10,30 @@ font_body = None
 font_bold = None
 font_equation = None
 
+rp_font_large = None
+rp_font_medium = None
+rp_font_body = None
+rp_font_bold = None
+rp_font_equation = None
+_font_scale = 1.0
 
-def _init_fonts():
+
+def _init_fonts(font_scale=1.0):
     global font_large, font_medium, font_body, font_bold, font_equation
+    global rp_font_large, rp_font_medium, rp_font_body, rp_font_bold, rp_font_equation
+    global _font_scale
+    _font_scale = font_scale
     pygame.font.init()
     font_large = pygame.font.SysFont("segoeui", 28, bold=True)
     font_medium = pygame.font.SysFont("segoeui", 18)
     font_body = pygame.font.SysFont("segoeui", 18)
     font_bold = pygame.font.SysFont("segoeui", 15, bold=True)
     font_equation = pygame.font.SysFont("segoeui", 15, bold=True)
+    rp_font_large = pygame.font.SysFont("segoeui", int(28 * font_scale), bold=True)
+    rp_font_medium = pygame.font.SysFont("segoeui", int(18 * font_scale))
+    rp_font_body = pygame.font.SysFont("segoeui", int(18 * font_scale))
+    rp_font_bold = pygame.font.SysFont("segoeui", int(15 * font_scale), bold=True)
+    rp_font_equation = pygame.font.SysFont("segoeui", int(15 * font_scale), bold=True)
 
 
 # Step-by-step guidance dictionary configuration
@@ -357,11 +372,11 @@ def draw_instruction_panel(surface, area):
         lw = config.expected_answers.get(
             "thirdStepLeft", {}).get("one", ["?", "?"])
 
-        header_surf = font_large.render("Problem:", True, config.COLOR_TEXT)
+        header_surf = rp_font_large.render("Problem:", True, config.COLOR_TEXT)
         surface.blit(header_surf, (cx, cy))
         cy += int(36 * scale_y)
 
-        pf = font_medium
+        pf = rp_font_medium
         pcol = config.COLOR_TEXT
 
         def _draw_vvec(surf, x, y, vals, colors=None):
@@ -484,13 +499,13 @@ def draw_instruction_panel(surface, area):
                          (cx, sep_y), (cx + mw, sep_y), 1)
         cy += int(10 * scale_y)
 
-    for line in wrap_text(step_info["title"], font_large, mw):
-        surface.blit(font_large.render(
+    for line in wrap_text(step_info["title"], rp_font_large, mw):
+        surface.blit(rp_font_large.render(
             line, True, config.COLOR_TEXT), (cx, cy))
         cy += int(40 * scale_y)
     cy += int(6 * scale_y)
-    for line in wrap_text(step_info["desc"], font_body, mw):
-        surface.blit(font_body.render(line, True, config.COLOR_TEXT), (cx, cy))
+    for line in wrap_text(step_info["desc"], rp_font_body, mw):
+        surface.blit(rp_font_body.render(line, True, config.COLOR_TEXT), (cx, cy))
         cy += int(26 * scale_y)
     cy += int(10 * scale_y)
 
@@ -520,9 +535,9 @@ def draw_instruction_panel(surface, area):
                 parts.append(("text", seg))
 
         eq_max_w = mw - 8
-        eq_font_size = 15
-        for size in range(15, 8, -2):
-            test_font = pygame.font.SysFont("segoeui", size, bold=True)
+        eq_font_size = int(15 * _font_scale)
+        for size in range(int(15 * _font_scale), int(7 * _font_scale), -2):
+            test_font = pygame.font.SysFont("segoeui", max(1, size), bold=True)
             total_w = 0
             for ptype, pcontent in parts:
                 if ptype == "text":
@@ -534,7 +549,7 @@ def draw_instruction_panel(surface, area):
                 eq_font_size = size
                 break
 
-        use_font = pygame.font.SysFont("segoeui", eq_font_size, bold=True)
+        use_font = pygame.font.SysFont("segoeui", max(1, eq_font_size), bold=True)
         row_h = use_font.get_height()
         center_y = eq_rect.centery
         current_x = eq_rect.x + 15
@@ -591,7 +606,7 @@ def draw_instruction_panel(surface, area):
         legend_y = area.bottom - pad - total_legend_h
         for color, label in legend_items:
             pygame.draw.rect(surface, color, (legend_x, legend_y, sq, sq))
-            txt = font_large.render(label, True, color)
+            txt = rp_font_large.render(label, True, color)
             surface.blit(txt, (legend_x + sq + 6, legend_y - 2))
             legend_y += line_h
 
