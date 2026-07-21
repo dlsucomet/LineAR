@@ -368,10 +368,8 @@ def draw_instruction_panel(surface, area):
         u_vec = config.active_vectors[0]
         w_vec = config.active_vectors[1]
         v_vec = config.active_vectors[2]
-        lu = config.expected_answers.get(
-            "secondStepLeft", {}).get("one", ["?", "?"])
-        lw = config.expected_answers.get(
-            "thirdStepLeft", {}).get("one", ["?", "?"])
+        lu = config.qr_data.get("step2_applyTransformation", {}).get("og1_ov1", ["?", "?"])
+        lw = config.qr_data.get("step2_applyTransformation", {}).get("og2_ov2", ["?", "?"])
 
         header_surf = rp_font_large.render("Problem:", True, config.COLOR_TEXT)
         surface.blit(header_surf, (cx, cy))
