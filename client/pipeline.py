@@ -178,26 +178,57 @@ def detect_content_bands(warped_img):
     return bands
 
 
-def _ocr_region(region_img, reader):
-    blue = region_img[:, :, 0]
-    best_tokens = []
+def _preprocessing_passes(region_img, blue):
     for bs, c in [(15, 2), (15, 4), (31, 2), (31, 4)]:
         try:
-            thresh = cv2.adaptiveThreshold(blue, 255, cv2.ADAPTIVE_THRESH_GAUSSIAN_C, cv2.THRESH_BINARY_INV, bs, c)
-            processed = cv2.bitwise_not(thresh)
-            results = reader.readtext(processed, allowlist='0123456789,-', paragraph=False)
+            thresh = cv2.adaptiveThreshold(blue, 255, cv2.ADAPTIVE_THRESH_GAUSSIAN_C,
+                                           cv2.THRESH_BINARY_INV, bs, c)
+            yield f"adaptive({bs},{c})", cv2.bitwise_not(thresh)
+        except Exception:
+            continue
+    try:
+        gray = cv2.cvtColor(region_img, cv2.COLOR_BGR2GRAY)
+        resized = cv2.resize(gray, (0, 0), fx=2.0, fy=2.0, interpolation=cv2.INTER_LANCZOS4)
+        clahe = cv2.createCLAHE(clipLimit=2.0, tileGridSize=(16, 16))
+        enhanced = clahe.apply(resized)
+        _, binary = cv2.threshold(enhanced, 0, 255, cv2.THRESH_BINARY + cv2.THRESH_OTSU)
+        yield "clahe_otsu", binary
+    except Exception:
+        pass
+
+
+def _ocr_region(region_img, reader, min_confidence=0.3):
+    blue = region_img[:, :, 0]
+    candidates = []
+    for label, processed in _preprocessing_passes(region_img, blue):
+        try:
+            results = reader.readtext(processed, allowlist='0123456789-', paragraph=False)
             tokens = []
             for (bbox, text, confidence) in results:
+                if confidence < min_confidence:
+                    continue
                 cleaned = text.replace(" ", "")
                 for match in re.finditer(r'-?\d+', cleaned):
                     token = match.group()
                     if token and token != "-":
-                        tokens.append(token)
-            if len(tokens) > len(best_tokens):
-                best_tokens = tokens
+                        y_center = bbox[0][1] + (bbox[2][1] - bbox[0][1]) / 2
+                        tokens.append((y_center, token, confidence))
+            candidates.append((label, tokens, processed))
         except Exception:
             continue
-    return best_tokens
+    if not candidates:
+        return [], {}, "none", None
+    label, tokens, debug_img = max(candidates, key=lambda c: len(c[1]))
+    tokens.sort(key=lambda item: item[0])
+    seen = set()
+    unique = []
+    conf_map = {}
+    for _, token, conf in tokens:
+        if token not in seen:
+            seen.add(token)
+            unique.append(token)
+            conf_map[token] = conf
+    return unique, conf_map, label, debug_img
 
 
 def scan_qr_from_camera():
@@ -350,36 +381,17 @@ def background_ocr_pipeline():
             r_height = max(1, min(height, img_h - r_top))
             r_width = max(1, min(width, img_w - r_left))
             crop = local_sheet[r_top:r_top+r_height, r_left:r_left+r_width]
-            
-            # Grayscale channel conversion to remove color lens rolling banding
-            gray = cv2.cvtColor(crop, cv2.COLOR_BGR2GRAY)
-            
-            # Cubic up-scale by 2.0x to handle small text dimensions safely
-            resized = cv2.resize(gray, (0, 0), fx=2.0, fy=2.0, interpolation=cv2.INTER_LANCZOS4)
-            
-            # Localized grid normalization via CLAHE to erase overhead lighting glare
-            clahe = cv2.createCLAHE(clipLimit=2.0, tileGridSize=(16, 16))
-            enhanced = clahe.apply(resized)
-            
-            _, binary = cv2.threshold(enhanced, 0, 255, cv2.THRESH_BINARY + cv2.THRESH_OTSU)
-            
+
+            tokens, conf_map, winning, debug_img = _ocr_region(crop, config.ocr_reader)
+            recognized_data[region_name] = tokens
+
             try:
-                cv2.imwrite(os.path.join(captures_dir, f"p{config.problem_number}_{config.current_step}_{region_name}_{stamp}.png"), binary)
+                if debug_img is not None:
+                    cv2.imwrite(os.path.join(captures_dir, f"p{config.problem_number}_{config.current_step}_{region_name}_{stamp}.png"), debug_img)
             except Exception:
                 pass
-                
-            ocr_results = config.ocr_reader.readtext(binary, allowlist='0123456789-', paragraph=False)
-            detected_tokens = []
-            for (bbox, text, confidence) in ocr_results:
-                cleaned = text.replace(" ", "")
-                for match in re.finditer(r'-?\d+', cleaned):
-                    token = match.group()
-                    if token and token != "-":
-                        y_center = bbox[0][1] + (bbox[2][1] - bbox[0][1]) / 2
-                        detected_tokens.append((y_center, token))
-            detected_tokens.sort(key=lambda item: item[0])
-            recognized_data[region_name] = [t for (_, t) in detected_tokens]
-            log_message(f"Parsed region '{region_name}' values -> {recognized_data[region_name]}")
+
+            log_message(f"Region '{region_name}': winning={winning} tokens={tokens} confidences={conf_map}")
         
         is_valid = False
         expected = config.expected_answers.get(config.current_step, {})
