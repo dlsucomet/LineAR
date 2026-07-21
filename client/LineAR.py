@@ -195,7 +195,18 @@ def background_ocr_pipeline():
             blue_channel = crop[:, :, 0]
             thresh = cv2.adaptiveThreshold(blue_channel, 255, cv2.ADAPTIVE_THRESH_GAUSSIAN_C, cv2.THRESH_BINARY_INV, 15, 4)
             processed_crop = cv2.bitwise_not(thresh)
-            ocr_results = ocr_reader.readtext(processed_crop, allowlist='0123456789-', paragraph=False)
+            ocr_results = ocr_reader.readtext(
+                processed_crop,
+                allowlist='0123456789-',
+                paragraph=False,
+                detail=1,
+                text_threshold=0.3,
+                low_text=0.3,
+                contrast_ths=0.3,
+                adjust_contrast=0.7,
+                mag_ratio=1.5,
+                min_size=10,
+            )
             detected_tokens = []
             for (bbox, text, confidence) in ocr_results:
                 cleaned = text.replace(" ", "")

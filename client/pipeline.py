@@ -186,13 +186,32 @@ def _preprocessing_passes(region_img):
         yield "clahe_otsu", binary
     except Exception:
         pass
+    try:
+        upscaled = cv2.resize(gray, (0, 0), fx=2.0, fy=2.0, interpolation=cv2.INTER_CUBIC)
+        kernel = cv2.getStructuringElement(cv2.MORPH_RECT, (2, 2))
+        morphed = cv2.morphologyEx(upscaled, cv2.MORPH_CLOSE, kernel)
+        _, clean = cv2.threshold(morphed, 0, 255, cv2.THRESH_BINARY + cv2.THRESH_OTSU)
+        yield "upscale_morph", clean
+    except Exception:
+        pass
 
 
 def _ocr_region(region_img, reader, min_confidence=0.3):
     candidates = []
     for label, processed in _preprocessing_passes(region_img):
         try:
-            results = reader.readtext(processed, allowlist='0123456789-', paragraph=False)
+            results = reader.readtext(
+                processed,
+                allowlist='0123456789-',
+                paragraph=False,
+                detail=1,
+                text_threshold=0.3,
+                low_text=0.3,
+                contrast_ths=0.3,
+                adjust_contrast=0.7,
+                mag_ratio=1.5,
+                min_size=10,
+            )
             tokens = []
             for (bbox, text, confidence) in results:
                 if confidence < min_confidence:
@@ -208,7 +227,7 @@ def _ocr_region(region_img, reader, min_confidence=0.3):
             continue
     if not candidates:
         return [], {}, "none", None
-    label, tokens, debug_img = max(candidates, key=lambda c: len(c[1]))
+    label, tokens, debug_img = max(candidates, key=lambda c: sum(t[2] for t in c[1]) if c[1] else 0)
     tokens.sort(key=lambda item: item[0])
     seen = set()
     unique = []
