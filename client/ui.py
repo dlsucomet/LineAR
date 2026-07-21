@@ -327,6 +327,9 @@ def get_hint_math(step):
     try:
         c1 = qr['step1_linearCombination']['c1']
         c2 = qr['step1_linearCombination']['c2']
+        g1, v1 = qr['step1_linearCombination']['v1']
+        g2, v2 = qr['step1_linearCombination']['v2']
+        f1, n1 = qr['step1_linearCombination']['v_target']
         og1, ov1 = qr['step2_applyTransformation']['og1_ov1']
         og2, ov2 = qr['step2_applyTransformation']['og2_ov2']
         c1og1, c1ov1 = qr['step3_scalarMultiplication']['scaled_vector1']
@@ -337,6 +340,7 @@ def get_hint_math(step):
 
     hints = {
         "firstStep":       f"L([c1]*u + [c2]*v) = [c1]*L(u) + [c2]*L(v)".replace("[c1]", str(c1)).replace("[c2]", str(c2)),
+        "firstStepFour":   f"[{f1} / {n1}] = {c1} * [{g1} / {v1}] + {c2} * [{g2} / {v2}]",
         "secondStepLeft":  f"[{c1}] * [{og1} / {ov1}]",
         "secondStepRight": f"[{c2}] * [{og2} / {ov2}]",
         "thirdStepLeft":   f"[{c1}] * [{og1} / {ov1}] = [{c1og1} / {c1ov1}]",
@@ -447,6 +451,10 @@ def draw_instruction_panel(surface, area):
             config.current_step) if config.current_step == "firstStepThree" else None
         hl_v = step_colors.get(
             config.current_step) if config.current_step == "firstStepOne" else None
+        hl_lu = step_colors.get(
+            config.current_step) if config.current_step == "secondStepLeft" else None
+        hl_lw = step_colors.get(
+            config.current_step) if config.current_step == "secondStepRight" else None
 
         vx = cx
         vy = cy
@@ -462,7 +470,7 @@ def draw_instruction_panel(surface, area):
         vx += 16
         _draw_paren(surface, vx, vy, vec_h, "left")
         vx += 10
-        vx = _draw_vvec(surface, vx, vy, [lu[0], lu[1]]) + 10
+        vx = _draw_vvec(surface, vx, vy, [lu[0], lu[1]], colors=hl_lu) + 10
         vx += _draw_paren(surface, vx, vy, vec_h, "right")
         vx += 16
         vx = _draw_text(surface, vx, vy, ",  L", center_h=vec_h)
@@ -477,7 +485,7 @@ def draw_instruction_panel(surface, area):
         vx += 16
         _draw_paren(surface, vx, vy, vec_h, "left")
         vx += 10
-        vx = _draw_vvec(surface, vx, vy, [lw[0], lw[1]]) + 10
+        vx = _draw_vvec(surface, vx, vy, [lw[0], lw[1]], colors=hl_lw) + 10
         vx += _draw_paren(surface, vx, vy, vec_h, "right")
         cy += int(50 * scale_y)
 
