@@ -433,9 +433,10 @@ def draw_instruction_panel(surface, area):
 
         vx = cx
         vy = cy
-        vx = _draw_text(
-            surface, vx, vy, "Let L: R\u00b2 \u2192 R\u00b2 be a linear transformation such that")
-        cy += int(24 * scale_y)
+        for line in wrap_text("Let L: R\u00b2 \u2192 R\u00b2 be a linear transformation such that", pf, mw):
+            surface.blit(pf.render(line, True, pcol), (vx, vy))
+            vy += pf.get_height() + 2
+        cy = vy + int(4 * scale_y)
 
         vec_h = 2 * pf.get_height() + 2
 
