@@ -441,6 +441,15 @@ def main(mode):
                 threading.Thread(
                     target=background_ocr_pipeline, daemon=True).start()
 
+        if config.app_phase == "running" and config.problem_loaded and not config.is_processing:
+            expected = config.expected_answers.get(config.current_step, {})
+            regions = config.CROP_REGIONS.get(config.current_step, {})
+            if not expected and not regions:
+                idx = config.STEP_SEQUENCE.index(config.current_step)
+                if idx < len(config.STEP_SEQUENCE) - 1:
+                    config.current_step = config.STEP_SEQUENCE[idx + 1]
+                    log_message(f"AUTO-ADVANCE: Step has no OCR requirements, advancing to '{config.current_step}'.")
+
         if config.current_step == "complete":
             if config.transformation_progress < 1.0:
                 config.transformation_progress += 0.003
