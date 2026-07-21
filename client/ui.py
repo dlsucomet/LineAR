@@ -3,6 +3,7 @@ import pygame
 import config
 import math
 from pipeline import transform_to_projection_space
+from logger import log_message
 
 font_large = None
 font_medium = None
@@ -652,6 +653,8 @@ def draw_projection_boxes(surface, center):
                 if tl and br:
                     pygame.draw.rect(surface, feedback_color,
                                      (tl[0], tl[1], br[0]-tl[0], br[1]-tl[1]))
+                    if config.feedback_timer == 60:
+                        log_message(f"FEEDBACK: Drew {config.feedback_state} box for step '{config.feedback_step}'")
 
 
 def draw_panels(surface, mode="running"):

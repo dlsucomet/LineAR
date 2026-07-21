@@ -82,6 +82,7 @@ def reset_for_new_problem():
     config.transformation_progress = 0.0
     config.complete_point_progress = 0.0
     config.last_ocr_time = 0
+    config.markers_visible_since = 0
     config.problem_ended_early = False
     config.app_phase = "start"
     log_message(f"=== Problem {config.problem_number} Ready ===")
@@ -432,7 +433,6 @@ def main(mode):
             log_message(f"Problem loaded! === Problem {config.problem_number} Started ===")
 
         if config.app_phase == "running" and config.problem_loaded and not config.is_processing:
-            now = pygame.time.get_ticks()
             marker_elapsed = time.time() - config.markers_visible_since
             remaining = max(0, 3.0 - marker_elapsed)
             if remaining > 0:
@@ -445,10 +445,10 @@ def main(mode):
                     config._last_countdown = 0
                     log_message("Markers stable — OCR eligible")
             if (
-                now - config.last_ocr_time >= 1000
+                time.time() - config.last_ocr_time >= 1.0
                 and marker_elapsed >= 3.0
             ):
-                config.last_ocr_time = now
+                config.last_ocr_time = time.time()
                 config.is_processing = True
                 threading.Thread(
                     target=background_ocr_pipeline, daemon=True).start()

@@ -110,9 +110,10 @@ def paper_tracking_daemon():
                                 r_width = max(1, min(box["width"], iw - r_left))
                                 imgs.append(crop_img[r_top:r_top+r_height, r_left:r_left+r_width])
                             crop_img = np.vstack(imgs) if len(imgs) > 1 else imgs[0]
+                        gray_crop = cv2.cvtColor(crop_img, cv2.COLOR_BGR2GRAY)
                         cv2.imwrite(
                             os.path.join(captures_dir, f"p{config.problem_number}_track_{config.current_step}_{stamp}.png"),
-                            crop_img,
+                            gray_crop,
                         )
                     except Exception:
                         pass
@@ -354,7 +355,8 @@ def background_ocr_pipeline():
     os.makedirs(captures_dir, exist_ok=True)
     stamp = datetime.now().strftime("%H%M%S_%f")[:-3]
     try:
-        cv2.imwrite(os.path.join(captures_dir, f"p{config.problem_number}_warped_{config.current_step}_{stamp}.png"), local_sheet)
+        gray_sheet = cv2.cvtColor(local_sheet, cv2.COLOR_BGR2GRAY)
+        cv2.imwrite(os.path.join(captures_dir, f"p{config.problem_number}_warped_{config.current_step}_{stamp}.png"), gray_sheet)
     except Exception:
         pass
         
@@ -405,17 +407,17 @@ def background_ocr_pipeline():
             idx = config.STEP_SEQUENCE.index(config.current_step)
             if idx < len(config.STEP_SEQUENCE) - 1:
                 config.current_step = config.STEP_SEQUENCE[idx + 1]
-                log_message(f"SUCCESS: Moving to step {config.current_step}")
+                log_message(f"SUCCESS: Moving to step {config.current_step} | Expected: {expected} | Got: {recognized_data}")
             else:
                 config.app_phase = "done"
-                log_message("SUCCESS: Problem completed. Entering done phase.")
+                log_message(f"SUCCESS: Problem completed. Entering done phase. | Expected: {expected} | Got: {recognized_data}")
         else:
             config.red_count += 1
             config.feedback_step = config.current_step
             config.feedback_state = "red"
             config.feedback_timer = 60
             config.show_hint = True
-            log_message(f"REJECTED: Submission mismatch. Got: {list(recognized_data.values())}")
+            log_message(f"REJECTED: Step '{config.current_step}' incorrect | Expected: {expected} | Got: {recognized_data}")
         
         with open(config.SESSION_PATH) as f:
             session_data = json.load(f)
