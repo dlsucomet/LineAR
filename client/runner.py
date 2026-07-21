@@ -210,7 +210,7 @@ def main(mode):
     pygame.display.set_caption("LineAR - Production Projector Space")
     clock = pygame.time.Clock()
     init_session_files()
-    ui._init_fonts(min(1.1, config.WINDOW_HEIGHT / 720))
+    ui._init_fonts(min(1.2, config.WINDOW_HEIGHT / 720))
 
     log_message("Initializing hardware camera capture access...")
     camera_device = None
@@ -406,7 +406,7 @@ def main(mode):
                     screen = pygame.display.set_mode(
                         (event.w, event.h), pygame.RESIZABLE
                     )
-                    ui._init_fonts(min(1.1, event.h / 720))
+                    ui._init_fonts(min(1.2, event.h / 720))
 
         if (
             config.app_phase == "scan_qr"
