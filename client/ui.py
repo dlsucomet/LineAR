@@ -31,8 +31,8 @@ def _init_fonts(font_scale=1.0):
     font_bold = pygame.font.SysFont("segoeui", 15, bold=True)
     font_equation = pygame.font.SysFont("segoeui", 15, bold=True)
     rp_font_large = pygame.font.SysFont("segoeui", int(28 * font_scale), bold=True)
-    rp_font_medium = pygame.font.SysFont("segoeui", int(18 * font_scale))
-    rp_font_body = pygame.font.SysFont("segoeui", int(18 * font_scale))
+    rp_font_medium = pygame.font.SysFont("segoeui", int(22 * font_scale))
+    rp_font_body = pygame.font.SysFont("segoeui", int(22 * font_scale))
     rp_font_bold = pygame.font.SysFont("segoeui", int(15 * font_scale), bold=True)
     rp_font_equation = pygame.font.SysFont("segoeui", int(15 * font_scale), bold=True)
 
@@ -42,12 +42,12 @@ STEP_GUIDANCE = {
     "firstStep": {
         "title": "Linear Combination Setup",
         "desc": "Express the input vector as a linear combination of the given basis vectors.",
-        "math": "L(c1*v1 + c2*v2) = c1*L(v1) + c2*L(v2)"
+        "math": "L(a*v1 + b*v2) = a*L(v1) + b*L(v2)"
     },
     "firstStepOne": {
         "title": "Identify the Target",
         "desc": "The vector you need to find is highlighted below.",
-        "math": "L(v) = ?"
+        "math": "L(w) = ?"
     },
     "firstStepTwo": {
         "title": "First Basis Vector",
@@ -57,32 +57,32 @@ STEP_GUIDANCE = {
     "firstStepThree": {
         "title": "Second Basis Vector",
         "desc": "Review the second basis vector and its transformation.",
-        "math": "L(w) = ?"
+        "math": "L(v) = ?"
     },
     "firstStepFour": {
         "title": "Solve for the coefficients",
         "desc": "Solve for the coefficients",
-        "math": "L(w) = c1 * L(u) + c2 * L(v)\nw\u2081 = c1 * u\u2081 + c2 * v\u2081  ->  c1 = ?\nw\u2082 = c1 * u\u2082 + c2 * v\u2082  ->  c2 = ?"
+        "math": "L(w) = a * L(u) + b * L(v)\nw\u2081 = a * u\u2081 + b * v\u2081          a = ?\nw\u2082 = a * u\u2082 + b * v\u2082          b = ?"
     },
     "secondStepLeft": {
         "title": "Transformation Property Expansion",
         "desc": "Substitute the known transformed vector definitions into your linear combination equation.",
-        "math": "c1 * [x1 / y1] + c2 * [x2 / y2]"
+        "math": "a * [x1 / y1] + b * [x2 / y2]"
     },
     "secondStepRight": {
         "title": "Transformation Property Expansion",
         "desc": "Substitute the known transformed vector definitions into your linear combination equation.",
-        "math": "c1 * [x1 / y1] + c2 * [x2 / y2]"
+        "math": "a * [x1 / y1] + b * [x2 / y2]"
     },
     "thirdStepLeft": {
         "title": "Scalar Multiplication",
         "desc": "Distribute the first scalar coefficient into the left vector component elements.",
-        "math": "a * [b / c] = [a * b / a * c]"
+        "math": "a[x\u2081 y\u2081] = [x\u2081' y\u2081']"
     },
     "thirdStepRight": {
         "title": "Scalar Multiplication",
         "desc": "Distribute the second scalar coefficient into the right vector component elements.",
-        "math": "a * [b / c] = [a * b / a * c]"
+        "math": "b[x\u2081 y\u2081] = [x\u2081' y\u2081']"
     },
     "fourthStep": {
         "title": "Vector Addition",
@@ -342,12 +342,12 @@ def get_hint_math(step):
         return None
 
     hints = {
-        "firstStep":       f"L([c1]*u + [c2]*v) = [c1]*L(u) + [c2]*L(v)".replace("[c1]", str(c1)).replace("[c2]", str(c2)),
-        "firstStepFour":   f"L(w) = {c1} * L(u) + {c2} * L(v)\n{f1} = c1 * {g1} + c2 * {g2}  ->  c1 = {c1}\n{n1} = c1 * {v1} + c2 * {v2}  ->  c2 = {c2}",
-        "secondStepLeft":  f"[{c1}] * [{og1} / {ov1}]",
-        "secondStepRight": f"[{c2}] * [{og2} / {ov2}]",
-        "thirdStepLeft":   f"[{c1}] * [{og1} / {ov1}] = [{c1og1} / {c1ov1}]",
-        "thirdStepRight":  f"[{c2}] * [{og2} / {ov2}] = [{c2og2} / {c2ov2}]",
+        "firstStep":       f"L([a]*u + [b]*v) = [a]*L(u) + [b]*L(v)".replace("[a]", str(c1)).replace("[b]", str(c2)),
+        "firstStepFour":   f"L(w) = {c1} * L(u) + {c2} * L(v)\n{f1} = a * {g1} + b * {g2}          a = {c1}\n{n1} = a * {v1} + b * {v2}          b = {c2}",
+        "secondStepLeft":  f"[a={c1}] * [{og1} / {ov1}]",
+        "secondStepRight": f"[b={c2}] * [{og2} / {ov2}]",
+        "thirdStepLeft":   f"[a={c1}] * [{og1} / {ov1}] = [{c1og1} / {c1ov1}]",
+        "thirdStepRight":  f"[b={c2}] * [{og2} / {ov2}] = [{c2og2} / {c2ov2}]",
         "fourthStep":      f"[{c1og1} / {c1ov1}] + [{c2og2} / {c2ov2}] = [{of1} / {on1}]",
     }
     return hints.get(step)

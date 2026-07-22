@@ -124,12 +124,12 @@ STEP_GUIDANCE = {
     "firstStep": {
         "title": "Linear Combination Setup",
         "desc": "Express the input vector as a linear combination of the given basis vectors.",
-        "math": "L(c1*v1 + c2*v2) = c1*L(v1) + c2*L(v2)"
+        "math": "L(a*v1 + b*v2) = a*L(v1) + b*L(v2)"
     },
     "firstStepOne": {
         "title": "Identify the Target",
         "desc": "The vector you need to find is highlighted below.",
-        "math": "L(v) = ?"
+        "math": "L(w) = ?"
     },
     "firstStepTwo": {
         "title": "First Basis Vector",
@@ -139,32 +139,32 @@ STEP_GUIDANCE = {
     "firstStepThree": {
         "title": "Second Basis Vector",
         "desc": "Review the second basis vector and its transformation.",
-        "math": "L(w) = ?"
+        "math": "L(v) = ?"
     },
     "firstStepFour": {
         "title": "Solve for the coefficients",
         "desc": "Solve for the coefficients",
-        "math": "L(w) = c1 * L(u) + c2 * L(v)\nw\u2081 = c1 * u\u2081 + c2 * v\u2081  ->  c1 = ?\nw\u2082 = c1 * u\u2082 + c2 * v\u2082  ->  c2 = ?"
+        "math": "L(w) = a * L(u) + b * L(v)\nw\u2081 = a * u\u2081 + b * v\u2081          a = ?\nw\u2082 = a * u\u2082 + b * v\u2082          b = ?"
     },
     "secondStepLeft": {
         "title": "Transformation Property Expansion",
         "desc": "Substitute the known transformed vector definitions into your linear combination equation.",
-        "math": "c1 * [x1 / y1] + c2 * [x2 / y2]"
+        "math": "a * [x1 / y1] + b * [x2 / y2]"
     },
     "secondStepRight": {
         "title": "Transformation Property Expansion",
         "desc": "Substitute the known transformed vector definitions into your linear combination equation.",
-        "math": "c1 * [x1 / y1] + c2 * [x2 / y2]"
+        "math": "a * [x1 / y1] + b * [x2 / y2]"
     },
     "thirdStepLeft": {
         "title": "Scalar Multiplication",
         "desc": "Distribute the first scalar coefficient into the left vector component elements.",
-        "math": "a * [b / c] = [a * b / a * c]"
+        "math": "a[x\u2081 y\u2081] = [x\u2081' y\u2081']"
     },
     "thirdStepRight": {
         "title": "Scalar Multiplication",
         "desc": "Distribute the second scalar coefficient into the right vector component elements.",
-        "math": "a * [b / c] = [a * b / a * c]"
+        "math": "b[x\u2081 y\u2081] = [x\u2081' y\u2081']"
     },
     "fourthStep": {
         "title": "Vector Addition",
