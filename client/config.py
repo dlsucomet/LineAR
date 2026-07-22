@@ -129,47 +129,47 @@ STEP_GUIDANCE = {
     },
     "firstStepOne": {
         "title": "Identify the Target",
-        "desc": "The vector you need to find is highlighted below.",
+        "desc": "The vector you need to find is highlighted below.\nWrite your answer in the first box.",
         "math": "L(w) = ?"
     },
     "firstStepTwo": {
         "title": "First Basis Vector",
-        "desc": "Review the first basis vector and its transformation.",
+        "desc": "Review the first basis vector and its transformation.\nWrite your answer in the first box.",
         "math": "L(u) = ?"
     },
     "firstStepThree": {
         "title": "Second Basis Vector",
-        "desc": "Review the second basis vector and its transformation.",
+        "desc": "Review the second basis vector and its transformation.\nWrite your answer in the first box.",
         "math": "L(v) = ?"
     },
     "firstStepFour": {
         "title": "Solve for the coefficients",
-        "desc": "Solve for the coefficients",
+        "desc": "Solve for the coefficients.\nWrite your answer in the first box.",
         "math": "L(w) = a * L(u) + b * L(v)\nw\u2081 = a * u\u2081 + b * v\u2081          a = ?\nw\u2082 = a * u\u2082 + b * v\u2082          b = ?"
     },
     "secondStepLeft": {
         "title": "Transformation Property Expansion",
-        "desc": "Substitute the known transformed vector definitions into your linear combination equation.",
+        "desc": "Substitute the known transformed vector definitions into your linear combination equation.\nWrite your answer in the second box.",
         "math": "a * [x1 / y1] + b * [x2 / y2]"
     },
     "secondStepRight": {
         "title": "Transformation Property Expansion",
-        "desc": "Substitute the known transformed vector definitions into your linear combination equation.",
+        "desc": "Substitute the known transformed vector definitions into your linear combination equation.\nWrite your answer in the second box.",
         "math": "a * [x1 / y1] + b * [x2 / y2]"
     },
     "thirdStepLeft": {
         "title": "Scalar Multiplication",
-        "desc": "Distribute the first scalar coefficient into the left vector component elements.",
+        "desc": "Distribute the first scalar coefficient into the left vector component elements.\nWrite your answer in the third box.",
         "math": "a [x\u2081 y\u2081] = [x\u2081' y\u2081']"
     },
     "thirdStepRight": {
         "title": "Scalar Multiplication",
-        "desc": "Distribute the second scalar coefficient into the right vector component elements.",
+        "desc": "Distribute the second scalar coefficient into the right vector component elements.\nWrite your answer in the third box.",
         "math": "b [x\u2081 y\u2081] = [x\u2081' y\u2081']"
     },
     "fourthStep": {
         "title": "Vector Addition",
-        "desc": "Perform row-by-row matrix addition on your scaled vector elements to solve.",
+        "desc": "Perform row-by-row matrix addition on your scaled vector elements to solve.\nWrite your answer in the fourth box.",
         "math": "[a / b] + [c / d] = [a + c / b + d]"
     },
     "complete": {
