@@ -244,6 +244,22 @@ CROP_REGIONS = {
     "fourthStep": {"one": {"top": 1930, "left": 220, "width": 1700, "height": 400}},
 }
 
+STEP_ZONES = {
+    "firstStep":    {"top": 270,  "left": 0, "width": 2200, "height": 750},
+    "secondStep":   {"top": 1030, "left": 0, "width": 2200, "height": 500},
+    "thirdStep":    {"top": 1530, "left": 0, "width": 2200, "height": 400},
+    "fourthStep":   {"top": 1930, "left": 0, "width": 2200, "height": 400},
+}
+
+STEP_TO_ZONE = {
+    "firstStep": "firstStep", "firstStepOne": "firstStep",
+    "firstStepTwo": "firstStep", "firstStepThree": "firstStep",
+    "firstStepFour": "firstStep",
+    "secondStepLeft": "secondStep", "secondStepRight": "secondStep",
+    "thirdStepLeft": "thirdStep", "thirdStepRight": "thirdStep",
+    "fourthStep": "fourthStep",
+}
+
 def get_panel_rects(surface_width, surface_height):
     avail_w = surface_width - OUTER_GAP * 2 - INNER_GAP * 2
     panel_y = TOP_BAR_HEIGHT + OUTER_GAP

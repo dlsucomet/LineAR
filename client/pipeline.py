@@ -133,30 +133,62 @@ def debug_crop_capture():
 
     annotated = sheet.copy()
     img_h, img_w = annotated.shape[:2]
+    use_bands = getattr(config.args, "mode", "") == "no_highlights"
 
-    for i, (step_name, regions) in enumerate(config.CROP_REGIONS.items()):
-        color = _STEP_COLORS[i % len(_STEP_COLORS)]
-        for region_name, box in regions.items():
+    if use_bands:
+        for i, (zone_name, zone) in enumerate(config.STEP_ZONES.items()):
+            color = _STEP_COLORS[i % len(_STEP_COLORS)]
+            z_top = max(0, min(zone["top"], img_h - 1))
+            z_left = max(0, min(zone["left"], img_w - 1))
+            z_h = max(1, min(zone["height"], img_h - z_top))
+            z_w = max(1, min(zone["width"], img_w - z_left))
+            cv2.rectangle(annotated, (z_left, z_top), (z_left + z_w, z_top + z_h), color, 3)
+            cv2.putText(annotated, zone_name, (z_left + 4, z_top + 20),
+                        cv2.FONT_HERSHEY_SIMPLEX, 0.6, color, 2)
+
+        zone_key = config.STEP_TO_ZONE.get(config.current_step)
+        if zone_key and zone_key in config.STEP_ZONES:
+            zone = config.STEP_ZONES[zone_key]
+            z_top = max(0, min(zone["top"], img_h - 1))
+            z_left = max(0, min(zone["left"], img_w - 1))
+            z_h = max(1, min(zone["height"], img_h - z_top))
+            z_w = max(1, min(zone["width"], img_w - z_left))
+            zone_crop = sheet[z_top:z_top+z_h, z_left:z_left+z_w]
+            bands = detect_content_bands(zone_crop)
+            for bi, (row_start, row_end, col_start, col_end) in enumerate(bands):
+                abs_r0 = z_top + row_start
+                abs_r1 = z_top + row_end
+                abs_c0 = z_left + col_start
+                abs_c1 = z_left + col_end
+                cv2.rectangle(annotated, (abs_c0, abs_r0), (abs_c1, abs_r1), (0, 255, 0), 2)
+                cv2.putText(annotated, f"band{bi}", (abs_c0 + 2, abs_r0 - 4),
+                            cv2.FONT_HERSHEY_SIMPLEX, 0.4, (0, 255, 0), 1)
+            cv2.imwrite(os.path.join(captures_dir,
+                        f"debug_crop_{config.current_step}_zone.png"), zone_crop)
+    else:
+        for i, (step_name, regions) in enumerate(config.CROP_REGIONS.items()):
+            color = _STEP_COLORS[i % len(_STEP_COLORS)]
+            for region_name, box in regions.items():
+                top = max(0, min(box["top"], img_h - 1))
+                left = max(0, min(box["left"], img_w - 1))
+                r_h = max(1, min(box["height"], img_h - top))
+                r_w = max(1, min(box["width"], img_w - left))
+                cv2.rectangle(annotated, (left, top), (left + r_w, top + r_h), color, 3)
+                label = f"{step_name}:{region_name}"
+                cv2.putText(annotated, label, (left + 4, top + 20),
+                            cv2.FONT_HERSHEY_SIMPLEX, 0.5, color, 1)
+
+        current_regions = config.CROP_REGIONS.get(config.current_step, {})
+        for region_name, box in current_regions.items():
             top = max(0, min(box["top"], img_h - 1))
             left = max(0, min(box["left"], img_w - 1))
             r_h = max(1, min(box["height"], img_h - top))
             r_w = max(1, min(box["width"], img_w - left))
-            cv2.rectangle(annotated, (left, top), (left + r_w, top + r_h), color, 3)
-            label = f"{step_name}:{region_name}"
-            cv2.putText(annotated, label, (left + 4, top + 20),
-                        cv2.FONT_HERSHEY_SIMPLEX, 0.5, color, 1)
+            crop = sheet[top:top + r_h, left:left + r_w]
+            cv2.imwrite(os.path.join(captures_dir,
+                        f"debug_crop_{config.current_step}_{region_name}.png"), crop)
 
     cv2.imwrite(os.path.join(captures_dir, "debug_all_regions.png"), annotated)
-
-    current_regions = config.CROP_REGIONS.get(config.current_step, {})
-    for region_name, box in current_regions.items():
-        top = max(0, min(box["top"], img_h - 1))
-        left = max(0, min(box["left"], img_w - 1))
-        r_h = max(1, min(box["height"], img_h - top))
-        r_w = max(1, min(box["width"], img_w - left))
-        crop = sheet[top:top + r_h, left:left + r_w]
-        cv2.imwrite(os.path.join(captures_dir,
-                    f"debug_crop_{config.current_step}_{region_name}.png"), crop)
 
 
 def detect_content_bands(warped_img):
@@ -370,8 +402,11 @@ def scan_qr_from_camera():
 
 
 def _expected_subset_match(recognized_data, expected):
+    band_tokens = [str(t) for t in recognized_data.get("bands", [])]
     for region_name, expected_tokens in expected.items():
         recognized_tokens = [str(t) for t in recognized_data.get(region_name, [])]
+        if not recognized_tokens:
+            recognized_tokens = band_tokens
         for token in expected_tokens:
             if str(token) not in recognized_tokens:
                 return False
@@ -394,27 +429,66 @@ def background_ocr_pipeline():
 
     log_message(f"Starting OCR evaluation routine for calculation phase: {config.current_step}")
     recognized_data = {}
+    use_bands = getattr(config.args, "mode", "") == "no_highlights"
     try:
-        regions = config.CROP_REGIONS.get(config.current_step, {})
-        for region_name, box in regions.items():
-            top, left, width, height = box["top"], box["left"], box["width"], box["height"]
-            img_h, img_w = local_sheet.shape[:2]
-            r_top = max(0, min(top, img_h - 1))
-            r_left = max(0, min(left, img_w - 1))
-            r_height = max(1, min(height, img_h - r_top))
-            r_width = max(1, min(width, img_w - r_left))
-            crop = local_sheet[r_top:r_top+r_height, r_left:r_left+r_width]
+        img_h, img_w = local_sheet.shape[:2]
 
-            tokens, conf_map, winning, debug_img = _ocr_region(crop, config.ocr_reader)
-            recognized_data[region_name] = tokens
+        if use_bands and config.current_step in config.STEP_TO_ZONE:
+            zone = config.STEP_ZONES[config.STEP_TO_ZONE[config.current_step]]
+            z_top = max(0, min(zone["top"], img_h - 1))
+            z_left = max(0, min(zone["left"], img_w - 1))
+            z_h = max(1, min(zone["height"], img_h - z_top))
+            z_w = max(1, min(zone["width"], img_w - z_left))
+            zone_crop = local_sheet[z_top:z_top+z_h, z_left:z_left+z_w]
 
-            try:
-                if debug_img is not None:
-                    cv2.imwrite(os.path.join(captures_dir, f"p{config.problem_number}_{config.current_step}_{region_name}_{stamp}.png"), debug_img)
-            except Exception:
-                pass
+            bands = detect_content_bands(zone_crop)
+            log_message(f"Zone '{config.STEP_TO_ZONE[config.current_step]}': found {len(bands)} ink bands")
 
-            log_message(f"Region '{region_name}': winning={winning} tokens={tokens} confidences={conf_map}")
+            all_tokens = []
+            all_conf = {}
+            for bi, (row_start, row_end, col_start, col_end) in enumerate(bands):
+                padding = 10
+                r0 = max(0, row_start - padding)
+                r1 = min(zone_crop.shape[0], row_end + padding)
+                c0 = max(0, col_start - padding)
+                c1 = min(zone_crop.shape[1], col_end + padding)
+                band_crop = zone_crop[r0:r1, c0:c1]
+
+                tokens, conf_map, winning, debug_img = _ocr_region(band_crop, config.ocr_reader)
+                log_message(f"Band {bi} (rows {row_start}-{row_end}): winning={winning} tokens={tokens}")
+                all_tokens.extend(tokens)
+                all_conf.update(conf_map)
+
+                try:
+                    if debug_img is not None:
+                        cv2.imwrite(os.path.join(captures_dir,
+                                    f"p{config.problem_number}_{config.current_step}_band{bi}_{stamp}.png"), debug_img)
+                except Exception:
+                    pass
+
+            recognized_data["bands"] = all_tokens
+            log_message(f"All bands tokens={all_tokens} confidences={all_conf}")
+
+        else:
+            regions = config.CROP_REGIONS.get(config.current_step, {})
+            for region_name, box in regions.items():
+                top, left, width, height = box["top"], box["left"], box["width"], box["height"]
+                r_top = max(0, min(top, img_h - 1))
+                r_left = max(0, min(left, img_w - 1))
+                r_height = max(1, min(height, img_h - r_top))
+                r_width = max(1, min(width, img_w - r_left))
+                crop = local_sheet[r_top:r_top+r_height, r_left:r_left+r_width]
+
+                tokens, conf_map, winning, debug_img = _ocr_region(crop, config.ocr_reader)
+                recognized_data[region_name] = tokens
+
+                try:
+                    if debug_img is not None:
+                        cv2.imwrite(os.path.join(captures_dir, f"p{config.problem_number}_{config.current_step}_{region_name}_{stamp}.png"), debug_img)
+                except Exception:
+                    pass
+
+                log_message(f"Region '{region_name}': winning={winning} tokens={tokens} confidences={conf_map}")
         
         is_valid = False
         expected = config.expected_answers.get(config.current_step, {})
