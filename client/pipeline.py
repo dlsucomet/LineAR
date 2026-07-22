@@ -240,19 +240,15 @@ def detect_content_bands(warped_img):
 
 def _preprocessing_passes(region_img):
     gray = cv2.cvtColor(region_img, cv2.COLOR_BGR2GRAY)
-    for bs, c in [(15, 2), (15, 4), (31, 2)]:
-        try:
-            thresh = cv2.adaptiveThreshold(gray, 255, cv2.ADAPTIVE_THRESH_GAUSSIAN_C,
-                                           cv2.THRESH_BINARY_INV, bs, c)
-            yield f"adaptive({bs},{c})", cv2.bitwise_not(thresh)
-        except Exception:
-            continue
     try:
-        resized = cv2.resize(gray, (0, 0), fx=2.0, fy=2.0, interpolation=cv2.INTER_LANCZOS4)
-        clahe = cv2.createCLAHE(clipLimit=2.0, tileGridSize=(16, 16))
-        enhanced = clahe.apply(resized)
-        _, binary = cv2.threshold(enhanced, 0, 255, cv2.THRESH_BINARY + cv2.THRESH_OTSU)
-        yield "clahe_otsu", binary
+        thresh = cv2.adaptiveThreshold(gray, 255, cv2.ADAPTIVE_THRESH_GAUSSIAN_C,
+                                       cv2.THRESH_BINARY_INV, 15, 2)
+        yield "adaptive(15,2)", cv2.bitwise_not(thresh)
+    except Exception:
+        pass
+    try:
+        _, binary = cv2.threshold(gray, 0, 255, cv2.THRESH_BINARY_INV + cv2.THRESH_OTSU)
+        yield "otsu", binary
     except Exception:
         pass
 
