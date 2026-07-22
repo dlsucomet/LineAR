@@ -10,7 +10,7 @@ from logger import log_message
 
 from pyzbar.pyzbar import decode
 
-_OCR_TARGET_WIDTH = 500
+_OCR_TARGET_WIDTH = 800
 
 
 def paper_tracking_daemon():
@@ -196,15 +196,13 @@ def detect_content_bands(warped_img):
     gray = cv2.cvtColor(warped_img, cv2.COLOR_BGR2GRAY)
     h, w = gray.shape[:2]
 
-    blurred = cv2.GaussianBlur(gray, (3, 3), 0)
     clahe = cv2.createCLAHE(clipLimit=3.0, tileGridSize=(8, 8))
-    enhanced = clahe.apply(blurred)
+    enhanced = clahe.apply(gray)
     _, binary = cv2.threshold(enhanced, 0, 255, cv2.THRESH_BINARY_INV + cv2.THRESH_OTSU)
 
     ink_per_row = (binary > 0).sum(axis=1)
-    row_threshold = w * 0.03
-    min_band_height = 30
-    min_band_ink_ratio = 0.005
+    row_threshold = w * 0.01
+    min_band_height = 15
 
     in_content = False
     bands = []
@@ -219,22 +217,16 @@ def detect_content_bands(warped_img):
             in_content = False
             if band_end - band_start >= min_band_height:
                 band_region = binary[band_start:band_end, :]
-                total_pixels = band_region.shape[0] * band_region.shape[1]
-                ink_pixels = np.count_nonzero(band_region)
-                if total_pixels > 0 and (ink_pixels / total_pixels) >= min_band_ink_ratio:
-                    cols_with_ink = np.where(band_region.max(axis=0) > 0)[0]
-                    if len(cols_with_ink) > 0:
-                        bands.append((band_start, band_end, cols_with_ink.min(), cols_with_ink.max()))
+                cols_with_ink = np.where(band_region.max(axis=0) > 0)[0]
+                if len(cols_with_ink) > 0:
+                    bands.append((band_start, band_end, cols_with_ink.min(), cols_with_ink.max()))
     if in_content:
         band_end = h
         if band_end - band_start >= min_band_height:
             band_region = binary[band_start:band_end, :]
-            total_pixels = band_region.shape[0] * band_region.shape[1]
-            ink_pixels = np.count_nonzero(band_region)
-            if total_pixels > 0 and (ink_pixels / total_pixels) >= min_band_ink_ratio:
-                cols_with_ink = np.where(band_region.max(axis=0) > 0)[0]
-                if len(cols_with_ink) > 0:
-                    bands.append((band_start, h, cols_with_ink.min(), cols_with_ink.max()))
+            cols_with_ink = np.where(band_region.max(axis=0) > 0)[0]
+            if len(cols_with_ink) > 0:
+                bands.append((band_start, h, cols_with_ink.min(), cols_with_ink.max()))
     return bands
 
 
@@ -251,6 +243,7 @@ def _preprocessing_passes(region_img):
         yield "otsu", binary
     except Exception:
         pass
+    yield "raw", gray
 
 
 def _ocr_region(region_img, reader, min_confidence=0.3):
@@ -266,7 +259,7 @@ def _ocr_region(region_img, reader, min_confidence=0.3):
                 low_text=0.3,
                 contrast_ths=0.3,
                 adjust_contrast=0.7,
-                mag_ratio=1.0,
+                mag_ratio=1.2,
                 min_size=10,
             )
             tokens = []
