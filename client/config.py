@@ -93,7 +93,6 @@ current_step = "firstStep"
 last_ocr_time = 0
 status_msg = "System Ready. Place paper to align ArUco markers."
 is_processing = False
-blank_projection = False
 last_ocr_finish_time = 0
 running = True
 green_count = 0
@@ -220,7 +219,7 @@ PROJECTION_REGIONS = {
 FEEDBACK_REGIONS = {
     "firstStep": {},
     "firstStepOne": {
-        "one": {"left": 100, "top": 100, "width": 300, "height": 250},
+        "one": {"left": 0, "top": 0, "width": 2000, "height": 1000},
     },
     "firstStepTwo": {
         "one": {"left": 600, "top": 100, "width": 300, "height": 250},

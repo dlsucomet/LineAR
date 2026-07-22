@@ -241,7 +241,7 @@ def main(mode):
         config.cap = cv2.VideoCapture(camera_device)
         log_message(f"Found REDRAGON camera at {camera_device}")
     else:
-        config.cap = cv2.VideoCapture(0)
+        config.cap = cv2.VideoCapture(2)
         log_message("REDRAGON not found, falling back to default camera")
     config.cap.set(cv2.CAP_PROP_FRAME_WIDTH, 1920)
     config.cap.set(cv2.CAP_PROP_FRAME_HEIGHT, 1080)
@@ -251,7 +251,8 @@ def main(mode):
     else:
         config.CAM_W = int(config.cap.get(cv2.CAP_PROP_FRAME_WIDTH))
         config.CAM_H = int(config.cap.get(cv2.CAP_PROP_FRAME_HEIGHT))
-        log_message(f"Camera stream initialized: {config.CAM_W}x{config.CAM_H}")
+        log_message(f"Camera stream initialized: {
+                    config.CAM_W}x{config.CAM_H}")
     log_message("Booting up backend real-time tracking daemon thread pass...")
     threading.Thread(target=paper_tracking_daemon, daemon=True).start()
 
@@ -429,7 +430,8 @@ def main(mode):
             config.app_phase = "running"
             config._problem_start_str = datetime.now().strftime("%H:%M:%S")
             config._problem_start_time = time.time()
-            log_message(f"Problem loaded! === Problem {config.problem_number} Started ===")
+            log_message(f"Problem loaded! === Problem {
+                        config.problem_number} Started ===")
 
         if config.app_phase == "running" and config.problem_loaded and not config.is_processing:
             expected = config.expected_answers.get(config.current_step, {})
@@ -438,7 +440,8 @@ def main(mode):
                 idx = config.STEP_SEQUENCE.index(config.current_step)
                 if idx < len(config.STEP_SEQUENCE) - 1:
                     config.current_step = config.STEP_SEQUENCE[idx + 1]
-                    log_message(f"AUTO-ADVANCE: Step has no OCR requirements, advancing to '{config.current_step}'.")
+                    log_message(
+                        f"AUTO-ADVANCE: Step has no OCR requirements, advancing to '{config.current_step}'.")
 
         if config.app_phase == "running" and config.problem_loaded and not config.is_processing:
             if config.markers_visible_since > 0:
@@ -448,21 +451,21 @@ def main(mode):
                     countdown = int(remaining) + 1
                     if not hasattr(config, '_last_countdown') or config._last_countdown != countdown:
                         config._last_countdown = countdown
-                        log_message(f"OCR ready in {countdown}s (markers visible for {marker_elapsed:.1f}s)")
+                        log_message(f"OCR ready in {
+                                    countdown}s (markers visible for {marker_elapsed:.1f}s)")
                 else:
                     if not hasattr(config, '_last_countdown') or config._last_countdown != 0:
                         config._last_countdown = 0
                         log_message("Markers stable — OCR eligible")
                 if marker_elapsed >= 3.0 and time.time() - config.last_ocr_finish_time >= 5.0:
-                    config.blank_projection = True
-                    time.sleep(0.1)
                     config.is_processing = True
                     threading.Thread(
                         target=background_ocr_pipeline, daemon=True).start()
             else:
                 if not hasattr(config, '_last_countdown') or config._last_countdown != -1:
                     config._last_countdown = -1
-                    log_message("Waiting for markers to stabilize before OCR...")
+                    log_message(
+                        "Waiting for markers to stabilize before OCR...")
 
         if config.paper_detected and config.warped_document is not None:
             debug_crop_capture()
