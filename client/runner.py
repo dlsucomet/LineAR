@@ -1,3 +1,9 @@
+import os
+os.environ["PYGAME_HIDE_SUPPORT_PROMPT"] = "1"
+os.environ["FLAGS_enable_pir_api"] = "0"
+os.environ["FLAGS_enable_pir_in_executor"] = "0"
+os.environ["FLAGS_use_mkldnn"] = "0"
+
 from questionnaires import (
     draw_nasa_tlx,
     handle_nasa_tlx_click,
@@ -17,7 +23,6 @@ from paddleocr import PaddleOCR
 import pygame
 import cv2
 import sys
-import os
 import time
 import fcntl
 import struct
@@ -26,7 +31,6 @@ import warnings
 import threading
 from datetime import datetime
 
-os.environ["PYGAME_HIDE_SUPPORT_PROMPT"] = "1"
 warnings.filterwarnings("ignore", message="pkg_resources")
 
 
@@ -61,8 +65,11 @@ def save_problem_results():
     with open(config.SESSION_PATH, "w") as f:
         json.dump(data, indent=2, fp=f)
     log_message(
-        f"Problem {config.problem_number} results saved (green={config.green_count}, red={
-            config.red_count}, duration={duration}s, ended_early={config.problem_ended_early})"
+        f"Problem {config.problem_number} results saved (green={
+            config.green_count
+        }, red={config.red_count}, duration={duration}s, ended_early={
+            config.problem_ended_early
+        })"
     )
 
 
@@ -122,8 +129,7 @@ def debug_simulate_correct():
         idx = config.STEP_SEQUENCE.index(config.current_step)
         if idx < len(config.STEP_SEQUENCE) - 1:
             config.current_step = config.STEP_SEQUENCE[idx + 1]
-            log_message(
-                f"DEBUG: Simulated correct -> step {config.current_step}")
+            log_message(f"DEBUG: Simulated correct -> step {config.current_step}")
         else:
             config.app_phase = "nasa_tlx"
             log_message(
@@ -152,6 +158,7 @@ def start_session():
             use_doc_unwarping=False,
             use_textline_orientation=False,
             lang="en",
+            enable_mkldnn=False,
         )
         log_message("OCR Engine Ready.")
     else:
@@ -226,15 +233,15 @@ def main(mode):
     log_message("Initializing hardware camera capture access...")
     camera_device = None
     for i in range(8):
-        dev = f'/dev/video{i}'
+        dev = f"/dev/video{i}"
         if not os.path.exists(dev):
             continue
         try:
             fd = os.open(dev, os.O_RDWR | os.O_NONBLOCK)
             buf = bytearray(108)
             fcntl.ioctl(fd, 0x80685600, buf)  # VIDIOC_QUERYCAP
-            card = buf[16:48].split(b'\x00')[0].decode()
-            device_caps = struct.unpack_from('I', buf, 88)[0]
+            card = buf[16:48].split(b"\x00")[0].decode()
+            device_caps = struct.unpack_from("I", buf, 88)[0]
             os.close(fd)
             if "REDRAGON" in card.upper() and (device_caps & 0x00000001):
                 camera_device = dev
@@ -246,18 +253,16 @@ def main(mode):
         config.cap = cv2.VideoCapture(camera_device)
         log_message(f"Found REDRAGON camera at {camera_device}")
     else:
-        config.cap = cv2.VideoCapture(2)
+        config.cap = cv2.VideoCapture(0)
         log_message("REDRAGON not found, falling back to default camera")
     config.cap.set(cv2.CAP_PROP_FRAME_WIDTH, 1920)
     config.cap.set(cv2.CAP_PROP_FRAME_HEIGHT, 1080)
     if not config.cap.isOpened():
-        log_message(
-            "CRITICAL ERROR: Could not open the system video capture stream.")
+        log_message("CRITICAL ERROR: Could not open the system video capture stream.")
     else:
         config.CAM_W = int(config.cap.get(cv2.CAP_PROP_FRAME_WIDTH))
         config.CAM_H = int(config.cap.get(cv2.CAP_PROP_FRAME_HEIGHT))
-        log_message(f"Camera stream initialized: {
-                    config.CAM_W}x{config.CAM_H}")
+        log_message(f"Camera stream initialized: {config.CAM_W}x{config.CAM_H}")
     log_message("Booting up backend real-time tracking daemon thread pass...")
     threading.Thread(target=paper_tracking_daemon, daemon=True).start()
 
@@ -337,8 +342,7 @@ def main(mode):
                             json.dump(data, f, indent=2)
                     config.nasa_tlx_current_page = 0
                     config.app_phase = "nasa_tlx"
-                    log_message(
-                        "Task ended early. Starting NASA-TLX questionnaire.")
+                    log_message("Task ended early. Starting NASA-TLX questionnaire.")
                 elif getattr(
                     config, "debug_mode", False
                 ) and debug_btn_rect.collidepoint(event.pos):
@@ -347,12 +351,10 @@ def main(mode):
             elif event.type == pygame.KEYDOWN:
                 if event.key == pygame.K_d:
                     config.debug_mode = not config.debug_mode
-                    log_message(f"Debug interface display set to: {
-                                config.debug_mode}")
+                    log_message(f"Debug interface display set to: {config.debug_mode}")
                 elif event.key == pygame.K_h:
                     config.debug_hints = not config.debug_hints
-                    log_message(f"Debug hints display set to: {
-                                config.debug_hints}")
+                    log_message(f"Debug hints display set to: {config.debug_hints}")
                 elif event.key == pygame.K_g and config.debug_mode:
                     debug_simulate_correct()
                 elif event.key == pygame.K_r and config.debug_mode:
@@ -393,8 +395,7 @@ def main(mode):
                                 config.nasa_tlx_responses
                             ):
                                 config.app_phase = "ueq_s"
-                                log_message(
-                                    "NASA-TLX completed, proceeding to UEQ-S.")
+                                log_message("NASA-TLX completed, proceeding to UEQ-S.")
                     elif config.app_phase == "ueq_s":
                         save_questionnaire_responses()
                         config.app_phase = "done"
@@ -424,8 +425,7 @@ def main(mode):
             if now_scan - config.last_ocr_time >= 2.0:
                 config.last_ocr_time = now_scan
                 config.is_processing = True
-                threading.Thread(target=scan_qr_from_camera,
-                                 daemon=True).start()
+                threading.Thread(target=scan_qr_from_camera, daemon=True).start()
 
         if (
             config.app_phase == "scan_qr"
@@ -435,10 +435,15 @@ def main(mode):
             config.app_phase = "running"
             config._problem_start_str = datetime.now().strftime("%H:%M:%S")
             config._problem_start_time = time.time()
-            log_message(f"Problem loaded! === Problem {
-                        config.problem_number} Started ===")
+            log_message(
+                f"Problem loaded! === Problem {config.problem_number} Started ==="
+            )
 
-        if config.app_phase == "running" and config.problem_loaded and not config.is_processing:
+        if (
+            config.app_phase == "running"
+            and config.problem_loaded
+            and not config.is_processing
+        ):
             expected = config.expected_answers.get(config.current_step, {})
             regions = config.CROP_REGIONS.get(config.current_step, {})
             if not expected and not regions:
@@ -446,31 +451,50 @@ def main(mode):
                 if idx < len(config.STEP_SEQUENCE) - 1:
                     config.current_step = config.STEP_SEQUENCE[idx + 1]
                     log_message(
-                        f"AUTO-ADVANCE: Step has no OCR requirements, advancing to '{config.current_step}'.")
+                        f"AUTO-ADVANCE: Step has no OCR requirements, advancing to '{config.current_step}'."
+                    )
 
-        if config.app_phase == "running" and config.problem_loaded and not config.is_processing:
+        if (
+            config.app_phase == "running"
+            and config.problem_loaded
+            and not config.is_processing
+        ):
             if config.markers_visible_since > 0:
                 marker_elapsed = time.time() - config.markers_visible_since
                 remaining = max(0, 3.0 - marker_elapsed)
                 if remaining > 0:
                     countdown = int(remaining) + 1
-                    if not hasattr(config, '_last_countdown') or config._last_countdown != countdown:
+                    if (
+                        not hasattr(config, "_last_countdown")
+                        or config._last_countdown != countdown
+                    ):
                         config._last_countdown = countdown
-                        log_message(f"OCR ready in {
-                                    countdown}s (markers visible for {marker_elapsed:.1f}s)")
+                        log_message(
+                            f"OCR ready in {countdown}s (markers visible for {
+                                marker_elapsed:.1f}s)"
+                        )
                 else:
-                    if not hasattr(config, '_last_countdown') or config._last_countdown != 0:
+                    if (
+                        not hasattr(config, "_last_countdown")
+                        or config._last_countdown != 0
+                    ):
                         config._last_countdown = 0
                         log_message("Markers stable — OCR eligible")
-                if marker_elapsed >= 3.0 and time.time() - config.last_ocr_finish_time >= 5.0:
+                if (
+                    marker_elapsed >= 3.0
+                    and time.time() - config.last_ocr_finish_time >= 5.0
+                ):
                     config.is_processing = True
                     threading.Thread(
-                        target=background_ocr_pipeline, daemon=True).start()
+                        target=background_ocr_pipeline, daemon=True
+                    ).start()
             else:
-                if not hasattr(config, '_last_countdown') or config._last_countdown != -1:
+                if (
+                    not hasattr(config, "_last_countdown")
+                    or config._last_countdown != -1
+                ):
                     config._last_countdown = -1
-                    log_message(
-                        "Waiting for markers to stabilize before OCR...")
+                    log_message("Waiting for markers to stabilize before OCR...")
 
         if config.paper_detected and config.warped_document is not None:
             debug_crop_capture()
@@ -501,8 +525,10 @@ def main(mode):
         elif config.app_phase == "done":
             sw, sh = screen.get_size()
             center_rect = pygame.Rect(
-                sw // 4, config.TOP_BAR_HEIGHT,
-                sw // 2, sh - config.TOP_BAR_HEIGHT - config.BOTTOM_BAR_HEIGHT
+                sw // 4,
+                config.TOP_BAR_HEIGHT,
+                sw // 2,
+                sh - config.TOP_BAR_HEIGHT - config.BOTTOM_BAR_HEIGHT,
             )
             btn_w = max(100, min(260, int(center_rect.width * 0.30)))
             gap = 20
@@ -510,9 +536,11 @@ def main(mode):
             left_x = center_rect.centerx - total_w // 2 + btn_w // 2
             right_x = left_x + btn_w + gap
             new_problem_btn_rect = ui.draw_new_problem_button(
-                screen, center_rect, y_offset=0, x_center=left_x)
+                screen, center_rect, y_offset=0, x_center=left_x
+            )
             done_btn_rect = ui.draw_done_button(
-                screen, center_rect, y_offset=0, x_center=right_x)
+                screen, center_rect, y_offset=0, x_center=right_x
+            )
         elif config.app_phase == "nasa_tlx":
             draw_nasa_tlx(screen)
         elif config.app_phase == "ueq_s":
