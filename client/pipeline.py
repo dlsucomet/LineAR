@@ -85,6 +85,7 @@ def paper_tracking_daemon():
                     config.tracking_matrix = smoothed_tracking
                     config.warped_document = cv2.warpPerspective(frame, M, (canvas_w, canvas_h), flags=cv2.INTER_CUBIC)
                     config.paper_detected = True
+                debug_crop_capture()
                 if not last_state:
                     log_message("Tracking Lock Acquired: Target sheet anchors located.")
                     last_state = True
@@ -105,6 +106,58 @@ def paper_tracking_daemon():
             if last_state:
                 log_message("Tracking Lock Lost: Target sheet missing or occluded.")
                 last_state = False
+
+_DEBUG_CAPTURE_COOLDOWN = 1.0
+_last_debug_capture_time = 0.0
+_STEP_COLORS = [
+    (255, 0, 0), (0, 255, 0), (0, 0, 255), (255, 255, 0),
+    (255, 0, 255), (0, 255, 255), (128, 0, 255), (255, 128, 0),
+    (0, 128, 255), (128, 255, 0),
+]
+
+
+def debug_crop_capture():
+    global _last_debug_capture_time
+    now = time.time()
+    if now - _last_debug_capture_time < _DEBUG_CAPTURE_COOLDOWN:
+        return
+    _last_debug_capture_time = now
+
+    with config.shared_frame_lock:
+        if config.warped_document is None:
+            return
+        sheet = config.warped_document.copy()
+
+    captures_dir = os.path.join(config.PARTICIPANT_DIR, "ocr_captures")
+    os.makedirs(captures_dir, exist_ok=True)
+
+    annotated = sheet.copy()
+    img_h, img_w = annotated.shape[:2]
+
+    for i, (step_name, regions) in enumerate(config.CROP_REGIONS.items()):
+        color = _STEP_COLORS[i % len(_STEP_COLORS)]
+        for region_name, box in regions.items():
+            top = max(0, min(box["top"], img_h - 1))
+            left = max(0, min(box["left"], img_w - 1))
+            r_h = max(1, min(box["height"], img_h - top))
+            r_w = max(1, min(box["width"], img_w - left))
+            cv2.rectangle(annotated, (left, top), (left + r_w, top + r_h), color, 3)
+            label = f"{step_name}:{region_name}"
+            cv2.putText(annotated, label, (left + 4, top + 20),
+                        cv2.FONT_HERSHEY_SIMPLEX, 0.5, color, 1)
+
+    cv2.imwrite(os.path.join(captures_dir, "debug_all_regions.png"), annotated)
+
+    current_regions = config.CROP_REGIONS.get(config.current_step, {})
+    for region_name, box in current_regions.items():
+        top = max(0, min(box["top"], img_h - 1))
+        left = max(0, min(box["left"], img_w - 1))
+        r_h = max(1, min(box["height"], img_h - top))
+        r_w = max(1, min(box["width"], img_w - left))
+        crop = sheet[top:top + r_h, left:left + r_w]
+        cv2.imwrite(os.path.join(captures_dir,
+                    f"debug_crop_{config.current_step}_{region_name}.png"), crop)
+
 
 def detect_content_bands(warped_img):
     gray = cv2.cvtColor(warped_img, cv2.COLOR_BGR2GRAY)
