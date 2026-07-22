@@ -13,7 +13,7 @@ from pipeline import (
 from logger import log_message, init_session_files
 import ui
 import config
-import easyocr
+from paddleocr import PaddleOCR
 import pygame
 import cv2
 import sys
@@ -147,7 +147,12 @@ def debug_simulate_incorrect():
 def start_session():
     if config.ocr_reader is None:
         log_message("Loading OCR Engine context...")
-        config.ocr_reader = easyocr.Reader(["en"], gpu=False, verbose=False)
+        config.ocr_reader = PaddleOCR(
+            use_doc_orientation_classify=False,
+            use_doc_unwarping=False,
+            use_textline_orientation=False,
+            lang="en",
+        )
         log_message("OCR Engine Ready.")
     else:
         log_message("OCR Engine already loaded, reusing.")

@@ -230,143 +230,21 @@ def detect_content_bands(warped_img):
     return bands
 
 
-def _preprocessing_passes(region_img):
-    gray = cv2.cvtColor(region_img, cv2.COLOR_BGR2GRAY)
-
-    clahe = cv2.createCLAHE(clipLimit=3.0, tileGridSize=(8, 8))
-    enhanced = clahe.apply(gray)
-
-    try:
-        thresh = cv2.adaptiveThreshold(enhanced, 255, cv2.ADAPTIVE_THRESH_GAUSSIAN_C,
-                                       cv2.THRESH_BINARY_INV, 31, 2)
-        adaptive_result = cv2.bitwise_not(thresh)
-        yield "adaptive(31,2)", adaptive_result
-    except Exception:
-        pass
-
-    try:
-        _, binary = cv2.threshold(enhanced, 0, 255, cv2.THRESH_BINARY + cv2.THRESH_OTSU)
-        yield "otsu", binary
-    except Exception:
-        pass
-
-    try:
-        adaptive_t = cv2.adaptiveThreshold(enhanced, 255, cv2.ADAPTIVE_THRESH_GAUSSIAN_C,
-                                           cv2.THRESH_BINARY_INV, 31, 2)
-        kernel = cv2.getStructuringElement(cv2.MORPH_RECT, (2, 2))
-        morphed = cv2.morphologyEx(adaptive_t, cv2.MORPH_OPEN, kernel)
-        morphed = cv2.bitwise_not(morphed)
-        yield "morph", morphed
-    except Exception:
-        pass
-
-    yield "clahe", enhanced
-
-
-def _upscale_for_ocr(img, min_height=300, max_width=1200):
-    h, w = img.shape[:2]
-    if h >= min_height:
-        return img, 1.0
-    scale = min_height / h
-    new_w = int(w * scale)
-    new_h = min_height
-    if new_w > max_width:
-        scale = max_width / new_w
-        new_w = max_width
-        new_h = int(h * (max_width / w))
-    if len(img.shape) == 3:
-        resized = cv2.resize(img, (new_w, new_h), interpolation=cv2.INTER_CUBIC)
-        canvas = np.full((new_h, new_w, 3), 255, dtype=np.uint8)
-    else:
-        resized = cv2.resize(img, (new_w, new_h), interpolation=cv2.INTER_CUBIC)
-        canvas = np.full((new_h, new_w), 255, dtype=np.uint8)
-    canvas[:new_h, :new_w] = resized
-    return canvas, scale
-
-
 def _ocr_region(region_img, reader, min_confidence=0.3):
-    upscaled, _ = _upscale_for_ocr(region_img, min_height=300)
-
-    all_pass_results = []
-    for label, processed in _preprocessing_passes(upscaled):
-        try:
-            ocr_input = processed
-            if len(processed.shape) == 2 and processed.dtype == np.uint8:
-                unique_vals = np.unique(processed)
-                if len(unique_vals) <= 2:
-                    white_count = np.sum(processed == 255)
-                    total = processed.size
-                    if total > 0 and white_count / total < 0.5:
-                        ocr_input = cv2.bitwise_not(processed)
-
-            results = reader.readtext(
-                ocr_input,
-                allowlist='0123456789-',
-                paragraph=False,
-                detail=1,
-                text_threshold=0.3,
-                low_text=0.2,
-                contrast_ths=0.3,
-                adjust_contrast=0.7,
-                mag_ratio=1.5,
-                canvas_size=3840,
-                min_size=10,
-            )
-            tokens = []
-            for (bbox, text, confidence) in results:
-                if confidence < min_confidence:
-                    continue
-                cleaned = text.replace(" ", "")
-                for match in re.finditer(r'-?\d+', cleaned):
-                    token = match.group()
-                    if token and token != "-":
-                        y_center = bbox[0][1] + (bbox[2][1] - bbox[0][1]) / 2
-                        tokens.append((y_center, token, confidence))
-            all_pass_results.append((label, tokens, processed))
-            if tokens and sum(t[2] for t in tokens) / len(tokens) > 0.90:
-                break
-        except Exception:
-            continue
-
-    if not all_pass_results:
-        return [], {}, "none", None
-
-    best_label, best_tokens, best_img = max(
-        all_pass_results, key=lambda c: sum(t[2] for t in c[1]) if c[1] else 0
-    )
-
-    merged_tokens = []
-    seen = set()
-    for label, tokens, _ in all_pass_results:
-        for y_center, token, conf in tokens:
-            if token not in seen:
-                seen.add(token)
-                merged_tokens.append((y_center, token, conf))
-            else:
-                for i, (yc, t, c) in enumerate(merged_tokens):
-                    if t == token and conf > c:
-                        merged_tokens[i] = (y_center, token, conf)
-                        break
-
-    if merged_tokens:
-        merged_tokens.sort(key=lambda item: item[0])
-        conf_map = {}
-        for _, token, conf in merged_tokens:
-            if token not in conf_map or conf > conf_map[token]:
-                conf_map[token] = conf
-        unique = [t for _, t, _ in merged_tokens]
-        return unique, conf_map, best_label, best_img
-
-    tokens = sorted(best_tokens, key=lambda item: item[0])
-    seen = set()
-    unique = []
+    result = reader.predict(input=region_img)
+    tokens = []
     conf_map = {}
-    for _, token, conf in tokens:
-        if token not in seen:
-            seen.add(token)
-            unique.append(token)
-            conf_map[token] = conf
-    return unique, conf_map, best_label, best_img
+    if result and len(result) > 0:
+        for text, score in zip(result[0]['rec_texts'], result[0]['rec_scores']):
+            if score < min_confidence:
+                continue
+            cleaned = text.replace(" ", "")
+            for match in re.finditer(r'-?\d+', cleaned):
+                token = match.group()
+                if token and token != "-":
+                    tokens.append(token)
+                    conf_map[token] = score
+    return tokens, conf_map, "paddleocr", region_img
 
 
 def scan_qr_from_camera():
