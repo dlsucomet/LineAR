@@ -515,8 +515,8 @@ def background_ocr_pipeline():
                 config.current_step = config.STEP_SEQUENCE[idx + 1]
                 log_message(f"SUCCESS: Moving to step {config.current_step} | Expected: {expected} | Got: {recognized_data}")
             else:
-                config.app_phase = "done"
-                log_message(f"SUCCESS: Problem completed. Entering done phase. | Expected: {expected} | Got: {recognized_data}")
+                config.app_phase = "nasa_tlx"
+                log_message(f"SUCCESS: Problem completed. Starting NASA-TLX questionnaire. | Expected: {expected} | Got: {recognized_data}")
         else:
             config.red_count += 1
             config.feedback_step = config.current_step

@@ -122,9 +122,9 @@ def debug_simulate_correct():
             log_message(
                 f"DEBUG: Simulated correct -> step {config.current_step}")
         else:
-            config.app_phase = "done"
+            config.app_phase = "nasa_tlx"
             log_message(
-                "DEBUG: Simulated correct -> problem completed, entering done phase"
+                "DEBUG: Simulated correct -> problem completed, starting NASA-TLX questionnaire"
             )
     else:
         log_message(f"DEBUG: Correct recorded (green={config.green_count})")
@@ -299,7 +299,7 @@ def main(mode):
                     result = handle_ueq_s_click(event.pos)
                     if result == "submit":
                         save_questionnaire_responses()
-                        return_to_launcher()
+                        config.app_phase = "done"
                 elif config.app_phase == "start" and start_btn_rect.collidepoint(
                     event.pos
                 ):
@@ -313,10 +313,7 @@ def main(mode):
                     event.pos
                 ):
                     save_problem_results()
-                    config.nasa_tlx_current_page = 0
-                    config.app_phase = "nasa_tlx"
-                    log_message(
-                        "Task complete. Starting NASA-TLX questionnaire.")
+                    return_to_launcher()
                 elif config.app_phase == "running" and end_btn_rect.collidepoint(
                     event.pos
                 ):
@@ -374,10 +371,7 @@ def main(mode):
                         start_session()
                     elif config.app_phase == "done":
                         save_problem_results()
-                        config.nasa_tlx_current_page = 0
-                        config.app_phase = "nasa_tlx"
-                        log_message(
-                            "Task complete. Starting NASA-TLX questionnaire.")
+                        return_to_launcher()
                     elif config.app_phase == "nasa_tlx":
                         if (
                             config.nasa_tlx_responses[config.nasa_tlx_current_page]
@@ -392,7 +386,7 @@ def main(mode):
                                     "NASA-TLX completed, proceeding to UEQ-S.")
                     elif config.app_phase == "ueq_s":
                         save_questionnaire_responses()
-                        return_to_launcher()
+                        config.app_phase = "done"
                     elif not config.is_processing:
                         config.is_processing = True
                         threading.Thread(
