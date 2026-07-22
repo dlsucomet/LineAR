@@ -62,7 +62,7 @@ STEP_GUIDANCE = {
     "firstStepFour": {
         "title": "Solve for the coefficients",
         "desc": "Solve for the coefficients",
-        "math": "f1 = g1*c1 + g2*c2  |  n1 = v1*c1 + v2*c2"
+        "math": "L(w) = c1*L(u) + c2*L(v)\nf1 = g1*c1 + g2*c2  ->  c1 = ?\nn1 = v1*c1 + v2*c2  ->  c2 = ?"
     },
     "secondStepLeft": {
         "title": "Transformation Property Expansion",
@@ -340,7 +340,7 @@ def get_hint_math(step):
 
     hints = {
         "firstStep":       f"L([c1]*u + [c2]*v) = [c1]*L(u) + [c2]*L(v)".replace("[c1]", str(c1)).replace("[c2]", str(c2)),
-        "firstStepFour":   f"{f1} = {g1}*c1 + {g2}*c2  ->  c1 = {c1}  |  {n1} = {v1}*c1 + {v2}*c2  ->  c2 = {c2}",
+        "firstStepFour":   f"L(w) = {c1}*L(u) + {c2}*L(v)\n{f1} = {g1}*c1 + {g2}*c2  ->  c1 = {c1}\n{n1} = {v1}*c1 + {v2}*c2  ->  c2 = {c2}",
         "secondStepLeft":  f"[{c1}] * [{og1} / {ov1}]",
         "secondStepRight": f"[{c2}] * [{og2} / {ov2}]",
         "thirdStepLeft":   f"[{c1}] * [{og1} / {ov1}] = [{c1og1} / {c1ov1}]",
@@ -526,81 +526,92 @@ def draw_instruction_panel(surface, area):
     eq_card_h = max(20, min(int(70 * scale_y), bottom_limit - cy))
 
     if eq_card_h > 20:
-        eq_rect = pygame.Rect(cx, cy, mw, eq_card_h)
-        pygame.draw.rect(surface, config.COLOR_WHITE, eq_rect)
-        pygame.draw.rect(surface, config.COLOR_TEXT, eq_rect, 2)
-
         raw_math = step_info["math"]
+        math_lines = raw_math.split("\n")
+        num_lines = len(math_lines)
 
-        parts = []
-        for seg in re.split(r'(\[[^\[\]]*\])', raw_math):
-            if not seg:
-                continue
-            if seg.startswith("[") and seg.endswith("]"):
-                inner = seg[1:-1]
-                rows = [r.strip() for r in inner.split("/")]
-                parts.append(("vector", rows))
-            else:
-                parts.append(("text", seg))
+        def _parse_math_parts(line_text):
+            parts = []
+            for seg in re.split(r'(\[[^\[\]]*\])', line_text):
+                if not seg:
+                    continue
+                if seg.startswith("[") and seg.endswith("]"):
+                    inner = seg[1:-1]
+                    rows = [r.strip() for r in inner.split("/")]
+                    parts.append(("vector", rows))
+                else:
+                    parts.append(("text", seg))
+            return parts
+
+        all_line_parts = [_parse_math_parts(line) for line in math_lines]
 
         eq_max_w = mw - 8
         eq_font_size = int(15 * _font_scale)
         for size in range(int(15 * _font_scale), int(7 * _font_scale), -2):
             test_font = pygame.font.SysFont("segoeui", max(1, size), bold=True)
-            total_w = 0
-            for ptype, pcontent in parts:
-                if ptype == "text":
-                    total_w += test_font.size(pcontent)[0]
-                else:
-                    row_widths = [test_font.size(r)[0] for r in pcontent]
-                    total_w += (max(row_widths) if row_widths else 0) + 24
-            if total_w <= eq_max_w:
+            fits = True
+            for line_parts in all_line_parts:
+                total_w = 0
+                for ptype, pcontent in line_parts:
+                    if ptype == "text":
+                        total_w += test_font.size(pcontent)[0]
+                    else:
+                        row_widths = [test_font.size(r)[0] for r in pcontent]
+                        total_w += (max(row_widths) if row_widths else 0) + 24
+                if total_w > eq_max_w:
+                    fits = False
+                    break
+            if fits:
                 eq_font_size = size
                 break
 
         use_font = pygame.font.SysFont("segoeui", max(1, eq_font_size), bold=True)
         row_h = use_font.get_height()
-        center_y = eq_rect.centery
-        current_x = eq_rect.x + 15
         line_spacing = 4
+        line_block_gap = 12
 
-        for i, (ptype, pcontent) in enumerate(parts):
-            if ptype == "text":
-                t_surf = use_font.render(pcontent, True, config.COLOR_TEXT)
-                surface.blit(t_surf, (current_x, center_y -
-                             t_surf.get_height() // 2))
-                current_x += t_surf.get_width()
-            else:
-                rows = pcontent
-                row_surfaces = [use_font.render(
-                    r, True, config.COLOR_TEXT) for r in rows]
-                max_row_w = max(s.get_width() for s in row_surfaces)
-                total_h = len(rows) * row_h + (len(rows) - 1) * line_spacing
-                bracket_top = center_y - total_h // 2
-                bracket_bottom = bracket_top + total_h
+        single_line_h = row_h + 8
+        total_content_h = num_lines * single_line_h + (num_lines - 1) * line_block_gap
+        eq_card_h = max(eq_card_h, total_content_h + 16)
 
-                pygame.draw.line(surface, config.COLOR_TEXT, (current_x,
-                                 bracket_top), (current_x, bracket_bottom), 2)
-                pygame.draw.line(surface, config.COLOR_TEXT, (current_x,
-                                 bracket_top), (current_x + 4, bracket_top), 2)
-                pygame.draw.line(surface, config.COLOR_TEXT, (current_x,
-                                 bracket_bottom), (current_x + 4, bracket_bottom), 2)
+        eq_rect = pygame.Rect(cx, cy, mw, eq_card_h)
+        pygame.draw.rect(surface, config.COLOR_WHITE, eq_rect)
+        pygame.draw.rect(surface, config.COLOR_TEXT, eq_rect, 2)
 
-                content_x = current_x + 6
-                for j, surf in enumerate(row_surfaces):
-                    row_y = bracket_top + j * (row_h + line_spacing)
-                    surface.blit(
-                        surf, (content_x + (max_row_w - surf.get_width()) // 2, row_y))
+        start_y = eq_rect.y + (eq_rect.height - total_content_h) // 2
 
-                right_x = content_x + max_row_w + 6
-                pygame.draw.line(surface, config.COLOR_TEXT,
-                                 (right_x, bracket_top), (right_x, bracket_bottom), 2)
-                pygame.draw.line(surface, config.COLOR_TEXT,
-                                 (right_x, bracket_top), (right_x - 4, bracket_top), 2)
-                pygame.draw.line(surface, config.COLOR_TEXT, (right_x,
-                                 bracket_bottom), (right_x - 4, bracket_bottom), 2)
+        for line_idx, line_parts in enumerate(all_line_parts):
+            line_y_center = start_y + line_idx * (single_line_h + line_block_gap) + single_line_h // 2
+            current_x = eq_rect.x + 15
 
-                current_x = right_x
+            for ptype, pcontent in line_parts:
+                if ptype == "text":
+                    t_surf = use_font.render(pcontent, True, config.COLOR_TEXT)
+                    surface.blit(t_surf, (current_x, line_y_center - t_surf.get_height() // 2))
+                    current_x += t_surf.get_width()
+                else:
+                    rows = pcontent
+                    row_surfaces = [use_font.render(r, True, config.COLOR_TEXT) for r in rows]
+                    max_row_w = max(s.get_width() for s in row_surfaces)
+                    total_h = len(rows) * row_h + (len(rows) - 1) * line_spacing
+                    bracket_top = line_y_center - total_h // 2
+                    bracket_bottom = bracket_top + total_h
+
+                    pygame.draw.line(surface, config.COLOR_TEXT, (current_x, bracket_top), (current_x, bracket_bottom), 2)
+                    pygame.draw.line(surface, config.COLOR_TEXT, (current_x, bracket_top), (current_x + 4, bracket_top), 2)
+                    pygame.draw.line(surface, config.COLOR_TEXT, (current_x, bracket_bottom), (current_x + 4, bracket_bottom), 2)
+
+                    content_x = current_x + 6
+                    for j, surf in enumerate(row_surfaces):
+                        row_y = bracket_top + j * (row_h + line_spacing)
+                        surface.blit(surf, (content_x + (max_row_w - surf.get_width()) // 2, row_y))
+
+                    right_x = content_x + max_row_w + 6
+                    pygame.draw.line(surface, config.COLOR_TEXT, (right_x, bracket_top), (right_x, bracket_bottom), 2)
+                    pygame.draw.line(surface, config.COLOR_TEXT, (right_x, bracket_top), (right_x - 4, bracket_top), 2)
+                    pygame.draw.line(surface, config.COLOR_TEXT, (right_x, bracket_bottom), (right_x - 4, bracket_bottom), 2)
+
+                    current_x = right_x
 
     if getattr(config.args, "mode", "") == "highlights":
         legend_items = [
