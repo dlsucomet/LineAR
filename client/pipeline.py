@@ -375,6 +375,7 @@ def background_ocr_pipeline():
         if config.warped_document is None:
             log_message("Verification Failed: No warped document data available yet.")
             config.last_ocr_finish_time = time.time()
+            config.blank_projection = False
             config.is_processing = False
             return
         if not config.paper_detected:
@@ -466,6 +467,7 @@ def background_ocr_pipeline():
                 config.current_step = config.STEP_SEQUENCE[idx + 1]
                 log_message(f"SKIPPED: Step has no expected values, advancing to '{config.current_step}'.")
             config.last_ocr_finish_time = time.time()
+            config.blank_projection = False
             config.is_processing = False
             return
 
@@ -513,6 +515,7 @@ def background_ocr_pipeline():
         pass
 
     config.last_ocr_finish_time = time.time()
+    config.blank_projection = False
     config.is_processing = False
 
 def transform_to_projection_space(w_x, w_y, center_rect, track_mat=None):

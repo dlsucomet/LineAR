@@ -93,6 +93,7 @@ current_step = "firstStep"
 last_ocr_time = 0
 status_msg = "System Ready. Place paper to align ArUco markers."
 is_processing = False
+blank_projection = False
 last_ocr_finish_time = 0
 running = True
 green_count = 0
@@ -219,39 +220,34 @@ PROJECTION_REGIONS = {
 FEEDBACK_REGIONS = {
     "firstStep": {},
     "firstStepOne": {
-        "one": {"left": 0, "top": 0, "width": 2000, "height": 1000},
+        "one": {"left": 0, "top": 0, "width": 2500, "height": 500},
     },
     "firstStepTwo": {
-        "one": {"left": 600, "top": 100, "width": 300, "height": 250},
+        "one": {"left": 0, "top": 0, "width": 2500, "height": 500},
     },
     "firstStepThree": {
-        "one": {"left": 1100, "top": 100, "width": 300, "height": 250},
+        "one": {"left": 0, "top": 0, "width": 2500, "height": 500},
     },
     "firstStepFour": {
         "one": {"left": 1800, "top": 650, "width": 250, "height": 200},
         "two": {"left": 2400, "top": 650, "width": 250, "height": 200},
     },
     "secondStepLeft": {
-        "one": {"left": 1800, "top": 750, "width": 250, "height": 200},
-        "two": {"left": 600, "top": 1200, "width": 250, "height": 200},
-        "three": {"left": 900, "top": 1100, "width": 300, "height": 300},
+        "one": {"left": 0, "top": 1200, "width": 2500, "height": 500},
+        "two": {"left": 0, "top": 1100, "width": 2500, "height": 500},
     },
     "secondStepRight": {
-        "one": {"left": 2400, "top": 650, "width": 250, "height": 200},
-        "two": {"left": 1500, "top": 1200, "width": 250, "height": 200},
-        "three": {"left": 1800, "top": 1100, "width": 300, "height": 300},
+        "one": {"left": 0, "top": 1200, "width": 2500, "height": 500},
+        "two": {"left": 0, "top": 1100, "width": 2500, "height": 500},
     },
     "thirdStepLeft": {
-        "one": {"left": 600, "top": 1100, "width": 700, "height": 300},
-        "two": {"left": 300, "top": 1700, "width": 300, "height": 300},
+        "one": {"left": 0, "top": 1700, "width": 2500, "height": 500},
     },
     "thirdStepRight": {
-        "one": {"left": 1500, "top": 1100, "width": 700, "height": 300},
-        "two": {"left": 800, "top": 1700, "width": 300, "height": 300},
+        "one": {"left": 0, "top": 1700, "width": 2500, "height": 500},
     },
     "fourthStep": {
-        "one": {"left": 300, "top": 1650, "width": 2000, "height": 300},
-        "two": {"left": 300, "top": 2300, "width": 300, "height": 300},
+        "one": {"left": 0, "top": 2300, "width": 2500, "height": 500},
     },
 }
 
