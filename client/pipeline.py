@@ -338,12 +338,7 @@ def background_ocr_pipeline():
     captures_dir = os.path.join(config.PARTICIPANT_DIR, "ocr_captures")
     os.makedirs(captures_dir, exist_ok=True)
     stamp = datetime.now().strftime("%H%M%S_%f")[:-3]
-    try:
-        gray_sheet = cv2.cvtColor(local_sheet, cv2.COLOR_BGR2GRAY)
-        cv2.imwrite(os.path.join(captures_dir, f"p{config.problem_number}_warped_{config.current_step}_{stamp}.png"), gray_sheet)
-    except Exception:
-        pass
-        
+
     log_message(f"Starting OCR evaluation routine for calculation phase: {config.current_step}")
     recognized_data = {}
     try:
