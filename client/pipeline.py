@@ -10,7 +10,32 @@ from logger import log_message
 
 from pyzbar.pyzbar import decode
 
-_OCR_TARGET_WIDTH = 800
+_OCR_MIN_WIDTH = 600
+_OCR_MAX_WIDTH = 1200
+
+
+def _clamp_ocr_resolution(img):
+    h, w = img.shape[:2]
+    if w < _OCR_MIN_WIDTH:
+        scale = _OCR_MIN_WIDTH / w
+        img = cv2.resize(img, None, fx=scale, fy=scale, interpolation=cv2.INTER_CUBIC)
+    elif w > _OCR_MAX_WIDTH:
+        scale = _OCR_MAX_WIDTH / w
+        img = cv2.resize(img, None, fx=scale, fy=scale, interpolation=cv2.INTER_AREA)
+    return img
+
+
+def preprocess_for_paddleocr(img):
+    result = img.copy()
+    result = _clamp_ocr_resolution(result)
+    if len(result.shape) == 3:
+        lab = cv2.cvtColor(result, cv2.COLOR_BGR2LAB)
+        clahe = cv2.createCLAHE(clipLimit=2.0, tileGridSize=(8, 8))
+        lab[:, :, 0] = clahe.apply(lab[:, :, 0])
+        result = cv2.cvtColor(lab, cv2.COLOR_LAB2BGR)
+    gaussian = cv2.GaussianBlur(result, (0, 0), 3)
+    result = cv2.addWeighted(result, 1.3, gaussian, -0.3, 0)
+    return result
 
 
 def paper_tracking_daemon():
@@ -231,7 +256,8 @@ def detect_content_bands(warped_img):
 
 
 def _ocr_region(region_img, reader, min_confidence=0.3):
-    result = reader.predict(input=region_img)
+    processed = preprocess_for_paddleocr(region_img)
+    result = reader.predict(input=processed)
     tokens = []
     conf_map = {}
     if result and len(result) > 0:
@@ -244,7 +270,7 @@ def _ocr_region(region_img, reader, min_confidence=0.3):
                 if token and token != "-":
                     tokens.append(token)
                     conf_map[token] = score
-    return tokens, conf_map, "paddleocr", region_img
+    return tokens, conf_map, "paddleocr", processed
 
 
 def scan_qr_from_camera():
@@ -413,19 +439,14 @@ def background_ocr_pipeline():
                 c1 = min(zone_crop.shape[1], col_end + padding)
                 band_crop = zone_crop[r0:r1, c0:c1]
 
-                scale = _OCR_TARGET_WIDTH / band_crop.shape[1] if band_crop.shape[1] > _OCR_TARGET_WIDTH else 1.0
-                if scale < 1.0:
-                    band_crop = cv2.resize(band_crop, None, fx=scale, fy=scale, interpolation=cv2.INTER_AREA)
-
                 tokens, conf_map, winning, debug_img = _ocr_region(band_crop, config.ocr_reader)
                 log_message(f"Band {bi} (rows {row_start}-{row_end}): winning={winning} tokens={tokens}")
                 all_tokens.extend(tokens)
                 all_conf.update(conf_map)
 
                 try:
-                    if debug_img is not None:
-                        cv2.imwrite(os.path.join(captures_dir,
-                                    f"p{config.problem_number}_{config.current_step}_band{bi}_{stamp}.png"), debug_img)
+                    cv2.imwrite(os.path.join(captures_dir,
+                                f"p{config.problem_number}_{config.current_step}_band{bi}_{stamp}.png"), band_crop)
                 except Exception:
                     pass
 
@@ -442,16 +463,11 @@ def background_ocr_pipeline():
                 r_width = max(1, min(width, img_w - r_left))
                 crop = local_sheet[r_top:r_top+r_height, r_left:r_left+r_width]
 
-                scale = _OCR_TARGET_WIDTH / crop.shape[1] if crop.shape[1] > _OCR_TARGET_WIDTH else 1.0
-                if scale < 1.0:
-                    crop = cv2.resize(crop, None, fx=scale, fy=scale, interpolation=cv2.INTER_AREA)
-
                 tokens, conf_map, winning, debug_img = _ocr_region(crop, config.ocr_reader)
                 recognized_data[region_name] = tokens
 
                 try:
-                    if debug_img is not None:
-                        cv2.imwrite(os.path.join(captures_dir, f"p{config.problem_number}_{config.current_step}_{region_name}_{stamp}.png"), debug_img)
+                    cv2.imwrite(os.path.join(captures_dir, f"p{config.problem_number}_{config.current_step}_{region_name}_{stamp}.png"), crop)
                 except Exception:
                     pass
 
