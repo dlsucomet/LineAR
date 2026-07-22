@@ -8,6 +8,7 @@ from pipeline import (
     paper_tracking_daemon,
     background_ocr_pipeline,
     scan_qr_from_camera,
+    debug_crop_capture,
 )
 from logger import log_message, init_session_files
 import ui
@@ -72,9 +73,10 @@ def reset_for_new_problem():
     config.expected_answers = {}
     config.target_vector = None
     config.active_vectors = []
-    config.feedback_state = None
-    config.feedback_timer = 0
-    config.feedback_step = None
+    with config.feedback_lock:
+        config.feedback_state = None
+        config.feedback_timer = 0
+        config.feedback_step = None
     config.show_hint = False
     config.green_count = 0
     config.red_count = 0
@@ -112,8 +114,9 @@ def _write_session_counts():
 
 def debug_simulate_correct():
     config.green_count += 1
-    config.feedback_state = "green"
-    config.feedback_timer = 60
+    with config.feedback_lock:
+        config.feedback_state = "green"
+        config.feedback_timer = 60
     config.show_hint = False
     if config.app_phase in ("running", "done"):
         idx = config.STEP_SEQUENCE.index(config.current_step)
@@ -133,8 +136,9 @@ def debug_simulate_correct():
 
 def debug_simulate_incorrect():
     config.red_count += 1
-    config.feedback_state = "red"
-    config.feedback_timer = 60
+    with config.feedback_lock:
+        config.feedback_state = "red"
+        config.feedback_timer = 60
     config.show_hint = True
     log_message(f"DEBUG: Incorrect recorded (red={config.red_count})")
     _write_session_counts()
@@ -185,8 +189,9 @@ def main(mode):
     config.transformation_progress = 0.0
     config.green_count = 0
     config.red_count = 0
-    config.feedback_state = None
-    config.feedback_timer = 0
+    with config.feedback_lock:
+        config.feedback_state = None
+        config.feedback_timer = 0
     config.show_hint = False
     config.is_processing = False
     config.debug_preview = False
@@ -458,6 +463,9 @@ def main(mode):
                 threading.Thread(
                     target=background_ocr_pipeline, daemon=True).start()
 
+        if config.paper_detected and config.warped_document is not None:
+            debug_crop_capture()
+
         if config.current_step == "complete":
             if config.transformation_progress < 1.0:
                 config.transformation_progress += 0.003
@@ -496,10 +504,11 @@ def main(mode):
             center_rect = ui.draw_panels(screen, mode="running")
             end_btn_rect = ui.draw_end_task_button(screen, center_rect)
 
-        if config.feedback_timer > 0:
-            config.feedback_timer -= 1
-            if config.feedback_timer == 0:
-                config.feedback_state = None
+        with config.feedback_lock:
+            if config.feedback_timer > 0:
+                config.feedback_timer -= 1
+                if config.feedback_timer == 0:
+                    config.feedback_state = None
 
         pygame.display.flip()
         clock.tick(60)

@@ -85,7 +85,6 @@ def paper_tracking_daemon():
                     config.tracking_matrix = smoothed_tracking
                     config.warped_document = cv2.warpPerspective(frame, M, (canvas_w, canvas_h), flags=cv2.INTER_CUBIC)
                     config.paper_detected = True
-                debug_crop_capture()
                 if not last_state:
                     log_message("Tracking Lock Acquired: Target sheet anchors located.")
                     last_state = True
@@ -506,10 +505,11 @@ def background_ocr_pipeline():
             is_valid = True
         if is_valid:
             config.green_count += 1
-            config.feedback_step = config.current_step
-            config.feedback_state = "green"
-            config.feedback_timer = 60
-            config.show_hint = False
+            with config.feedback_lock:
+                config.feedback_step = config.current_step
+                config.feedback_state = "green"
+                config.feedback_timer = 60
+                config.show_hint = False
             idx = config.STEP_SEQUENCE.index(config.current_step)
             if idx < len(config.STEP_SEQUENCE) - 1:
                 config.current_step = config.STEP_SEQUENCE[idx + 1]
@@ -519,10 +519,11 @@ def background_ocr_pipeline():
                 log_message(f"SUCCESS: Problem completed. Entering done phase. | Expected: {expected} | Got: {recognized_data}")
         else:
             config.red_count += 1
-            config.feedback_step = config.current_step
-            config.feedback_state = "red"
-            config.feedback_timer = 60
-            config.show_hint = True
+            with config.feedback_lock:
+                config.feedback_step = config.current_step
+                config.feedback_state = "red"
+                config.feedback_timer = 60
+                config.show_hint = True
             log_message(f"REJECTED: Step '{config.current_step}' incorrect | Expected: {expected} | Got: {recognized_data}")
         
         with open(config.SESSION_PATH) as f:

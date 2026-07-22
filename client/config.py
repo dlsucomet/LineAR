@@ -113,6 +113,7 @@ paper_detected = False
 markers_visible_since = 0
 
 shared_frame_lock = threading.Lock()
+feedback_lock = threading.Lock()
 cap = None
 ocr_reader = None
 

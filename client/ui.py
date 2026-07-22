@@ -197,11 +197,14 @@ def draw_cartesian_plane(surface, area):
 
     ox, oy = area.x + area.width // 2, area.y + area.height // 2
 
-    if getattr(config, "feedback_timer", 0) > 0 and getattr(config, "feedback_state", "") == "green":
+    with config.feedback_lock:
+        fb_timer = getattr(config, "feedback_timer", 0)
+        fb_state = getattr(config, "feedback_state", "")
+    if fb_timer > 0 and fb_state == "green":
         amplitude = 25
         frequency = 0.1
-        bounce_offset = int(amplitude * math.sin(config.feedback_timer *
-                            frequency) * (config.feedback_timer / 60.0))
+        bounce_offset = int(amplitude * math.sin(fb_timer *
+                            frequency) * (fb_timer / 60.0))
         ox += bounce_offset
         oy -= bounce_offset
     step_order = config.STEP_SEQUENCE
@@ -637,9 +640,14 @@ def draw_projection_boxes(surface, center):
         track_mat = config.tracking_matrix
         frozen_mat = config.frozen_tracking_matrix
 
+    with config.feedback_lock:
+        fb_timer = config.feedback_timer
+        fb_step = config.feedback_step
+        fb_state = config.feedback_state
+
     highlight_step = config.current_step
-    if config.feedback_timer > 0 and config.feedback_step:
-        highlight_step = config.feedback_step
+    if fb_timer > 0 and fb_step:
+        highlight_step = fb_step
 
     if highlight_step in config.PROJECTION_REGIONS:
         proj_mat = track_mat if tracking else frozen_mat
@@ -658,12 +666,12 @@ def draw_projection_boxes(surface, center):
                 "[ Align ArUco Markers to Project Guides ]", True, config.COLOR_TEXT)
             surface.blit(msg, msg.get_rect(center=center.center))
 
-    if config.feedback_timer > 0 and config.feedback_step and config.feedback_step in config.CROP_REGIONS:
+    if fb_timer > 0 and fb_step and fb_step in config.CROP_REGIONS:
         proj_mat = track_mat if tracking else frozen_mat
         if proj_mat is not None:
             feedback_color = (
-                34, 197, 94) if config.feedback_state == "green" else (239, 68, 68)
-            for _, box in config.CROP_REGIONS[config.feedback_step].items():
+                34, 197, 94) if fb_state == "green" else (239, 68, 68)
+            for _, box in config.CROP_REGIONS[fb_step].items():
                 tl = transform_to_projection_space(
                     box["left"], box["top"], center, proj_mat)
                 br = transform_to_projection_space(
@@ -671,8 +679,8 @@ def draw_projection_boxes(surface, center):
                 if tl and br:
                     pygame.draw.rect(surface, feedback_color,
                                      (tl[0], tl[1], br[0]-tl[0], br[1]-tl[1]))
-                    if config.feedback_timer == 60:
-                        log_message(f"FEEDBACK: Drew {config.feedback_state} box for step '{config.feedback_step}'")
+                    if fb_timer == 60:
+                        log_message(f"FEEDBACK: Drew {fb_state} box for step '{fb_step}'")
 
 
 def draw_panels(surface, mode="running"):
