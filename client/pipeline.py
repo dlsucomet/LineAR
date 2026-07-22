@@ -10,6 +10,8 @@ from logger import log_message
 
 from pyzbar.pyzbar import decode
 
+_OCR_TARGET_WIDTH = 500
+
 
 def paper_tracking_daemon():
     aruco_dict = cv2.aruco.getPredefinedDictionary(cv2.aruco.DICT_4X4_50)
@@ -256,7 +258,7 @@ def _ocr_region(region_img, reader, min_confidence=0.3):
                 low_text=0.3,
                 contrast_ths=0.3,
                 adjust_contrast=0.7,
-                mag_ratio=1.5,
+                mag_ratio=1.0,
                 min_size=10,
             )
             tokens = []
@@ -453,6 +455,10 @@ def background_ocr_pipeline():
                 c1 = min(zone_crop.shape[1], col_end + padding)
                 band_crop = zone_crop[r0:r1, c0:c1]
 
+                scale = _OCR_TARGET_WIDTH / band_crop.shape[1] if band_crop.shape[1] > _OCR_TARGET_WIDTH else 1.0
+                if scale < 1.0:
+                    band_crop = cv2.resize(band_crop, None, fx=scale, fy=scale, interpolation=cv2.INTER_AREA)
+
                 tokens, conf_map, winning, debug_img = _ocr_region(band_crop, config.ocr_reader)
                 log_message(f"Band {bi} (rows {row_start}-{row_end}): winning={winning} tokens={tokens}")
                 all_tokens.extend(tokens)
@@ -477,6 +483,10 @@ def background_ocr_pipeline():
                 r_height = max(1, min(height, img_h - r_top))
                 r_width = max(1, min(width, img_w - r_left))
                 crop = local_sheet[r_top:r_top+r_height, r_left:r_left+r_width]
+
+                scale = _OCR_TARGET_WIDTH / crop.shape[1] if crop.shape[1] > _OCR_TARGET_WIDTH else 1.0
+                if scale < 1.0:
+                    crop = cv2.resize(crop, None, fx=scale, fy=scale, interpolation=cv2.INTER_AREA)
 
                 tokens, conf_map, winning, debug_img = _ocr_region(crop, config.ocr_reader)
                 recognized_data[region_name] = tokens

@@ -441,21 +441,26 @@ def main(mode):
                     log_message(f"AUTO-ADVANCE: Step has no OCR requirements, advancing to '{config.current_step}'.")
 
         if config.app_phase == "running" and config.problem_loaded and not config.is_processing:
-            marker_elapsed = time.time() - config.markers_visible_since
-            remaining = max(0, 1.0 - marker_elapsed)
-            if remaining > 0:
-                countdown = int(remaining) + 1
-                if not hasattr(config, '_last_countdown') or config._last_countdown != countdown:
-                    config._last_countdown = countdown
-                    log_message(f"OCR ready in {countdown}s (markers visible for {marker_elapsed:.1f}s)")
+            if config.markers_visible_since > 0:
+                marker_elapsed = time.time() - config.markers_visible_since
+                remaining = max(0, 1.0 - marker_elapsed)
+                if remaining > 0:
+                    countdown = int(remaining) + 1
+                    if not hasattr(config, '_last_countdown') or config._last_countdown != countdown:
+                        config._last_countdown = countdown
+                        log_message(f"OCR ready in {countdown}s (markers visible for {marker_elapsed:.1f}s)")
+                else:
+                    if not hasattr(config, '_last_countdown') or config._last_countdown != 0:
+                        config._last_countdown = 0
+                        log_message("Markers stable — OCR eligible")
+                if marker_elapsed >= 1.0:
+                    config.is_processing = True
+                    threading.Thread(
+                        target=background_ocr_pipeline, daemon=True).start()
             else:
-                if not hasattr(config, '_last_countdown') or config._last_countdown != 0:
-                    config._last_countdown = 0
-                    log_message("Markers stable — OCR eligible")
-            if marker_elapsed >= 1.0:
-                config.is_processing = True
-                threading.Thread(
-                    target=background_ocr_pipeline, daemon=True).start()
+                if not hasattr(config, '_last_countdown') or config._last_countdown != -1:
+                    config._last_countdown = -1
+                    log_message("Waiting for markers to stabilize before OCR...")
 
         if config.paper_detected and config.warped_document is not None:
             debug_crop_capture()
