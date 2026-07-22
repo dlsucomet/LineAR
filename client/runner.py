@@ -453,7 +453,7 @@ def main(mode):
                     if not hasattr(config, '_last_countdown') or config._last_countdown != 0:
                         config._last_countdown = 0
                         log_message("Markers stable — OCR eligible")
-                if marker_elapsed >= 3.0:
+                if marker_elapsed >= 3.0 and time.time() - config.last_ocr_finish_time >= 5.0:
                     config.blank_projection = True
                     time.sleep(0.1)
                     config.is_processing = True
