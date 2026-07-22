@@ -62,7 +62,7 @@ STEP_GUIDANCE = {
     "firstStepFour": {
         "title": "Solve for the coefficients",
         "desc": "Solve for the coefficients",
-        "math": "L(w) = c1*L(u) + c2*L(v)\nf1 = g1*c1 + g2*c2  ->  c1 = ?\nn1 = v1*c1 + v2*c2  ->  c2 = ?"
+        "math": "L(w) = c1 * L(u) + c2 * L(v)\nw\u2081 = c1 * u\u2081 + c2 * v\u2081  ->  c1 = ?\nw\u2082 = c1 * u\u2082 + c2 * v\u2082  ->  c2 = ?"
     },
     "secondStepLeft": {
         "title": "Transformation Property Expansion",
@@ -343,7 +343,7 @@ def get_hint_math(step):
 
     hints = {
         "firstStep":       f"L([c1]*u + [c2]*v) = [c1]*L(u) + [c2]*L(v)".replace("[c1]", str(c1)).replace("[c2]", str(c2)),
-        "firstStepFour":   f"L(w) = {c1}*L(u) + {c2}*L(v)\n{f1} = {g1}*c1 + {g2}*c2  ->  c1 = {c1}\n{n1} = {v1}*c1 + {v2}*c2  ->  c2 = {c2}",
+        "firstStepFour":   f"L(w) = {c1} * L(u) + {c2} * L(v)\n{f1} = c1 * {g1} + c2 * {g2}  ->  c1 = {c1}\n{n1} = c1 * {v1} + c2 * {v2}  ->  c2 = {c2}",
         "secondStepLeft":  f"[{c1}] * [{og1} / {ov1}]",
         "secondStepRight": f"[{c2}] * [{og2} / {ov2}]",
         "thirdStepLeft":   f"[{c1}] * [{og1} / {ov1}] = [{c1og1} / {c1ov1}]",
