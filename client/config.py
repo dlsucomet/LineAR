@@ -143,7 +143,7 @@ STEP_GUIDANCE = {
     "firstStepFour": {
         "title": "Solve for the coefficients",
         "desc": "Solve for the coefficients",
-        "math": "L(w) = ?"
+        "math": "c1 * L(u) + c2 * L(v) = ?"
     },
     "secondStepLeft": {
         "title": "Transformation Property Expansion",

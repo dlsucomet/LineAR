@@ -62,7 +62,7 @@ STEP_GUIDANCE = {
     "firstStepFour": {
         "title": "Solve for the coefficients",
         "desc": "Solve for the coefficients",
-        "math": "L(w) = ?"
+        "math": "c1 * L(u) + c2 * L(v) = ?"
     },
     "secondStepLeft": {
         "title": "Transformation Property Expansion",
@@ -340,7 +340,7 @@ def get_hint_math(step):
 
     hints = {
         "firstStep":       f"L([c1]*u + [c2]*v) = [c1]*L(u) + [c2]*L(v)".replace("[c1]", str(c1)).replace("[c2]", str(c2)),
-        "firstStepFour":   f"[{f1} / {n1}] = {c1} * [{g1} / {v1}] + {c2} * [{g2} / {v2}]",
+        "firstStepFour":   f"[{f1} / {n1}] = {c1} * [{g1} / {v1}] + {c2} * [{g2} / {v2}]  ->  c1 = {c1}, c2 = {c2}",
         "secondStepLeft":  f"[{c1}] * [{og1} / {ov1}]",
         "secondStepRight": f"[{c2}] * [{og2} / {ov2}]",
         "thirdStepLeft":   f"[{c1}] * [{og1} / {ov1}] = [{c1og1} / {c1ov1}]",
@@ -358,17 +358,6 @@ def draw_instruction_panel(surface, area):
     if config.current_step == "complete" and config.target_vector:
         tx, ty = config.target_vector
         step_info = dict(step_info, math=f"L(v) = [{tx} / {ty}]")
-    elif config.current_step == "firstStepFour" and config.qr_data:
-        qr = config.qr_data
-        try:
-            c1 = qr['step1_linearCombination']['c1']
-            c2 = qr['step1_linearCombination']['c2']
-            g1, v1 = qr['step1_linearCombination']['v1']
-            g2, v2 = qr['step1_linearCombination']['v2']
-            f1, n1 = qr['step1_linearCombination']['v_target']
-            step_info = dict(step_info, math=f"[{f1} / {n1}] = {c1} * [{g1} / {v1}] + {c2} * [{g2} / {v2}]")
-        except (KeyError, TypeError):
-            pass
 
     # NEW OVERRIDE: Show hint on incorrect answer
     if getattr(config, 'show_hint', False):
