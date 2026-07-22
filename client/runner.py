@@ -489,7 +489,11 @@ def main(mode):
         elif config.app_phase == "scan_qr":
             center_rect = ui.draw_panels(screen, mode="scan_qr")
         elif config.app_phase == "done":
-            center_rect = ui.draw_panels(screen, mode="done")
+            sw, sh = screen.get_size()
+            center_rect = pygame.Rect(
+                sw // 4, config.TOP_BAR_HEIGHT,
+                sw // 2, sh - config.TOP_BAR_HEIGHT - config.BOTTOM_BAR_HEIGHT
+            )
             btn_w = max(100, min(260, int(center_rect.width * 0.30)))
             gap = 20
             total_w = btn_w * 2 + gap
