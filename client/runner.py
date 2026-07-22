@@ -433,6 +433,15 @@ def main(mode):
             log_message(f"Problem loaded! === Problem {config.problem_number} Started ===")
 
         if config.app_phase == "running" and config.problem_loaded and not config.is_processing:
+            expected = config.expected_answers.get(config.current_step, {})
+            regions = config.CROP_REGIONS.get(config.current_step, {})
+            if not expected and not regions:
+                idx = config.STEP_SEQUENCE.index(config.current_step)
+                if idx < len(config.STEP_SEQUENCE) - 1:
+                    config.current_step = config.STEP_SEQUENCE[idx + 1]
+                    log_message(f"AUTO-ADVANCE: Step has no OCR requirements, advancing to '{config.current_step}'.")
+
+        if config.app_phase == "running" and config.problem_loaded and not config.is_processing:
             marker_elapsed = time.time() - config.markers_visible_since
             remaining = max(0, 3.0 - marker_elapsed)
             if remaining > 0:
@@ -448,15 +457,6 @@ def main(mode):
                 config.is_processing = True
                 threading.Thread(
                     target=background_ocr_pipeline, daemon=True).start()
-
-        if config.app_phase == "running" and config.problem_loaded and not config.is_processing:
-            expected = config.expected_answers.get(config.current_step, {})
-            regions = config.CROP_REGIONS.get(config.current_step, {})
-            if not expected and not regions:
-                idx = config.STEP_SEQUENCE.index(config.current_step)
-                if idx < len(config.STEP_SEQUENCE) - 1:
-                    config.current_step = config.STEP_SEQUENCE[idx + 1]
-                    log_message(f"AUTO-ADVANCE: Step has no OCR requirements, advancing to '{config.current_step}'.")
 
         if config.current_step == "complete":
             if config.transformation_progress < 1.0:

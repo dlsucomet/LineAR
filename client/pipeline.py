@@ -142,7 +142,7 @@ def detect_content_bands(warped_img):
 
 def _preprocessing_passes(region_img):
     gray = cv2.cvtColor(region_img, cv2.COLOR_BGR2GRAY)
-    for bs, c in [(15, 2), (15, 4), (31, 2), (31, 4)]:
+    for bs, c in [(15, 2), (15, 4), (31, 2)]:
         try:
             thresh = cv2.adaptiveThreshold(gray, 255, cv2.ADAPTIVE_THRESH_GAUSSIAN_C,
                                            cv2.THRESH_BINARY_INV, bs, c)
@@ -155,14 +155,6 @@ def _preprocessing_passes(region_img):
         enhanced = clahe.apply(resized)
         _, binary = cv2.threshold(enhanced, 0, 255, cv2.THRESH_BINARY + cv2.THRESH_OTSU)
         yield "clahe_otsu", binary
-    except Exception:
-        pass
-    try:
-        upscaled = cv2.resize(gray, (0, 0), fx=2.0, fy=2.0, interpolation=cv2.INTER_CUBIC)
-        kernel = cv2.getStructuringElement(cv2.MORPH_RECT, (2, 2))
-        morphed = cv2.morphologyEx(upscaled, cv2.MORPH_CLOSE, kernel)
-        _, clean = cv2.threshold(morphed, 0, 255, cv2.THRESH_BINARY + cv2.THRESH_OTSU)
-        yield "upscale_morph", clean
     except Exception:
         pass
 
@@ -194,6 +186,8 @@ def _ocr_region(region_img, reader, min_confidence=0.3):
                         y_center = bbox[0][1] + (bbox[2][1] - bbox[0][1]) / 2
                         tokens.append((y_center, token, confidence))
             candidates.append((label, tokens, processed))
+            if tokens and sum(t[2] for t in tokens) / len(tokens) > 0.90:
+                break
         except Exception:
             continue
     if not candidates:
