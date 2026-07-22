@@ -34,7 +34,6 @@ def paper_tracking_daemon():
     last_seen_ids = set()
     smoothed_tracking = None
     ema_alpha = 0.3
-    last_capture_time = 0
     last_full_detect_time = 0.0
     MARKER_DROPOUT_GRACE = 0.5  # seconds to tolerate a brief marker dropout before declaring lock lost
     
@@ -90,33 +89,6 @@ def paper_tracking_daemon():
                     log_message("Tracking Lock Acquired: Target sheet anchors located.")
                     last_state = True
 
-                now_capture = time.time()
-                is_settled = now_capture - config.markers_visible_since >= 1.0
-                if config.PARTICIPANT_DIR and is_settled and now_capture - last_capture_time >= 3.0:
-                    last_capture_time = now_capture
-                    captures_dir = os.path.join(config.PARTICIPANT_DIR, "ocr_captures")
-                    os.makedirs(captures_dir, exist_ok=True)
-                    stamp = datetime.now().strftime("%H%M%S_%f")[:-3]
-                    try:
-                        crop_img = config.warped_document
-                        regions = config.CROP_REGIONS.get(config.current_step, {})
-                        if regions:
-                            imgs = []
-                            for rname, box in regions.items():
-                                ih, iw = crop_img.shape[:2]
-                                r_top = max(0, min(box["top"], ih - 1))
-                                r_left = max(0, min(box["left"], iw - 1))
-                                r_height = max(1, min(box["height"], ih - r_top))
-                                r_width = max(1, min(box["width"], iw - r_left))
-                                imgs.append(crop_img[r_top:r_top+r_height, r_left:r_left+r_width])
-                            crop_img = np.vstack(imgs) if len(imgs) > 1 else imgs[0]
-                        gray_crop = cv2.cvtColor(crop_img, cv2.COLOR_BGR2GRAY)
-                        cv2.imwrite(
-                            os.path.join(captures_dir, f"p{config.problem_number}_track_{config.current_step}_{stamp}.png"),
-                            gray_crop,
-                        )
-                    except Exception:
-                        pass
                 continue
 
         now = time.time()
@@ -130,7 +102,6 @@ def paper_tracking_daemon():
                     config.frozen_tracking_matrix = config.tracking_matrix
                     config.paper_detected = False
             config.markers_visible_since = 0
-            last_capture_time = 0  # reset so the next lock starts its own capture cadence
             if last_state:
                 log_message("Tracking Lock Lost: Target sheet missing or occluded.")
                 last_state = False

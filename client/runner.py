@@ -444,11 +444,7 @@ def main(mode):
                 if not hasattr(config, '_last_countdown') or config._last_countdown != 0:
                     config._last_countdown = 0
                     log_message("Markers stable — OCR eligible")
-            if (
-                time.time() - config.last_ocr_time >= 1.0
-                and marker_elapsed >= 3.0
-            ):
-                config.last_ocr_time = time.time()
+            if marker_elapsed >= 3.0:
                 config.is_processing = True
                 threading.Thread(
                     target=background_ocr_pipeline, daemon=True).start()
