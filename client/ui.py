@@ -666,12 +666,12 @@ def draw_projection_boxes(surface, center):
                 "[ Align ArUco Markers to Project Guides ]", True, config.COLOR_TEXT)
             surface.blit(msg, msg.get_rect(center=center.center))
 
-    if fb_timer > 0 and fb_step and fb_step in config.CROP_REGIONS:
+    if fb_timer > 0 and fb_step and fb_step in config.FEEDBACK_REGIONS:
         proj_mat = track_mat if tracking else frozen_mat
         if proj_mat is not None:
             feedback_color = (
                 34, 197, 94) if fb_state == "green" else (239, 68, 68)
-            for _, box in config.CROP_REGIONS[fb_step].items():
+            for _, box in config.FEEDBACK_REGIONS[fb_step].items():
                 tl = transform_to_projection_space(
                     box["left"], box["top"], center, proj_mat)
                 br = transform_to_projection_space(

@@ -215,6 +215,45 @@ PROJECTION_REGIONS = {
     }
 }
 
+FEEDBACK_REGIONS = {
+    "firstStep": {},
+    "firstStepOne": {
+        "one": {"left": 100, "top": 100, "width": 300, "height": 250},
+    },
+    "firstStepTwo": {
+        "one": {"left": 600, "top": 100, "width": 300, "height": 250},
+    },
+    "firstStepThree": {
+        "one": {"left": 1100, "top": 100, "width": 300, "height": 250},
+    },
+    "firstStepFour": {
+        "one": {"left": 1800, "top": 650, "width": 250, "height": 200},
+        "two": {"left": 2400, "top": 650, "width": 250, "height": 200},
+    },
+    "secondStepLeft": {
+        "one": {"left": 1800, "top": 750, "width": 250, "height": 200},
+        "two": {"left": 600, "top": 1200, "width": 250, "height": 200},
+        "three": {"left": 900, "top": 1100, "width": 300, "height": 300},
+    },
+    "secondStepRight": {
+        "one": {"left": 2400, "top": 650, "width": 250, "height": 200},
+        "two": {"left": 1500, "top": 1200, "width": 250, "height": 200},
+        "three": {"left": 1800, "top": 1100, "width": 300, "height": 300},
+    },
+    "thirdStepLeft": {
+        "one": {"left": 600, "top": 1100, "width": 700, "height": 300},
+        "two": {"left": 300, "top": 1700, "width": 300, "height": 300},
+    },
+    "thirdStepRight": {
+        "one": {"left": 1500, "top": 1100, "width": 700, "height": 300},
+        "two": {"left": 800, "top": 1700, "width": 300, "height": 300},
+    },
+    "fourthStep": {
+        "one": {"left": 300, "top": 1650, "width": 2000, "height": 300},
+        "two": {"left": 300, "top": 2300, "width": 300, "height": 300},
+    },
+}
+
 problem_loaded = False
 expected_answers = {}
 target_vector = None
