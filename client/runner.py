@@ -490,11 +490,15 @@ def main(mode):
             center_rect = ui.draw_panels(screen, mode="scan_qr")
         elif config.app_phase == "done":
             center_rect = ui.draw_panels(screen, mode="done")
+            btn_w = max(100, min(260, int(center_rect.width * 0.30)))
+            gap = 20
+            total_w = btn_w * 2 + gap
+            left_x = center_rect.centerx - total_w // 2 + btn_w // 2
+            right_x = left_x + btn_w + gap
             new_problem_btn_rect = ui.draw_new_problem_button(
-                screen, center_rect, y_offset=-60
-            )
+                screen, center_rect, y_offset=0, x_center=left_x)
             done_btn_rect = ui.draw_done_button(
-                screen, center_rect, y_offset=60)
+                screen, center_rect, y_offset=0, x_center=right_x)
         elif config.app_phase == "nasa_tlx":
             draw_nasa_tlx(screen)
         elif config.app_phase == "ueq_s":

@@ -757,11 +757,12 @@ def draw_end_task_button(surface, center_rect):
     return rect
 
 
-def draw_done_button(surface, center_rect, y_offset=0):
+def draw_done_button(surface, center_rect, y_offset=0, x_center=None):
     btn_w = max(100, min(260, int(center_rect.width * 0.30)))
     btn_h = max(28, min(70, int(btn_w * 70 / 260)))
+    cx = x_center if x_center is not None else center_rect.centerx
     btn_rect = pygame.Rect(
-        center_rect.x + (center_rect.width - btn_w) // 2,
+        cx - btn_w // 2,
         center_rect.centery + y_offset - btn_h // 2,
         btn_w,
         btn_h
@@ -782,11 +783,12 @@ def draw_done_button(surface, center_rect, y_offset=0):
     return btn_rect
 
 
-def draw_new_problem_button(surface, center_rect, y_offset=0):
+def draw_new_problem_button(surface, center_rect, y_offset=0, x_center=None):
     btn_w = max(100, min(260, int(center_rect.width * 0.30)))
     btn_h = max(54, min(70, int(btn_w * 70 / 260)))
+    cx = x_center if x_center is not None else center_rect.centerx
     btn_rect = pygame.Rect(
-        center_rect.x + (center_rect.width - btn_w) // 2,
+        cx - btn_w // 2,
         center_rect.centery + y_offset - btn_h // 2,
         btn_w,
         btn_h
