@@ -443,7 +443,7 @@ def main(mode):
         if config.app_phase == "running" and config.problem_loaded and not config.is_processing:
             if config.markers_visible_since > 0:
                 marker_elapsed = time.time() - config.markers_visible_since
-                remaining = max(0, 1.0 - marker_elapsed)
+                remaining = max(0, 3.0 - marker_elapsed)
                 if remaining > 0:
                     countdown = int(remaining) + 1
                     if not hasattr(config, '_last_countdown') or config._last_countdown != countdown:
@@ -453,7 +453,7 @@ def main(mode):
                     if not hasattr(config, '_last_countdown') or config._last_countdown != 0:
                         config._last_countdown = 0
                         log_message("Markers stable — OCR eligible")
-                if marker_elapsed >= 1.0:
+                if marker_elapsed >= 3.0:
                     config.is_processing = True
                     threading.Thread(
                         target=background_ocr_pipeline, daemon=True).start()
