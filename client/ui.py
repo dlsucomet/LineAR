@@ -358,6 +358,17 @@ def draw_instruction_panel(surface, area):
     if config.current_step == "complete" and config.target_vector:
         tx, ty = config.target_vector
         step_info = dict(step_info, math=f"L(v) = [{tx} / {ty}]")
+    elif config.current_step == "firstStepFour" and config.qr_data:
+        qr = config.qr_data
+        try:
+            c1 = qr['step1_linearCombination']['c1']
+            c2 = qr['step1_linearCombination']['c2']
+            g1, v1 = qr['step1_linearCombination']['v1']
+            g2, v2 = qr['step1_linearCombination']['v2']
+            f1, n1 = qr['step1_linearCombination']['v_target']
+            step_info = dict(step_info, math=f"[{f1} / {n1}] = {c1} * [{g1} / {v1}] + {c2} * [{g2} / {v2}]")
+        except (KeyError, TypeError):
+            pass
 
     # NEW OVERRIDE: Show hint on incorrect answer
     if getattr(config, 'show_hint', False):
@@ -443,8 +454,9 @@ def draw_instruction_panel(surface, area):
 
         vec_h = 2 * pf.get_height() + 2
 
-        step_colors = {None: None, "firstStep": None, "firstStepOne": [config.COLOR_HIGHLIGHT_BLUE, config.COLOR_POINT_LIGHT], "firstStepTwo": [
-            config.COLOR_HIGHLIGHT_BLUE, config.COLOR_POINT_LIGHT], "firstStepThree": [config.COLOR_HIGHLIGHT_BLUE, config.COLOR_POINT_LIGHT]}
+        use_highlights = getattr(config.args, "mode", "") == "highlights"
+        step_colors = {None: None, "firstStep": None, "firstStepOne": [config.COLOR_HIGHLIGHT_BLUE, config.COLOR_POINT_LIGHT] if use_highlights else [None, None], "firstStepTwo": [
+            config.COLOR_HIGHLIGHT_BLUE, config.COLOR_POINT_LIGHT] if use_highlights else [None, None], "firstStepThree": [config.COLOR_HIGHLIGHT_BLUE, config.COLOR_POINT_LIGHT] if use_highlights else [None, None]}
         hl_u = step_colors.get(
             config.current_step) if config.current_step == "firstStepTwo" else None
         hl_w = step_colors.get(
