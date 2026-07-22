@@ -160,12 +160,12 @@ STEP_GUIDANCE = {
     "thirdStepLeft": {
         "title": "Scalar Multiplication",
         "desc": "Distribute the first scalar coefficient into the left vector component elements.",
-        "math": "a[x\u2081 y\u2081] = [x\u2081' y\u2081']"
+        "math": "a [x\u2081 y\u2081] = [x\u2081' y\u2081']"
     },
     "thirdStepRight": {
         "title": "Scalar Multiplication",
         "desc": "Distribute the second scalar coefficient into the right vector component elements.",
-        "math": "b[x\u2081 y\u2081] = [x\u2081' y\u2081']"
+        "math": "b [x\u2081 y\u2081] = [x\u2081' y\u2081']"
     },
     "fourthStep": {
         "title": "Vector Addition",
