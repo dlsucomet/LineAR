@@ -196,33 +196,45 @@ def detect_content_bands(warped_img):
     gray = cv2.cvtColor(warped_img, cv2.COLOR_BGR2GRAY)
     h, w = gray.shape[:2]
 
+    blurred = cv2.GaussianBlur(gray, (3, 3), 0)
     clahe = cv2.createCLAHE(clipLimit=3.0, tileGridSize=(8, 8))
-    enhanced = clahe.apply(gray)
+    enhanced = clahe.apply(blurred)
     _, binary = cv2.threshold(enhanced, 0, 255, cv2.THRESH_BINARY_INV + cv2.THRESH_OTSU)
 
     ink_per_row = (binary > 0).sum(axis=1)
-    threshold = w * 0.01
+    row_threshold = w * 0.03
+    min_band_height = 30
+    min_band_ink_ratio = 0.005
 
     in_content = False
     bands = []
     band_start = 0
     for row in range(h):
-        has_content = ink_per_row[row] > threshold
+        has_content = ink_per_row[row] > row_threshold
         if has_content and not in_content:
             band_start = row
             in_content = True
         elif not has_content and in_content:
             band_end = row
             in_content = False
-            if band_end - band_start > 10:
+            if band_end - band_start >= min_band_height:
                 band_region = binary[band_start:band_end, :]
+                total_pixels = band_region.shape[0] * band_region.shape[1]
+                ink_pixels = np.count_nonzero(band_region)
+                if total_pixels > 0 and (ink_pixels / total_pixels) >= min_band_ink_ratio:
+                    cols_with_ink = np.where(band_region.max(axis=0) > 0)[0]
+                    if len(cols_with_ink) > 0:
+                        bands.append((band_start, band_end, cols_with_ink.min(), cols_with_ink.max()))
+    if in_content:
+        band_end = h
+        if band_end - band_start >= min_band_height:
+            band_region = binary[band_start:band_end, :]
+            total_pixels = band_region.shape[0] * band_region.shape[1]
+            ink_pixels = np.count_nonzero(band_region)
+            if total_pixels > 0 and (ink_pixels / total_pixels) >= min_band_ink_ratio:
                 cols_with_ink = np.where(band_region.max(axis=0) > 0)[0]
                 if len(cols_with_ink) > 0:
-                    bands.append((band_start, band_end, cols_with_ink.min(), cols_with_ink.max()))
-    if in_content:
-        cols_with_ink = np.where(binary[band_start:, :].max(axis=0) > 0)[0]
-        if len(cols_with_ink) > 0 and h - band_start > 10:
-            bands.append((band_start, h, cols_with_ink.min(), cols_with_ink.max()))
+                    bands.append((band_start, h, cols_with_ink.min(), cols_with_ink.max()))
     return bands
 
 
