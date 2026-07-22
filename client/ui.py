@@ -690,6 +690,9 @@ def draw_panels(surface, mode="running"):
         pygame.draw.rect(surface, config.COLOR_WHITE, rect)
         pygame.draw.rect(surface, config.COLOR_BLUE, rect, 3)
 
+    if config.blank_projection:
+        return center
+
     if mode == "start":
         return center
 
