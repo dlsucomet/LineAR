@@ -46,7 +46,7 @@ UEQ_S_ITEMS = [
     ("usual",           "leading edge"),
 ]
 
-NASA_STEPS = 20
+NASA_STEPS = 21
 UEQ_STEPS = 7
 
 TRACK_COLOR = (200, 206, 214)
@@ -106,9 +106,9 @@ def draw_nasa_tlx(surface):
     pygame.draw.rect(surface, TRACK_COLOR, track_rect, border_radius=4)
 
     val = config.nasa_tlx_responses[page]
-    display_val = val if val is not None else 1
+    display_val = val if val is not None else 0
 
-    frac = (display_val - 1) / (NASA_STEPS - 1) if NASA_STEPS > 1 else 0
+    frac = display_val / (NASA_STEPS - 1) if NASA_STEPS > 1 else 0
     fill_w = max(0, int(slider_w * frac))
     if fill_w > 2:
         fill_rect = pygame.Rect(slider_x, track_y, fill_w, track_h)
@@ -119,7 +119,7 @@ def draw_nasa_tlx(surface):
     dot_r = 9
     for s in range(NASA_STEPS):
         dx = int(slider_x + s * step_spacing)
-        is_sel = (s + 1 == display_val)
+        is_sel = (s == display_val)
         if is_sel:
             pygame.draw.circle(surface, DOT_SELECTED, (dx, dot_cy), dot_r + 2)
         else:
@@ -144,13 +144,13 @@ def draw_nasa_tlx(surface):
     surface.blit(btn_label, btn_label.get_rect(center=next_btn.center))
 
     config._questionnaire_nasa_next_btn = next_btn
-    config._questionnaire_nasa_slider_rect = pygame.Rect(slider_x, track_y - 20, slider_w, 60)
+    config._questionnaire_nasa_slider_rect = pygame.Rect(slider_x, track_y - 20, slider_w + dot_r, 60)
 
 
 def handle_nasa_tlx_click(pos):
     if config._questionnaire_nasa_next_btn and config._questionnaire_nasa_next_btn.collidepoint(pos):
         if config.nasa_tlx_responses[config.nasa_tlx_current_page] is None:
-            config.nasa_tlx_responses[config.nasa_tlx_current_page] = 1
+            config.nasa_tlx_responses[config.nasa_tlx_current_page] = 0
         config.nasa_tlx_current_page += 1
         if config.nasa_tlx_current_page >= len(NASA_TLX_ITEMS):
             return "done"
@@ -162,7 +162,7 @@ def handle_nasa_tlx_click(pos):
         slider_w = slider_rect.w
         rel_x = pos[0] - slider_x
         frac = rel_x / slider_w
-        step = max(1, min(NASA_STEPS, int(round(frac * (NASA_STEPS - 1) + 1))))
+        step = max(0, min(NASA_STEPS - 1, int(round(frac * (NASA_STEPS - 1)))))
         config.nasa_tlx_responses[config.nasa_tlx_current_page] = step
         return "updated"
     return None
