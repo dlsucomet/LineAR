@@ -484,6 +484,7 @@ def main(mode):
                     marker_elapsed >= 3.0
                     and time.time() - config.last_ocr_finish_time >= 5.0
                 ):
+                    config.markers_visible_since = 0
                     config.is_processing = True
                     threading.Thread(
                         target=background_ocr_pipeline, daemon=True
