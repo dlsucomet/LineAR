@@ -123,7 +123,7 @@ def debug_simulate_correct():
     config.green_count += 1
     with config.feedback_lock:
         config.feedback_state = "green"
-        config.feedback_timer = 3000
+        config.feedback_timer = 5000
     config.show_hint = False
     if config.app_phase in ("running", "done"):
         idx = config.STEP_SEQUENCE.index(config.current_step)
@@ -144,7 +144,7 @@ def debug_simulate_incorrect():
     config.red_count += 1
     with config.feedback_lock:
         config.feedback_state = "red"
-        config.feedback_timer = 3000
+        config.feedback_timer = 5000
     config.show_hint = True
     log_message(f"DEBUG: Incorrect recorded (red={config.red_count})")
     _write_session_counts()
