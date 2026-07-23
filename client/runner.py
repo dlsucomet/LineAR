@@ -91,6 +91,8 @@ def reset_for_new_problem():
     config.transformation_progress = 0.0
     config.complete_point_progress = 0.0
     config.last_ocr_time = 0
+    config.last_ocr_finish_time = 0
+    config.last_step_advance_time = 0
     config.markers_visible_since = 0
     config.problem_ended_early = False
     config.app_phase = "start"
@@ -483,6 +485,7 @@ def main(mode):
                 if (
                     marker_elapsed >= 3.0
                     and time.time() - config.last_ocr_finish_time >= 5.0
+                    and time.time() - config.last_step_advance_time >= 10.0
                 ):
                     config.markers_visible_since = 0
                     config.is_processing = True

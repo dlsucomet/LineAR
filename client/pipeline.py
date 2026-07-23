@@ -556,16 +556,6 @@ def background_ocr_pipeline():
         expected = config.expected_answers.get(config.current_step, {})
         all_empty = all(len(v) == 0 for v in recognized_data.values())
 
-        if not expected and not regions:
-            idx = config.STEP_SEQUENCE.index(config.current_step)
-            if idx < len(config.STEP_SEQUENCE) - 1:
-                config.current_step = config.STEP_SEQUENCE[idx + 1]
-                log_message(f"SKIPPED: Step has no expected values, advancing to '{config.current_step}'.")
-            config.last_ocr_finish_time = time.time()
-            config.blank_projection = False
-            config.is_processing = False
-            return
-
         if not all_empty and expected and _expected_subset_match(recognized_data, expected):
             is_valid = True
         if is_valid:
@@ -578,6 +568,7 @@ def background_ocr_pipeline():
             idx = config.STEP_SEQUENCE.index(config.current_step)
             if idx < len(config.STEP_SEQUENCE) - 1:
                 config.current_step = config.STEP_SEQUENCE[idx + 1]
+                config.last_step_advance_time = time.time()
                 log_message(f"SUCCESS: Moving to step {config.current_step} | Expected: {expected} | Got: {recognized_data}")
             else:
                 config.app_phase = "nasa_tlx"
@@ -590,6 +581,8 @@ def background_ocr_pipeline():
                 config.feedback_timer = 5000
                 config.show_hint = True
             log_message(f"REJECTED: Step '{config.current_step}' incorrect | Expected: {expected} | Got: {recognized_data}")
+            config.last_step_advance_time = time.time()
+        config.markers_visible_since = 0
         
         with open(config.SESSION_PATH) as f:
             session_data = json.load(f)
