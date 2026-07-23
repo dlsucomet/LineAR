@@ -224,7 +224,6 @@ def draw_cartesian_plane(surface, area):
     if max_extent > 0:
         half_area = min(area.width, area.height) / 2
         if max_extent > 2:
-            # Adaptive: labels need ~100px; solve scale for exact fit
             scale = min(scale, max(1.0, (half_area - 100) / max_extent))
         else:
             scale = min(scale, max(1.0, half_area / (max_extent + 3)))
@@ -257,6 +256,18 @@ def draw_cartesian_plane(surface, area):
     v_px = ox + int(v_vec["x"] * scale) if v_vec else ox
     v_py = oy - int(v_vec["y"] * scale) if v_vec else oy
 
+    def _label_pos(tx, ty, text_w, text_h):
+        label_offset = 20
+        if tx >= ox:
+            lx = tx + label_offset
+        else:
+            lx = tx - label_offset - text_w
+        if ty >= oy:
+            ly = ty + label_offset
+        else:
+            ly = ty - label_offset - text_h
+        return lx, ly
+
     for vec in config.active_vectors:
         vec_idx = step_order.index(vec.get("show_at", "firstStep"))
         if vec_idx > current_idx:
@@ -283,20 +294,24 @@ def draw_cartesian_plane(surface, area):
                 tx = int(w_px + (final_tx - w_px) * prog)
                 ty = int(w_py + (final_ty - w_py) * prog)
                 color = config.COLOR_POINT_BLUE
-                radius = int(6 + 2 * prog)
+                radius = int(10 + 4 * prog)
                 if area.x <= tx <= area.x + area.width and area.y <= ty <= area.y + area.height:
                     pygame.draw.circle(surface, color, (tx, ty), radius)
                     if prog > 0.5:
-                        surface.blit(font_bold.render(f'{vec["label"]} ({vec["x"]},{
-                                     vec["y"]})', True, color), (tx + 16, ty - 4))
+                        label_txt = f'{vec["label"]} ({vec["x"]},{vec["y"]})'
+                        lsurf = font_medium.render(label_txt, True, color)
+                        lx, ly = _label_pos(tx, ty, lsurf.get_width(), lsurf.get_height())
+                        surface.blit(lsurf, (lx, ly))
                 continue
             else:
                 color = config.COLOR_TEXT
                 tx, ty = ox + int(vec["x"] * scale), oy - int(vec["y"] * scale)
             if area.x <= tx <= area.x + area.width and area.y <= ty <= area.y + area.height:
-                pygame.draw.circle(surface, color, (tx, ty), 6)
-                surface.blit(font_bold.render(f'{vec["label"]} ({vec["x"]},{
-                             vec["y"]})', True, color), (tx + 16, ty - 4))
+                pygame.draw.circle(surface, color, (tx, ty), 10)
+                label_txt = f'{vec["label"]} ({vec["x"]},{vec["y"]})'
+                lsurf = font_medium.render(label_txt, True, color)
+                lx, ly = _label_pos(tx, ty, lsurf.get_width(), lsurf.get_height())
+                surface.blit(lsurf, (lx, ly))
         else:
             tx, ty = ox + int(vec["x"] * scale), oy - int(vec["y"] * scale)
             if area.x <= tx <= area.x + area.width and area.y <= ty <= area.y + area.height:
@@ -318,8 +333,10 @@ def draw_cartesian_plane(surface, area):
                     (int(base_lx), int(base_ly)),
                     (int(base_rx), int(base_ry))
                 ])
-                surface.blit(font_bold.render(f'{vec["label"]} ({vec["x"]},{
-                             vec["y"]})', True, config.COLOR_TEXT), (tx + 16, ty - 4))
+                label_txt = f'{vec["label"]} ({vec["x"]},{vec["y"]})'
+                lsurf = font_medium.render(label_txt, True, config.COLOR_TEXT)
+                lx, ly = _label_pos(tx, ty, lsurf.get_width(), lsurf.get_height())
+                surface.blit(lsurf, (lx, ly))
     surface.set_clip(clip_rect)
 
 
