@@ -473,7 +473,7 @@ def draw_instruction_panel(surface, area):
 
         use_highlights = getattr(config.args, "mode", "") == "highlights"
         step_colors = {None: None, "firstStep": None, "firstStepOne": [config.COLOR_HIGHLIGHT_BLUE, config.COLOR_POINT_LIGHT] if use_highlights else [None, None], "firstStepTwo": [
-            config.COLOR_HIGHLIGHT_BLUE, config.COLOR_POINT_LIGHT] if use_highlights else [None, None], "firstStepThree": [config.COLOR_HIGHLIGHT_BLUE, config.COLOR_POINT_LIGHT] if use_highlights else [None, None]}
+            config.COLOR_HIGHLIGHT_BLUE, config.COLOR_POINT_LIGHT] if use_highlights else [None, None], "firstStepThree": [config.COLOR_HIGHLIGHT_BLUE, config.COLOR_POINT_LIGHT] if use_highlights else [None, None], "secondStepLeft": [config.COLOR_HIGHLIGHT_BLUE, config.COLOR_POINT_LIGHT] if use_highlights else [None, None], "secondStepRight": [config.COLOR_HIGHLIGHT_BLUE, config.COLOR_POINT_LIGHT] if use_highlights else [None, None]}
         hl_u = step_colors.get(
             config.current_step) if config.current_step == "firstStepTwo" else None
         hl_w = step_colors.get(
