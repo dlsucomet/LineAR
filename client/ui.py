@@ -260,12 +260,20 @@ def draw_cartesian_plane(surface, area):
         label_offset = 24
         if tx >= ox:
             lx = tx + label_offset
+            if lx + text_w > area.x + area.width:
+                lx = tx - label_offset - text_w
         else:
             lx = tx - label_offset - text_w
+            if lx < area.x:
+                lx = tx + label_offset
         if ty >= oy:
             ly = ty + label_offset
+            if ly + text_h > area.y + area.height:
+                ly = ty - label_offset - text_h
         else:
             ly = ty - label_offset - text_h
+            if ly < area.y:
+                ly = ty + label_offset
         return lx, ly
 
     for vec in config.active_vectors:
