@@ -141,12 +141,8 @@ def draw_top_bar(surface):
         text = font_large.render(
             "Questionnaire: UEQ-S", True, config.COLOR_WHITE)
     else:
-        if getattr(config.args, "mode", "") == "highlights":
-            text = font_large.render(
-                "Please copy the number as highlighted by the blue marker", True, config.COLOR_WHITE)
-        else:
-            text = font_large.render(
-                "Please cover the aruco marker while solving", True, config.COLOR_WHITE)
+        text = font_large.render(
+            "Please cover the aruco marker while solving", True, config.COLOR_WHITE)
     surface.blit(text, text.get_rect(
         center=(surface.get_width() // 2, config.TOP_BAR_HEIGHT // 2)))
 
