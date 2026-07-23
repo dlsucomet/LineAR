@@ -630,22 +630,28 @@ def draw_instruction_panel(surface, area):
             line_y_center = start_y + line_idx * (single_line_h + line_block_gap) + single_line_h // 2
             current_x = eq_rect.x + 15
 
+            _coeff_color = config.COLOR_TEXT
+            _vec_color = config.COLOR_TEXT
+            if config.current_step in ("secondStepLeft", "secondStepRight"):
+                _coeff_color = config.COLOR_HIGHLIGHT_BLUE_LIGHT
+                _vec_color = config.COLOR_HIGHLIGHT_BLUE
+
             for ptype, pcontent in line_parts:
                 if ptype == "text":
-                    t_surf = use_font.render(pcontent, True, config.COLOR_TEXT)
+                    t_surf = use_font.render(pcontent, True, _coeff_color)
                     surface.blit(t_surf, (current_x, line_y_center - t_surf.get_height() // 2))
                     current_x += t_surf.get_width()
                 else:
                     rows = pcontent
-                    row_surfaces = [use_font.render(r, True, config.COLOR_TEXT) for r in rows]
+                    row_surfaces = [use_font.render(r, True, _vec_color) for r in rows]
                     max_row_w = max(s.get_width() for s in row_surfaces)
                     total_h = len(rows) * row_h + (len(rows) - 1) * line_spacing
                     bracket_top = line_y_center - total_h // 2
                     bracket_bottom = bracket_top + total_h
 
-                    pygame.draw.line(surface, config.COLOR_TEXT, (current_x, bracket_top), (current_x, bracket_bottom), 2)
-                    pygame.draw.line(surface, config.COLOR_TEXT, (current_x, bracket_top), (current_x + 4, bracket_top), 2)
-                    pygame.draw.line(surface, config.COLOR_TEXT, (current_x, bracket_bottom), (current_x + 4, bracket_bottom), 2)
+                    pygame.draw.line(surface, _vec_color, (current_x, bracket_top), (current_x, bracket_bottom), 2)
+                    pygame.draw.line(surface, _vec_color, (current_x, bracket_top), (current_x + 4, bracket_top), 2)
+                    pygame.draw.line(surface, _vec_color, (current_x, bracket_bottom), (current_x + 4, bracket_bottom), 2)
 
                     content_x = current_x + 6
                     for j, surf in enumerate(row_surfaces):
@@ -653,9 +659,9 @@ def draw_instruction_panel(surface, area):
                         surface.blit(surf, (content_x + (max_row_w - surf.get_width()) // 2, row_y))
 
                     right_x = content_x + max_row_w + 6
-                    pygame.draw.line(surface, config.COLOR_TEXT, (right_x, bracket_top), (right_x, bracket_bottom), 2)
-                    pygame.draw.line(surface, config.COLOR_TEXT, (right_x, bracket_top), (right_x - 4, bracket_top), 2)
-                    pygame.draw.line(surface, config.COLOR_TEXT, (right_x, bracket_bottom), (right_x - 4, bracket_bottom), 2)
+                    pygame.draw.line(surface, _vec_color, (right_x, bracket_top), (right_x, bracket_bottom), 2)
+                    pygame.draw.line(surface, _vec_color, (right_x, bracket_top), (right_x - 4, bracket_top), 2)
+                    pygame.draw.line(surface, _vec_color, (right_x, bracket_bottom), (right_x - 4, bracket_bottom), 2)
 
                     current_x = right_x
 
