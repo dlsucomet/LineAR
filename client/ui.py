@@ -209,7 +209,7 @@ def draw_cartesian_plane(surface, area):
         amplitude = 25
         frequency = 0.006
         bounce_offset = int(amplitude * math.sin(fb_timer *
-                            frequency) * (fb_timer / 1000.0))
+                            frequency) * (fb_timer / 3000.0))
         ox += bounce_offset
         oy -= bounce_offset
     step_order = config.STEP_SEQUENCE
