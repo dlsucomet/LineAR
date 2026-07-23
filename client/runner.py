@@ -549,12 +549,12 @@ def main(mode):
             center_rect = ui.draw_panels(screen, mode="running")
             end_btn_rect = ui.draw_end_task_button(screen, center_rect)
 
-    with config.feedback_lock:
-        if config.feedback_timer > 0:
-            config.feedback_timer -= clock.get_time()
-            if config.feedback_timer <= 0:
-                config.feedback_timer = 0
-                config.feedback_state = None
+        with config.feedback_lock:
+            if config.feedback_timer > 0:
+                config.feedback_timer -= clock.get_time()
+                if config.feedback_timer <= 0:
+                    config.feedback_timer = 0
+                    config.feedback_state = None
 
         pygame.display.flip()
         clock.tick(60)
