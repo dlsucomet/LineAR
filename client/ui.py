@@ -695,7 +695,7 @@ def draw_projection_boxes(surface, center):
     if highlight_step in config.PROJECTION_REGIONS:
         proj_mat = track_mat if tracking else frozen_mat
         if proj_mat is not None:
-                if config.args.mode == "highlights" and not config.blank_projection and fb_timer <= 0:
+            if config.args.mode == "highlights" and not config.blank_projection and fb_timer <= 0:
                 for _, box in config.PROJECTION_REGIONS[highlight_step].items():
                     tl = transform_to_projection_space(
                         box["left"], box["top"], center, proj_mat)
