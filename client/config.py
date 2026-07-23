@@ -220,33 +220,33 @@ PROJECTION_REGIONS = {
 FEEDBACK_REGIONS = {
     "firstStep": {},
     "firstStepOne": {
-        "one": {"left": 0, "top": 0, "width": 3000, "height": 500},
+        "one": {"left": 0, "top": 0, "width": 3000, "height": 800},
     },
     "firstStepTwo": {
-        "one": {"left": 0, "top": 0, "width": 3000, "height": 500},
+        "one": {"left": 0, "top": 0, "width": 3000, "height": 800},
     },
     "firstStepThree": {
-        "one": {"left": 0, "top": 0, "width": 3000, "height": 500},
+        "one": {"left": 0, "top": 0, "width": 3000, "height": 800},
     },
     "firstStepFour": {
-        "one": {"left": 0, "top": 0, "width": 3000, "height": 500},
+        "one": {"left": 0, "top": 0, "width": 3000, "height": 800},
     },
     "secondStepLeft": {
-        "one": {"left": 0, "top": 1200, "width": 3000, "height": 500},
-        "two": {"left": 0, "top": 1100, "width": 3000, "height": 500},
+        "one": {"left": 0, "top": 1200, "width": 3000, "height": 800},
+        "two": {"left": 0, "top": 1100, "width": 3000, "height": 800},
     },
     "secondStepRight": {
-        "one": {"left": 0, "top": 1200, "width": 3000, "height": 500},
-        "two": {"left": 0, "top": 1100, "width": 3000, "height": 500},
+        "one": {"left": 0, "top": 1200, "width": 3000, "height": 800},
+        "two": {"left": 0, "top": 1100, "width": 3000, "height": 800},
     },
     "thirdStepLeft": {
-        "one": {"left": 0, "top": 1700, "width": 3000, "height": 500},
+        "one": {"left": 0, "top": 1700, "width": 3000, "height": 800},
     },
     "thirdStepRight": {
-        "one": {"left": 0, "top": 1700, "width": 3000, "height": 500},
+        "one": {"left": 0, "top": 1700, "width": 3000, "height": 800},
     },
     "fourthStep": {
-        "one": {"left": 0, "top": 2300, "width": 3000, "height": 500},
+        "one": {"left": 0, "top": 2300, "width": 3000, "height": 800},
     },
 }
 

@@ -255,7 +255,7 @@ def detect_content_bands(warped_img):
     return bands
 
 
-def _ocr_region(region_img, reader, min_confidence=0.3):
+def _ocr_single_pass(region_img, reader, min_confidence=0.3):
     processed = preprocess_for_paddleocr(region_img)
     result = reader.predict(input=processed)
     tokens = []
@@ -270,7 +270,25 @@ def _ocr_region(region_img, reader, min_confidence=0.3):
                 if token and token != "-":
                     tokens.append(token)
                     conf_map[token] = score
-    return tokens, conf_map, "paddleocr", processed
+    return tokens, conf_map
+
+
+def _ocr_region(region_img, reader, min_confidence=0.3):
+    bands = detect_content_bands(region_img)
+    all_tokens = []
+    all_conf = {}
+    if len(bands) > 1:
+        for (row_start, row_end, col_start, col_end) in bands:
+            pad = 5
+            r0, r1 = max(0, row_start - pad), min(region_img.shape[0], row_end + pad)
+            c0, c1 = max(0, col_start - pad), min(region_img.shape[1], col_end + pad)
+            band_img = region_img[r0:r1, c0:c1]
+            tokens, conf_map = _ocr_single_pass(band_img, reader, min_confidence)
+            all_tokens.extend(tokens)
+            all_conf.update(conf_map)
+        return all_tokens, all_conf, "paddleocr", None
+    tokens, conf_map = _ocr_single_pass(region_img, reader, min_confidence)
+    return tokens, conf_map, "paddleocr", None
 
 
 def scan_qr_from_camera():
