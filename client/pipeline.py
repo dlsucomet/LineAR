@@ -33,9 +33,19 @@ def preprocess_for_paddleocr(img):
         clahe = cv2.createCLAHE(clipLimit=2.0, tileGridSize=(8, 8))
         lab[:, :, 0] = clahe.apply(lab[:, :, 0])
         result = cv2.cvtColor(lab, cv2.COLOR_LAB2BGR)
-    gaussian = cv2.GaussianBlur(result, (0, 0), 3)
-    result = cv2.addWeighted(result, 1.3, gaussian, -0.3, 0)
+    gaussian = cv2.GaussianBlur(result, (0, 0), 2)
+    result = cv2.addWeighted(result, 1.2, gaussian, -0.2, 0)
     return result
+
+
+def preprocess_adaptive_for_paddleocr(img):
+    result = _clamp_ocr_resolution(img.copy())
+    gray = cv2.cvtColor(result, cv2.COLOR_BGR2GRAY) if len(result.shape) == 3 else result
+    binary = cv2.adaptiveThreshold(gray, 255, cv2.ADAPTIVE_THRESH_GAUSSIAN_C,
+                                    cv2.THRESH_BINARY, 31, 10)
+    kernel = cv2.getStructuringElement(cv2.MORPH_RECT, (2, 2))
+    binary = cv2.morphologyEx(binary, cv2.MORPH_CLOSE, kernel)
+    return cv2.cvtColor(binary, cv2.COLOR_GRAY2BGR)
 
 
 def paper_tracking_daemon():
@@ -217,7 +227,7 @@ def debug_crop_capture():
     cv2.imwrite(os.path.join(captures_dir, "debug_all_regions.png"), annotated)
 
 
-def _split_tall_bands(bands, binary, min_gap_ratio=0.15, min_sub_band=8, split_threshold=30):
+def _split_tall_bands(bands, binary, min_gap_ratio=0.12, min_sub_band=8, split_threshold=25):
     expanded = []
     for (row_start, row_end, col_start, col_end) in bands:
         band_height = row_end - row_start
@@ -303,25 +313,28 @@ def detect_content_bands(warped_img):
     return bands
 
 
-def _ocr_single_pass(region_img, reader, min_confidence=0.3):
-    processed = preprocess_for_paddleocr(region_img)
-    result = reader.predict(input=processed)
+def _ocr_single_pass(region_img, reader, min_confidence=0.2):
     tokens = []
     conf_map = {}
-    if result and len(result) > 0:
-        for text, score in zip(result[0]['rec_texts'], result[0]['rec_scores']):
-            if score < min_confidence:
-                continue
-            cleaned = text.replace(" ", "")
-            for match in re.finditer(r'-?\d+', cleaned):
-                token = match.group()
-                if token and token != "-":
-                    tokens.append(token)
-                    conf_map[token] = score
+    seen = set()
+    for preprocess_fn in (preprocess_for_paddleocr, preprocess_adaptive_for_paddleocr):
+        processed = preprocess_fn(region_img)
+        result = reader.predict(input=processed)
+        if result and len(result) > 0:
+            for text, score in zip(result[0]['rec_texts'], result[0]['rec_scores']):
+                if score < min_confidence:
+                    continue
+                cleaned = text.replace(" ", "")
+                for match in re.finditer(r'-?\d+', cleaned):
+                    token = match.group()
+                    if token and token != "-" and token not in seen:
+                        seen.add(token)
+                        tokens.append(token)
+                        conf_map[token] = score
     return tokens, conf_map
 
 
-def _ocr_region(region_img, reader, min_confidence=0.3):
+def _ocr_region(region_img, reader, min_confidence=0.2):
     bands = detect_content_bands(region_img)
     all_tokens = []
     all_conf = {}
