@@ -98,20 +98,25 @@ STEP_GUIDANCE = {
 
 
 def wrap_text(text, font, max_width):
-    words = text.split(" ")
-    lines = []
-    current_line = ""
-    for word in words:
-        test_line = current_line + (" " if current_line else "") + word
-        if font.size(test_line)[0] <= max_width:
-            current_line = test_line
-        else:
-            if current_line:
-                lines.append(current_line)
-            current_line = word
-    if current_line:
-        lines.append(current_line)
-    return lines
+    all_lines = []
+    for paragraph in text.split("\n"):
+        paragraph = paragraph.strip()
+        if not paragraph:
+            all_lines.append("")
+            continue
+        words = paragraph.split(" ")
+        current_line = ""
+        for word in words:
+            test_line = current_line + (" " if current_line else "") + word
+            if font.size(test_line)[0] <= max_width:
+                current_line = test_line
+            else:
+                if current_line:
+                    all_lines.append(current_line)
+                current_line = word
+        if current_line:
+            all_lines.append(current_line)
+    return all_lines
 
 
 def draw_top_bar(surface):
@@ -258,24 +263,34 @@ def draw_cartesian_plane(surface, area):
 
     def _label_pos(tx, ty, text_w, text_h):
         label_offset = 24
+        lo = label_offset
         if tx >= ox:
-            lx = tx + label_offset
-            if lx + text_w > area.x + area.width:
-                lx = tx - label_offset - text_w
+            candidates = [
+                (tx + lo, ty + lo),
+                (tx + lo, ty - lo - text_h),
+                (tx - lo - text_w, ty + lo),
+                (tx - lo - text_w, ty - lo - text_h),
+            ]
         else:
-            lx = tx - label_offset - text_w
-            if lx < area.x:
-                lx = tx + label_offset
-        if ty >= oy:
-            ly = ty + label_offset
-            if ly + text_h > area.y + area.height:
-                ly = ty - label_offset - text_h
-        else:
-            ly = ty - label_offset - text_h
-            if ly < area.y:
-                ly = ty + label_offset
+            candidates = [
+                (tx - lo - text_w, ty + lo),
+                (tx - lo - text_w, ty - lo - text_h),
+                (tx + lo, ty + lo),
+                (tx + lo, ty - lo - text_h),
+            ]
+        for lx, ly in candidates:
+            if lx < area.x or lx + text_w > area.x + area.width:
+                continue
+            if ly < area.y or ly + text_h > area.y + area.height:
+                continue
+            rect = pygame.Rect(lx, ly, text_w, text_h)
+            if not any(rect.colliderect(r) for r in placed_rects):
+                return lx, ly
+        lx = tx + lo if tx >= ox else tx - lo - text_w
+        ly = ty + lo if ty >= oy else ty - lo - text_h
         return lx, ly
 
+    placed_rects = []
     for vec in config.active_vectors:
         vec_idx = step_order.index(vec.get("show_at", "firstStep"))
         if vec_idx > current_idx:
@@ -310,6 +325,7 @@ def draw_cartesian_plane(surface, area):
                         lsurf = font_medium.render(label_txt, True, color)
                         lx, ly = _label_pos(tx, ty, lsurf.get_width(), lsurf.get_height())
                         surface.blit(lsurf, (lx, ly))
+                        placed_rects.append(pygame.Rect(lx, ly, lsurf.get_width(), lsurf.get_height()))
                 continue
             else:
                 color = config.COLOR_TEXT
@@ -320,6 +336,7 @@ def draw_cartesian_plane(surface, area):
                 lsurf = font_medium.render(label_txt, True, color)
                 lx, ly = _label_pos(tx, ty, lsurf.get_width(), lsurf.get_height())
                 surface.blit(lsurf, (lx, ly))
+                placed_rects.append(pygame.Rect(lx, ly, lsurf.get_width(), lsurf.get_height()))
         else:
             tx, ty = ox + int(vec["x"] * scale), oy - int(vec["y"] * scale)
             if area.x <= tx <= area.x + area.width and area.y <= ty <= area.y + area.height:
@@ -345,6 +362,7 @@ def draw_cartesian_plane(surface, area):
                 lsurf = font_medium.render(label_txt, True, config.COLOR_TEXT)
                 lx, ly = _label_pos(tx, ty, lsurf.get_width(), lsurf.get_height())
                 surface.blit(lsurf, (lx, ly))
+                placed_rects.append(pygame.Rect(lx, ly, lsurf.get_width(), lsurf.get_height()))
     surface.set_clip(clip_rect)
 
 
