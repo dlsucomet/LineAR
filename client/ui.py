@@ -207,9 +207,9 @@ def draw_cartesian_plane(surface, area):
         fb_state = getattr(config, "feedback_state", "")
     if fb_timer > 0 and fb_state == "green":
         amplitude = 25
-        frequency = 0.1
+        frequency = 0.006
         bounce_offset = int(amplitude * math.sin(fb_timer *
-                            frequency) * (fb_timer / 60.0))
+                            frequency) * (fb_timer / 1000.0))
         ox += bounce_offset
         oy -= bounce_offset
     step_order = config.STEP_SEQUENCE
@@ -722,7 +722,7 @@ def draw_projection_boxes(surface, center):
                 if tl and br:
                     pygame.draw.rect(surface, feedback_color,
                                      (tl[0], tl[1], br[0]-tl[0], br[1]-tl[1]))
-                    if fb_timer == 60:
+                    if fb_timer >= 990:
                         log_message(f"FEEDBACK: Drew {fb_state} box for step '{fb_step}'")
 
 

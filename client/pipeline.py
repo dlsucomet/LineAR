@@ -573,7 +573,7 @@ def background_ocr_pipeline():
             with config.feedback_lock:
                 config.feedback_step = config.current_step
                 config.feedback_state = "green"
-                config.feedback_timer = 60
+                config.feedback_timer = 1000
                 config.show_hint = False
             idx = config.STEP_SEQUENCE.index(config.current_step)
             if idx < len(config.STEP_SEQUENCE) - 1:
@@ -587,7 +587,7 @@ def background_ocr_pipeline():
             with config.feedback_lock:
                 config.feedback_step = config.current_step
                 config.feedback_state = "red"
-                config.feedback_timer = 60
+                config.feedback_timer = 1000
                 config.show_hint = True
             log_message(f"REJECTED: Step '{config.current_step}' incorrect | Expected: {expected} | Got: {recognized_data}")
         
