@@ -33,7 +33,7 @@ COLOR_BG = (248, 250, 252)
 COLOR_TEXT = (0, 0, 0)
 COLOR_AXIS = (0, 0, 0)
 COLOR_BLUE = (26, 58, 107)
-COLOR_GRID = (226, 232, 240)
+COLOR_GRID = (190, 200, 212)
 COLOR_WHITE = (255, 255, 255)
 
 screen = pygame.display.set_mode((WINDOW_WIDTH, WINDOW_HEIGHT), pygame.RESIZABLE)
@@ -378,9 +378,9 @@ def draw_cartesian_plane(surface, area):
     scale = max(1, int(min(area.width, area.height) / 14))
     grid_surf = pygame.Surface((area.width, area.height), pygame.SRCALPHA)
     for x in range(ox % scale, area.x + area.width, scale):
-        pygame.draw.line(grid_surf, (*COLOR_GRID, 180), (x, area.y), (x, area.y + area.height))
+        pygame.draw.line(grid_surf, (*COLOR_GRID, 220), (x, area.y), (x, area.y + area.height))
     for y in range(oy % scale, area.y + area.height, scale):
-        pygame.draw.line(grid_surf, (*COLOR_GRID, 180), (area.x, y), (area.x + area.width, y))
+        pygame.draw.line(grid_surf, (*COLOR_GRID, 220), (area.x, y), (area.x + area.width, y))
     surface.blit(grid_surf, (area.x, area.y))
     pygame.draw.line(surface, COLOR_TEXT, (area.x, oy), (area.x + area.width, oy), 2)
     pygame.draw.line(surface, COLOR_TEXT, (ox, area.y), (ox, area.y + area.height), 2)
