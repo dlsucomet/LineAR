@@ -699,9 +699,9 @@ def draw_projection_boxes(surface, center):
                         box["left"] + box["width"], box["top"] + box["height"], center, proj_mat)
                     if tl and br:
                         if highlight_step in ("secondStepLeft", "secondStepRight"):
-                            if box_key == "one":
+                            if box_key in ("one", "two"):
                                 box_color = config.COLOR_HIGHLIGHT_BLUE_LIGHT
-                            elif box_key in ("two", "three"):
+                            elif box_key == "three":
                                 box_color = config.COLOR_HIGHLIGHT_BLUE
                             else:
                                 box_color = config.COLOR_BLUE
