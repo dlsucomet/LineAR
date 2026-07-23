@@ -698,8 +698,13 @@ def draw_projection_boxes(surface, center):
                     br = transform_to_projection_space(
                         box["left"] + box["width"], box["top"] + box["height"], center, proj_mat)
                     if tl and br:
-                        if highlight_step in ("secondStepLeft", "secondStepRight") and box_key == "one":
-                            box_color = config.COLOR_HIGHLIGHT_BLUE_LIGHT
+                        if highlight_step in ("secondStepLeft", "secondStepRight"):
+                            if box_key == "one":
+                                box_color = config.COLOR_HIGHLIGHT_BLUE_LIGHT
+                            elif box_key == "three":
+                                box_color = config.COLOR_HIGHLIGHT_BLUE
+                            else:
+                                box_color = config.COLOR_BLUE
                         else:
                             box_color = config.COLOR_BLUE
                         pygame.draw.rect(
