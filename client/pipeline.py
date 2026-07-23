@@ -217,6 +217,53 @@ def debug_crop_capture():
     cv2.imwrite(os.path.join(captures_dir, "debug_all_regions.png"), annotated)
 
 
+def _split_tall_bands(bands, binary, min_gap_ratio=0.15, min_sub_band=8, split_threshold=30):
+    expanded = []
+    for (row_start, row_end, col_start, col_end) in bands:
+        band_height = row_end - row_start
+        if band_height < split_threshold:
+            expanded.append((row_start, row_end, col_start, col_end))
+            continue
+
+        band_binary = binary[row_start:row_end, col_start:col_end + 1]
+        ink_per_row = (band_binary > 0).sum(axis=1)
+        avg_ink = float(ink_per_row.mean())
+        if avg_ink <= 0:
+            expanded.append((row_start, row_end, col_start, col_end))
+            continue
+
+        threshold = avg_ink * min_gap_ratio
+        in_gap = False
+        gap_start = 0
+        gaps = []
+        for i, density in enumerate(ink_per_row):
+            if density <= threshold and not in_gap:
+                gap_start = i
+                in_gap = True
+            elif density > threshold and in_gap:
+                if i - gap_start >= 2:
+                    gaps.append((gap_start, i))
+                in_gap = False
+
+        if not gaps:
+            expanded.append((row_start, row_end, col_start, col_end))
+            continue
+
+        prev_end = 0
+        for gs, ge in gaps:
+            sub_start = row_start + prev_end
+            sub_end = row_start + gs
+            if sub_end - sub_start >= min_sub_band:
+                expanded.append((sub_start, sub_end, col_start, col_end))
+            prev_end = ge
+
+        last_start = row_start + prev_end
+        if row_end - last_start >= min_sub_band:
+            expanded.append((last_start, row_end, col_start, col_end))
+
+    return expanded
+
+
 def detect_content_bands(warped_img):
     gray = cv2.cvtColor(warped_img, cv2.COLOR_BGR2GRAY)
     h, w = gray.shape[:2]
@@ -252,6 +299,7 @@ def detect_content_bands(warped_img):
             cols_with_ink = np.where(band_region.max(axis=0) > 0)[0]
             if len(cols_with_ink) > 0:
                 bands.append((band_start, h, cols_with_ink.min(), cols_with_ink.max()))
+    bands = _split_tall_bands(bands, binary)
     return bands
 
 
