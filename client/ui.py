@@ -626,28 +626,22 @@ def draw_instruction_panel(surface, area):
             line_y_center = start_y + line_idx * (single_line_h + line_block_gap) + single_line_h // 2
             current_x = eq_rect.x + 15
 
-            _coeff_color = config.COLOR_TEXT
-            _vec_color = config.COLOR_TEXT
-            if config.current_step in ("secondStepLeft", "secondStepRight"):
-                _coeff_color = config.COLOR_HIGHLIGHT_BLUE_LIGHT
-                _vec_color = config.COLOR_HIGHLIGHT_BLUE
-
             for ptype, pcontent in line_parts:
                 if ptype == "text":
-                    t_surf = use_font.render(pcontent, True, _coeff_color)
+                    t_surf = use_font.render(pcontent, True, config.COLOR_TEXT)
                     surface.blit(t_surf, (current_x, line_y_center - t_surf.get_height() // 2))
                     current_x += t_surf.get_width()
                 else:
                     rows = pcontent
-                    row_surfaces = [use_font.render(r, True, _vec_color) for r in rows]
+                    row_surfaces = [use_font.render(r, True, config.COLOR_TEXT) for r in rows]
                     max_row_w = max(s.get_width() for s in row_surfaces)
                     total_h = len(rows) * row_h + (len(rows) - 1) * line_spacing
                     bracket_top = line_y_center - total_h // 2
                     bracket_bottom = bracket_top + total_h
 
-                    pygame.draw.line(surface, _vec_color, (current_x, bracket_top), (current_x, bracket_bottom), 2)
-                    pygame.draw.line(surface, _vec_color, (current_x, bracket_top), (current_x + 4, bracket_top), 2)
-                    pygame.draw.line(surface, _vec_color, (current_x, bracket_bottom), (current_x + 4, bracket_bottom), 2)
+                    pygame.draw.line(surface, config.COLOR_TEXT, (current_x, bracket_top), (current_x, bracket_bottom), 2)
+                    pygame.draw.line(surface, config.COLOR_TEXT, (current_x, bracket_top), (current_x + 4, bracket_top), 2)
+                    pygame.draw.line(surface, config.COLOR_TEXT, (current_x, bracket_bottom), (current_x + 4, bracket_bottom), 2)
 
                     content_x = current_x + 6
                     for j, surf in enumerate(row_surfaces):
@@ -655,9 +649,9 @@ def draw_instruction_panel(surface, area):
                         surface.blit(surf, (content_x + (max_row_w - surf.get_width()) // 2, row_y))
 
                     right_x = content_x + max_row_w + 6
-                    pygame.draw.line(surface, _vec_color, (right_x, bracket_top), (right_x, bracket_bottom), 2)
-                    pygame.draw.line(surface, _vec_color, (right_x, bracket_top), (right_x - 4, bracket_top), 2)
-                    pygame.draw.line(surface, _vec_color, (right_x, bracket_bottom), (right_x - 4, bracket_bottom), 2)
+                    pygame.draw.line(surface, config.COLOR_TEXT, (right_x, bracket_top), (right_x, bracket_bottom), 2)
+                    pygame.draw.line(surface, config.COLOR_TEXT, (right_x, bracket_top), (right_x - 4, bracket_top), 2)
+                    pygame.draw.line(surface, config.COLOR_TEXT, (right_x, bracket_bottom), (right_x - 4, bracket_bottom), 2)
 
                     current_x = right_x
 
@@ -698,14 +692,18 @@ def draw_projection_boxes(surface, center):
         proj_mat = track_mat if tracking else frozen_mat
         if proj_mat is not None:
             if config.args.mode == "highlights" and not config.blank_projection and fb_timer <= 0:
-                for _, box in config.PROJECTION_REGIONS[highlight_step].items():
+                for box_key, box in config.PROJECTION_REGIONS[highlight_step].items():
                     tl = transform_to_projection_space(
                         box["left"], box["top"], center, proj_mat)
                     br = transform_to_projection_space(
                         box["left"] + box["width"], box["top"] + box["height"], center, proj_mat)
                     if tl and br:
+                        if highlight_step in ("secondStepLeft", "secondStepRight") and box_key == "one":
+                            box_color = config.COLOR_HIGHLIGHT_BLUE_LIGHT
+                        else:
+                            box_color = config.COLOR_BLUE
                         pygame.draw.rect(
-                            surface, config.COLOR_BLUE, (tl[0], tl[1], br[0]-tl[0], br[1]-tl[1]))
+                            surface, box_color, (tl[0], tl[1], br[0]-tl[0], br[1]-tl[1]))
         elif not tracking:
             msg = font_bold.render(
                 "[ Align ArUco Markers to Project Guides ]", True, config.COLOR_TEXT)
