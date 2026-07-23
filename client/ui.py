@@ -26,7 +26,7 @@ def _init_fonts(font_scale=1.0):
     _font_scale = font_scale
     pygame.font.init()
     font_large = pygame.font.SysFont("segoeui", 28, bold=True)
-    font_medium = pygame.font.SysFont("segoeui", 18)
+    font_medium = pygame.font.SysFont("segoeui", 20, bold=True)
     font_body = pygame.font.SysFont("segoeui", 18)
     font_bold = pygame.font.SysFont("segoeui", 15, bold=True)
     font_equation = pygame.font.SysFont("segoeui", 15, bold=True)
@@ -233,13 +233,13 @@ def draw_cartesian_plane(surface, area):
     x = ox % scale
     while x < area.x + area.width:
         local_x = x - area.x
-        pygame.draw.line(grid_surf, (*config.COLOR_GRID, 180),
+        pygame.draw.line(grid_surf, (*config.COLOR_GRID, 220),
                          (local_x, 0), (local_x, area.height))
         x += scale
     y = oy % scale
     while y < area.y + area.height:
         local_y = y - area.y
-        pygame.draw.line(grid_surf, (*config.COLOR_GRID, 180),
+        pygame.draw.line(grid_surf, (*config.COLOR_GRID, 220),
                          (0, local_y), (area.width, local_y))
         y += scale
 
@@ -257,7 +257,7 @@ def draw_cartesian_plane(surface, area):
     v_py = oy - int(v_vec["y"] * scale) if v_vec else oy
 
     def _label_pos(tx, ty, text_w, text_h):
-        label_offset = 20
+        label_offset = 24
         if tx >= ox:
             lx = tx + label_offset
         else:
