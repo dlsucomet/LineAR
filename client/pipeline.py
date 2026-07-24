@@ -11,7 +11,7 @@ from logger import log_message
 from pyzbar.pyzbar import decode
 
 _OCR_MIN_WIDTH = 600
-_OCR_MAX_WIDTH = 1200
+_OCR_MAX_WIDTH = 1600
 
 
 def _clamp_ocr_resolution(img):
@@ -42,9 +42,17 @@ def preprocess_adaptive_for_paddleocr(img):
     result = _clamp_ocr_resolution(img.copy())
     gray = cv2.cvtColor(result, cv2.COLOR_BGR2GRAY) if len(result.shape) == 3 else result
     binary = cv2.adaptiveThreshold(gray, 255, cv2.ADAPTIVE_THRESH_GAUSSIAN_C,
-                                    cv2.THRESH_BINARY, 31, 10)
+                                    cv2.THRESH_BINARY, 21, 8)
     kernel = cv2.getStructuringElement(cv2.MORPH_RECT, (2, 2))
     binary = cv2.morphologyEx(binary, cv2.MORPH_CLOSE, kernel)
+    return cv2.cvtColor(binary, cv2.COLOR_GRAY2BGR)
+
+
+def preprocess_otsu_for_paddleocr(img):
+    result = _clamp_ocr_resolution(img.copy())
+    gray = cv2.cvtColor(result, cv2.COLOR_BGR2GRAY) if len(result.shape) == 3 else result
+    blurred = cv2.GaussianBlur(gray, (3, 3), 0)
+    _, binary = cv2.threshold(blurred, 0, 255, cv2.THRESH_BINARY + cv2.THRESH_OTSU)
     return cv2.cvtColor(binary, cv2.COLOR_GRAY2BGR)
 
 
@@ -284,7 +292,7 @@ def detect_content_bands(warped_img):
 
     ink_per_row = (binary > 0).sum(axis=1)
     row_threshold = w * 0.01
-    min_band_height = 15
+    min_band_height = 10
 
     in_content = False
     bands = []
@@ -313,11 +321,11 @@ def detect_content_bands(warped_img):
     return bands
 
 
-def _ocr_single_pass(region_img, reader, min_confidence=0.2):
+def _ocr_single_pass(region_img, reader, min_confidence=0.15):
     tokens = []
     conf_map = {}
     seen = set()
-    for preprocess_fn in (preprocess_for_paddleocr, preprocess_adaptive_for_paddleocr):
+    for preprocess_fn in (preprocess_for_paddleocr, preprocess_adaptive_for_paddleocr, preprocess_otsu_for_paddleocr):
         processed = preprocess_fn(region_img)
         result = reader.predict(input=processed)
         if result and len(result) > 0:
@@ -334,7 +342,7 @@ def _ocr_single_pass(region_img, reader, min_confidence=0.2):
     return tokens, conf_map
 
 
-def _ocr_region(region_img, reader, min_confidence=0.2):
+def _ocr_region(region_img, reader, min_confidence=0.15):
     bands = detect_content_bands(region_img)
     all_tokens = []
     all_conf = {}
