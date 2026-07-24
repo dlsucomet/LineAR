@@ -142,7 +142,7 @@ def draw_top_bar(surface):
             "Questionnaire: UEQ-S", True, config.COLOR_WHITE)
     elif config.app_phase == "ar_remove":
         text = font_large.render(
-            "Please remove the paper to proceed to questionnaires", True, config.COLOR_WHITE)
+            "Please click on proceed to proceed to questionnaires", True, config.COLOR_WHITE)
     else:
         if config.is_processing:
             text = font_large.render(
@@ -760,7 +760,7 @@ def draw_panels(surface, mode="running"):
     draw_cartesian_plane(surface, left)
     pygame.draw.rect(surface, config.COLOR_BLUE, left, 3)
 
-    if mode == "done":
+    if mode == "done" or mode == "ar_remove":
         draw_instruction_panel(surface, right)
         return center
 

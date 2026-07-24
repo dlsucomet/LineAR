@@ -95,7 +95,6 @@ def reset_for_new_problem():
     config.last_step_advance_time = 0
     config.markers_visible_since = 0
     config.problem_ended_early = False
-    config.any_markers_visible = False
     config.app_phase = "start"
     log_message(f"=== Problem {config.problem_number} Ready ===")
 
@@ -222,7 +221,6 @@ def main(mode):
     config.expected_answers = {}
     config.problem_number = 1
     config.problem_ended_early = False
-    config.any_markers_visible = False
     config._problem_start_str = None
     config._problem_start_time = None
 
@@ -555,17 +553,8 @@ def main(mode):
                 screen, center_rect, y_offset=0, x_center=right_x
             )
         elif config.app_phase == "ar_remove":
-            sw, sh = screen.get_size()
-            center_rect = pygame.Rect(
-                sw // 4,
-                config.TOP_BAR_HEIGHT,
-                sw // 2,
-                sh - config.TOP_BAR_HEIGHT - config.BOTTOM_BAR_HEIGHT,
-            )
-            if not config.any_markers_visible:
-                proceed_btn_rect = ui.draw_proceed_button(screen, center_rect)
-            else:
-                proceed_btn_rect = None
+            center_rect = ui.draw_panels(screen, mode="ar_remove")
+            proceed_btn_rect = ui.draw_proceed_button(screen, center_rect)
         elif config.app_phase == "nasa_tlx":
             draw_nasa_tlx(screen)
         elif config.app_phase == "ueq_s":

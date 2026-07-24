@@ -91,7 +91,6 @@ def paper_tracking_daemon():
         corners, ids, _ = detector.detectMarkers(enhanced_bgr)
         # Report which ArUco marker IDs are currently visible, only when the set changes
         current_ids = set(int(i) for i in ids.flatten()) if ids is not None else set()
-        config.any_markers_visible = len(current_ids) > 0
         if current_ids != last_seen_ids:
             if current_ids:
                 id_str = " ".join(str(i) for i in sorted(current_ids))
