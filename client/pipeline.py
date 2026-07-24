@@ -16,11 +16,15 @@ _OCR_MAX_WIDTH = 1600
 
 def _clamp_ocr_resolution(img):
     h, w = img.shape[:2]
-    if w < _OCR_MIN_WIDTH:
-        scale = _OCR_MIN_WIDTH / w
+    min_side = min(w, h)
+    max_side = max(w, h)
+    if min_side < _OCR_MIN_WIDTH:
+        scale = _OCR_MIN_WIDTH / min_side
         img = cv2.resize(img, None, fx=scale, fy=scale, interpolation=cv2.INTER_CUBIC)
-    elif w > _OCR_MAX_WIDTH:
-        scale = _OCR_MAX_WIDTH / w
+        h, w = img.shape[:2]
+        max_side = max(w, h)
+    if max_side > _OCR_MAX_WIDTH:
+        scale = _OCR_MAX_WIDTH / max_side
         img = cv2.resize(img, None, fx=scale, fy=scale, interpolation=cv2.INTER_AREA)
     return img
 
