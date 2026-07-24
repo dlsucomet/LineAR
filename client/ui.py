@@ -140,6 +140,9 @@ def draw_top_bar(surface):
     elif config.app_phase == "ueq_s":
         text = font_large.render(
             "Questionnaire: UEQ-S", True, config.COLOR_WHITE)
+    elif config.app_phase == "ar_remove":
+        text = font_large.render(
+            "Please remove the paper to proceed to questionnaires", True, config.COLOR_WHITE)
     else:
         if config.is_processing:
             text = font_large.render(
@@ -830,6 +833,32 @@ def draw_done_button(surface, center_rect, y_offset=0, x_center=None):
     else:
         pygame.draw.rect(surface, green, btn_rect, border_radius=12)
         text = font_large.render("DONE", True, config.COLOR_WHITE)
+    text_rect = text.get_rect(center=btn_rect.center)
+    surface.blit(text, text_rect)
+    return btn_rect
+
+
+def draw_proceed_button(surface, center_rect, y_offset=0, x_center=None):
+    btn_w = max(100, min(260, int(center_rect.width * 0.30)))
+    btn_h = max(28, min(70, int(btn_w * 70 / 260)))
+    cx = x_center if x_center is not None else center_rect.centerx
+    btn_rect = pygame.Rect(
+        cx - btn_w // 2,
+        center_rect.centery + y_offset - btn_h // 2,
+        btn_w,
+        btn_h
+    )
+    mx, my = pygame.mouse.get_pos()
+    hovered = btn_rect.collidepoint(mx, my)
+    green = (34, 197, 94)
+    if hovered:
+        pygame.draw.rect(surface, config.COLOR_WHITE,
+                         btn_rect, border_radius=12)
+        pygame.draw.rect(surface, green, btn_rect, 3, border_radius=12)
+        text = font_large.render("PROCEED", True, green)
+    else:
+        pygame.draw.rect(surface, green, btn_rect, border_radius=12)
+        text = font_large.render("PROCEED", True, config.COLOR_WHITE)
     text_rect = text.get_rect(center=btn_rect.center)
     surface.blit(text, text_rect)
     return btn_rect

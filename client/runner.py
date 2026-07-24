@@ -95,6 +95,7 @@ def reset_for_new_problem():
     config.last_step_advance_time = 0
     config.markers_visible_since = 0
     config.problem_ended_early = False
+    config.any_markers_visible = False
     config.app_phase = "start"
     log_message(f"=== Problem {config.problem_number} Ready ===")
 
@@ -221,6 +222,7 @@ def main(mode):
     config.expected_answers = {}
     config.problem_number = 1
     config.problem_ended_early = False
+    config.any_markers_visible = False
     config._problem_start_str = None
     config._problem_start_time = None
 
@@ -277,6 +279,7 @@ def main(mode):
 
     while config.running:
         screen.fill(config.COLOR_BG)
+        proceed_btn_rect = None
 
         # Pre-calculate UI geometry maps BEFORE running event checks
         left_rect, center_rect, right_rect = config.get_panel_rects(
@@ -332,6 +335,12 @@ def main(mode):
                 ):
                     save_problem_results()
                     return_to_launcher()
+                elif config.app_phase == "ar_remove" and proceed_btn_rect and proceed_btn_rect.collidepoint(
+                    event.pos
+                ):
+                    config.nasa_tlx_current_page = 0
+                    config.app_phase = "nasa_tlx"
+                    log_message("Proceeding to NASA-TLX questionnaire.")
                 elif config.app_phase == "running" and end_btn_rect.collidepoint(
                     event.pos
                 ):
@@ -545,6 +554,18 @@ def main(mode):
             done_btn_rect = ui.draw_done_button(
                 screen, center_rect, y_offset=0, x_center=right_x
             )
+        elif config.app_phase == "ar_remove":
+            sw, sh = screen.get_size()
+            center_rect = pygame.Rect(
+                sw // 4,
+                config.TOP_BAR_HEIGHT,
+                sw // 2,
+                sh - config.TOP_BAR_HEIGHT - config.BOTTOM_BAR_HEIGHT,
+            )
+            if not config.any_markers_visible:
+                proceed_btn_rect = ui.draw_proceed_button(screen, center_rect)
+            else:
+                proceed_btn_rect = None
         elif config.app_phase == "nasa_tlx":
             draw_nasa_tlx(screen)
         elif config.app_phase == "ueq_s":
