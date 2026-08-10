@@ -142,13 +142,40 @@ def draw_top_bar(surface):
             "Questionnaire: UEQ-S", True, config.COLOR_WHITE)
     else:
         if config.is_processing:
-            text = font_large.render(
-                "Validating answer...", True, config.COLOR_WHITE)
+            header_msg = config.processing_message or "Validating answer..."
+            text = font_large.render(header_msg, True, config.COLOR_WHITE)
         else:
             text = font_large.render(
                 "Please cover the aruco marker while solving", True, config.COLOR_WHITE)
     surface.blit(text, text.get_rect(
         center=(surface.get_width() // 2, config.TOP_BAR_HEIGHT // 2)))
+
+
+def draw_loading_spinner(surface, center_rect):
+    if not config.is_processing or not config.processing_message:
+        return
+    cx, cy = center_rect.center
+    radius = max(28, min(56, int(min(center_rect.width, center_rect.height) * 0.18)))
+    t = pygame.time.get_ticks() / 1000.0
+
+    outer_rect = pygame.Rect(0, 0, radius * 2, radius * 2)
+    outer_rect.center = (cx, cy)
+    pygame.draw.arc(surface, config.COLOR_GRID, outer_rect, 0, 2 * math.pi, 3)
+
+    angle = (t * 2.0) % (2 * math.pi)
+    sweep = math.pi / 2
+    inner_rect = outer_rect.inflate(-14, -14)
+    pygame.draw.arc(surface, config.COLOR_BLUE, inner_rect,
+                    angle, angle + sweep, 7)
+
+    counter = (-t * 3.0) % (2 * math.pi)
+    counter_sweep = math.pi / 3
+    counter_rect = outer_rect.inflate(10, 10)
+    pygame.draw.arc(surface, config.COLOR_POINT_BLUE, counter_rect,
+                    counter, counter + counter_sweep, 5)
+
+    label = font_large.render(config.processing_message, True, config.COLOR_TEXT)
+    surface.blit(label, label.get_rect(center=(cx, cy + radius + 26)))
 
 
 def draw_bottom_bar(surface, center_rect=None):

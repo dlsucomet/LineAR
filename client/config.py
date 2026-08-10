@@ -94,6 +94,7 @@ current_step = "firstStep"
 last_ocr_time = 0
 status_msg = "System Ready. Place paper to align ArUco markers."
 is_processing = False
+processing_message = ""
 blank_projection = False
 last_ocr_finish_time = 0
 last_step_advance_time = 0

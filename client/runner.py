@@ -88,6 +88,7 @@ def reset_for_new_problem():
     config.green_count = 0
     config.red_count = 0
     config.is_processing = False
+    config.processing_message = ""
     config.transformation_progress = 0.0
     config.complete_point_progress = 0.0
     config.last_ocr_time = 0
@@ -152,21 +153,32 @@ def debug_simulate_incorrect():
     _write_session_counts()
 
 
+def _load_ocr_engine():
+    config.is_processing = True
+    config.processing_message = "Loading OCR Engine..."
+    log_message("Loading OCR Engine context...")
+    config.ocr_reader = PaddleOCR(
+        use_doc_orientation_classify=False,
+        use_doc_unwarping=False,
+        use_textline_orientation=False,
+        lang="en",
+        enable_mkldnn=False,
+    )
+    log_message("OCR Engine Ready.")
+    config.app_phase = "scan_qr"
+    config.is_processing = False
+    log_message(f"=== Problem {config.problem_number} — Scanning QR code ===")
+
+
 def start_session():
+    if config.is_processing:
+        return
     if config.ocr_reader is None:
-        log_message("Loading OCR Engine context...")
-        config.ocr_reader = PaddleOCR(
-            use_doc_orientation_classify=False,
-            use_doc_unwarping=False,
-            use_textline_orientation=False,
-            lang="en",
-            enable_mkldnn=False,
-        )
-        log_message("OCR Engine Ready.")
+        threading.Thread(target=_load_ocr_engine, daemon=True).start()
     else:
         log_message("OCR Engine already loaded, reusing.")
-    config.app_phase = "scan_qr"
-    log_message(f"=== Problem {config.problem_number} — Scanning QR code ===")
+        config.app_phase = "scan_qr"
+        log_message(f"=== Problem {config.problem_number} — Scanning QR code ===")
 
 
 def handle_shutdown(from_button=False):
@@ -208,6 +220,7 @@ def main(mode):
         config.feedback_timer = 0
     config.show_hint = False
     config.is_processing = False
+    config.processing_message = ""
     config.debug_preview = False
     config.nasa_tlx_responses = [None] * 6
     config.ueq_s_responses = [None] * 8
@@ -403,6 +416,7 @@ def main(mode):
                         config.app_phase = "done"
                     elif not config.is_processing:
                         config.is_processing = True
+                        config.processing_message = "Validating OCR..."
                         threading.Thread(
                             target=background_ocr_pipeline, daemon=True
                         ).start()
@@ -427,6 +441,7 @@ def main(mode):
             if now_scan - config.last_ocr_time >= 2.0:
                 config.last_ocr_time = now_scan
                 config.is_processing = True
+                config.processing_message = ""
                 threading.Thread(target=scan_qr_from_camera, daemon=True).start()
 
         if (
@@ -489,6 +504,7 @@ def main(mode):
                 ):
                     config.markers_visible_since = 0
                     config.is_processing = True
+                    config.processing_message = "Validating OCR..."
                     threading.Thread(
                         target=background_ocr_pipeline, daemon=True
                     ).start()
@@ -523,7 +539,8 @@ def main(mode):
 
         if config.app_phase == "start":
             center_rect = ui.draw_panels(screen, mode="start")
-            start_btn_rect = ui.draw_start_button(screen, center_rect)
+            if not config.is_processing:
+                start_btn_rect = ui.draw_start_button(screen, center_rect)
         elif config.app_phase == "scan_qr":
             center_rect = ui.draw_panels(screen, mode="scan_qr")
         elif config.app_phase == "done":
@@ -552,6 +569,9 @@ def main(mode):
         else:
             center_rect = ui.draw_panels(screen, mode="running")
             end_btn_rect = ui.draw_end_task_button(screen, center_rect)
+
+        if config.is_processing and config.app_phase in ("start", "running"):
+            ui.draw_loading_spinner(screen, center_rect)
 
         with config.feedback_lock:
             if config.feedback_timer > 0:
