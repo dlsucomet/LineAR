@@ -95,6 +95,7 @@ last_ocr_time = 0
 status_msg = "System Ready. Place paper to align ArUco markers."
 is_processing = False
 processing_message = ""
+center_hint = ""
 blank_projection = False
 last_ocr_finish_time = 0
 last_step_advance_time = 0

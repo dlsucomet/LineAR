@@ -89,6 +89,7 @@ def reset_for_new_problem():
     config.red_count = 0
     config.is_processing = False
     config.processing_message = ""
+    config.center_hint = ""
     config.transformation_progress = 0.0
     config.complete_point_progress = 0.0
     config.last_ocr_time = 0
@@ -475,10 +476,26 @@ def main(mode):
             config.app_phase == "running"
             and config.problem_loaded
             and not config.is_processing
+            and (
+                config.expected_answers.get(config.current_step)
+                or config.CROP_REGIONS.get(config.current_step)
+            )
         ):
             if config.markers_visible_since > 0:
                 marker_elapsed = time.time() - config.markers_visible_since
-                remaining = max(0, 3.0 - marker_elapsed)
+                now = time.time()
+                remaining = max(
+                    3.0 - marker_elapsed,
+                    5.0 - (now - config.last_ocr_finish_time),
+                    10.0 - (now - config.last_step_advance_time),
+                    0.0,
+                )
+                if remaining > 0:
+                    config.center_hint = (
+                        f"Auto-check in {int(remaining) + 1}s — keep paper steady"
+                    )
+                else:
+                    config.center_hint = ""
                 if remaining > 0:
                     countdown = int(remaining) + 1
                     if (
@@ -499,8 +516,8 @@ def main(mode):
                         log_message("Markers stable — OCR eligible")
                 if (
                     marker_elapsed >= 3.0
-                    and time.time() - config.last_ocr_finish_time >= 5.0
-                    and time.time() - config.last_step_advance_time >= 10.0
+                    and now - config.last_ocr_finish_time >= 5.0
+                    and now - config.last_step_advance_time >= 10.0
                 ):
                     config.markers_visible_since = 0
                     config.is_processing = True
@@ -509,6 +526,7 @@ def main(mode):
                         target=background_ocr_pipeline, daemon=True
                     ).start()
             else:
+                config.center_hint = ""
                 if (
                     not hasattr(config, "_last_countdown")
                     or config._last_countdown != -1
@@ -569,6 +587,8 @@ def main(mode):
         else:
             center_rect = ui.draw_panels(screen, mode="running")
             end_btn_rect = ui.draw_end_task_button(screen, center_rect)
+            if not config.is_processing:
+                ui.draw_center_hint(screen, center_rect)
 
         if config.is_processing and config.app_phase in ("start", "running"):
             ui.draw_loading_spinner(screen, center_rect)

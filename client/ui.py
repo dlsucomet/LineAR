@@ -178,6 +178,22 @@ def draw_loading_spinner(surface, center_rect):
     surface.blit(label, label.get_rect(center=(cx, cy + radius + 26)))
 
 
+def draw_center_hint(surface, center_rect):
+    hint = config.center_hint
+    if not hint:
+        return
+    text = font_bold.render(hint, True, config.COLOR_TEXT)
+    pad_x = 18
+    pad_y = 10
+    banner = pygame.Rect(
+        0, 0, text.get_width() + pad_x * 2, text.get_height() + pad_y * 2
+    )
+    banner.center = center_rect.center
+    pygame.draw.rect(surface, config.COLOR_WHITE, banner, border_radius=12)
+    pygame.draw.rect(surface, config.COLOR_BLUE, banner, 3, border_radius=12)
+    surface.blit(text, text.get_rect(center=banner.center))
+
+
 def draw_bottom_bar(surface, center_rect=None):
     H = surface.get_height()
     bar_rect = pygame.Rect(0, H - config.BOTTOM_BAR_HEIGHT,
