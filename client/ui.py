@@ -92,7 +92,7 @@ STEP_GUIDANCE = {
     "complete": {
         "title": "Problem Completed!",
         "desc": "The linear transformation mapping operations match the coordinate target state vector space outputs.",
-        "math": "L(v) = [14 / -7]"
+        "math": "L(w) = [14 / -7]"
     }
 }
 
@@ -446,7 +446,7 @@ def draw_instruction_panel(surface, area):
         config.current_step, STEP_GUIDANCE["complete"])
     if config.current_step == "complete" and config.target_vector:
         tx, ty = config.target_vector
-        step_info = dict(step_info, math=f"L(v) = [{tx} / {ty}]")
+        step_info = dict(step_info, math=f"L(w) = [{tx} / {ty}]")
 
     # NEW OVERRIDE: Show hint on incorrect answer
     if getattr(config, 'show_hint', False):

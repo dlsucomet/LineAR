@@ -180,7 +180,7 @@ STEP_GUIDANCE = {
     "complete": {
         "title": "Problem Completed!",
         "desc": "The linear transformation mapping operations match the coordinate target state vector space outputs.",
-        "math": "L(v) = [14 / -7]"
+        "math": "L(w) = [14 / -7]"
     }
 }
 
@@ -190,65 +190,65 @@ PROJECTION_REGIONS = {
         "one": {"left": 100, "top": 100, "width": 500, "height": 400},
     },
     "firstStepTwo": {
-        "one": {"left": 800, "top": 100, "width": 500, "height": 400},
+        "one": {"left": 800, "top": 170, "width": 500, "height": 400},
     },
     "firstStepThree": {
-        "one": {"left": 1500, "top": 100, "width": 500, "height": 400},
+        "one": {"left": 1500, "top": 240, "width": 500, "height": 400},
     },
     "firstStepFour": {
-        "one": {"left": 1800, "top": 650, "width": 400, "height": 350},
-        "two": {"left": 2400, "top": 650, "width": 400, "height": 350},
+        "one": {"left": 1800, "top": 680, "width": 400, "height": 350},
+        "two": {"left": 2400, "top": 700, "width": 400, "height": 350},
     },
-    "secondStepLeft": {"one": {"left": 1800, "top": 650, "width": 400, "height": 350},
-                      "two": {"left": 500, "top": 1150, "width": 400, "height": 350},
-                      "three": {"left": 1000, "top": 1100, "width": 500, "height": 400},
+    "secondStepLeft": {"one": {"left": 1800, "top": 680, "width": 400, "height": 350},
+                      "two": {"left": 0, "top": 1150, "width": 400, "height": 350},
+                      "three": {"left": 500, "top": 1100, "width": 500, "height": 400},
                       },
     "secondStepRight": {"one": {"left": 2400, "top": 650, "width": 400, "height": 350},
-                      "two": {"left": 1500, "top": 1150, "width": 400, "height": 350},
-                      "three": {"left": 2000, "top": 1100, "width": 500, "height": 400},
+                      "two": {"left": 1100, "top": 1150, "width": 400, "height": 350},
+                      "three": {"left": 1600, "top": 1100, "width": 500, "height": 400},
                       },
     "thirdStepLeft": {
-        "one": {"left": 500, "top": 1100, "width": 700, "height": 300},
-        "two": {"left": 300, "top": 1700, "width": 500, "height": 400}
+        "one": {"left": 0, "top": 1100, "width": 700, "height": 450},
+        "two": {"left": 0, "top": 1800, "width": 500, "height": 400}
     },
     "thirdStepRight": {
-        "one": {"left": 1500, "top": 1100, "width": 700, "height": 300},
-        "two": {"left": 1000, "top": 1700, "width": 500, "height": 400}
+        "one": {"left": 1100, "top": 1100, "width": 700, "height": 450},
+        "two": {"left": 700, "top": 1800, "width": 500, "height": 400}
     },
     "fourthStep": {
-        "one": {"left": 300, "top": 1650, "width": 2000, "height": 300},
-        "two": {"left": 300, "top": 2300, "width": 500, "height": 400}
+        "one": {"left": 0, "top": 1750, "width": 2000, "height": 450},
+        "two": {"left": 0, "top": 2400, "width": 500, "height": 400}
     }
 }
 
 FEEDBACK_REGIONS = {
     "firstStep": {},
     "firstStepOne": {
-        "one": {"left": 0, "top": 0, "width": 4000, "height": 650},
+        "one": {"left": 0, "top": 0, "width": 3500, "height": 1000},
     },
     "firstStepTwo": {
-        "one": {"left": 0, "top": 0, "width": 4000, "height": 650},
+        "one": {"left": 0, "top": 0, "width": 3500, "height": 1000},
     },
     "firstStepThree": {
-        "one": {"left": 0, "top": 0, "width": 4000, "height": 650},
+        "one": {"left": 0, "top": 0, "width": 3500, "height": 1000},
     },
     "firstStepFour": {
-        "one": {"left": 0, "top": 0, "width": 4000, "height": 650},
+        "one": {"left": 0, "top": 0, "width": 3500, "height": 1000},
     },
     "secondStepLeft": {
-        "one": {"left": 0, "top": 1000, "width": 3500, "height": 400},
+        "one": {"left": 0, "top": 1100, "width": 3500, "height": 700},
     },
     "secondStepRight": {
-        "one": {"left": 0, "top": 1000, "width": 3500, "height": 400},
+        "one": {"left": 0, "top": 1100, "width": 3500, "height": 700},
     },
     "thirdStepLeft": {
-        "one": {"left": 0, "top": 1500, "width": 3500, "height": 400},
+        "one": {"left": 0, "top": 1700, "width": 3500, "height": 700},
     },
     "thirdStepRight": {
-        "one": {"left": 0, "top": 1500, "width": 3500, "height": 400},
+        "one": {"left": 0, "top": 1700, "width": 3500, "height": 700},
     },
     "fourthStep": {
-        "one": {"left": 0, "top": 2100, "width": 3500, "height": 400},
+        "one": {"left": 0, "top": 2400, "width": 3500, "height": 700},
     },
 }
 
